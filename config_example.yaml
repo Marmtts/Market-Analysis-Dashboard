@@ -1,0 +1,193 @@
+# =============================================================
+# KONFIGURACJA - XTB Trend Watch
+# =============================================================
+# Tickery podajemy w formacie Yahoo Finance (np. AAPL, ASML.AS, ALE.WA).
+# W XTB nazwy instrumentów mogą się różnić (np. "US100" vs "^NDX"),
+# dlatego przy każdym tickerze warto dopisać notatkę, jak się nazywa w XTB.
+
+watchlist:
+  - ticker: "KTOS"
+    xtb_symbol: "KTOS.US"
+    name: "Kratos Defense & Security Solutions"
+  - ticker: "MU"
+    xtb_symbol: "MU.US"
+    name: "Micron Technology"
+  - ticker: "SNDK"
+    xtb_symbol: "SNDK.US"
+    name: "SanDisk Corporation"
+  - ticker: "IREN"
+    xtb_symbol: "IREN.US"
+    name: "IREN Limited"
+  - ticker: "IBM"
+    xtb_symbol: "IBM.US"
+    name: "International Business Machines"
+  - ticker: "QBTS"
+    xtb_symbol: "QBTS.US"
+    name: "D-Wave Quantum Inc."
+  - ticker: "ORCL"
+    xtb_symbol: "ORCL.US"
+    name: "Oracle Corporation"
+  - ticker: "MSFT"
+    xtb_symbol: "MSFT.US"
+    name: "Microsoft Corp."
+  - ticker: "MRVL"
+    xtb_symbol: "MRVL.US"
+    name: "Marvell Technology"
+  - ticker: "NOW"
+    xtb_symbol: "NOW.US"
+    name: "ServiceNow Inc."
+  - ticker: "ALAB"
+    xtb_symbol: "ALAB.US"
+    name: "Astera Labs Inc."
+  - ticker: "XTB.WA"
+    xtb_symbol: "XTB.PL"
+    name: "XTB S.A."
+  - ticker: "SNT.WA"
+    xtb_symbol: "SNT.PL"
+    name: "Synektik S.A."
+  - ticker: "EMR"
+    xtb_symbol: "EMR.US"
+    name: "Emerson Electric Co."
+  - ticker: "RKLB"
+    xtb_symbol: "RKLB.US"
+    name: "Rocket Lab"
+
+# -------------------------------------------------------------
+# Parametry analizy technicznej
+# -------------------------------------------------------------
+technical:
+  history_period: "2y"          # ile historii pobierać (yfinance: 6mo, 1y, 2y...) - wydłużone dla szerszego kontekstu trendu
+  interval: "1d"                 # interwał świec
+  rsi_period: 14
+  rsi_overbought: 70             # powyżej tego -> uznajemy za "górkę"
+  rsi_oversold: 30        # było 35 - konsekwentnie lepsze zarówno w grid search, jak i walk-forward
+  ma_short: 50
+  ma_long: 200
+  # "górka" = cena bardzo blisko szczytu 52-tygodniowego
+  distance_from_high_52w_warning_pct: 5   # jeśli cena jest < 5% od ATH -> ostrzeżenie
+  min_pullback_from_recent_high_pct: 3    # preferujemy min. 3% cofnięcia od lokalnego szczytu
+  bollinger_period: 20
+  bollinger_std: 2
+  volume_spike_multiplier: 2.0   # wolumen > 2x średniej -> odnotuj jako istotny sygnał
+  sharp_decline_lookback_days: 5    # okno (sesje), w którym mierzymy gwałtowność spadku
+  sharp_decline_threshold_pct: 15   # spadek >= tyle% w tym oknie -> traktuj jako "spadający nóż"
+  atr_period: 14                    # okres liczenia ATR (Average True Range)
+  atr_stop_multiplier: 2.0          # sugerowany stop-loss = cena - tyle x ATR
+
+  # -----------------------------------------------------------
+  # Potwierdzenie wielointerwałowe (sygnał dzienny + kontekst tygodniowy)
+  # -----------------------------------------------------------
+  # Klasyczna zasada: handluj zgodnie z trendem wyższego interwału. Jeśli
+  # dzienny sygnał GOOD_ENTRY nie jest potwierdzony trendem tygodniowym,
+  # obniżamy go do NEUTRAL - to ochrona przed "pułapką byka" (odbicie na
+  # dziennym w ramach szerszego trendu spadkowego).
+  use_weekly_confirmation: true
+  weekly_ma_short: 10             # ~10 tygodni (odpowiednik SMA50 na dziennym)
+  weekly_ma_long: 40              # ~40 tygodni (odpowiednik SMA200 na dziennym)
+  weekly_rsi_period: 14
+
+# -------------------------------------------------------------
+# Źródła newsów (ogólnorynkowe kanały RSS - makro/nastroje rynku)
+# -------------------------------------------------------------
+news:
+  use_ticker_news_from_yfinance: true   # yfinance.Ticker(x).news - newsy per spółka
+  macro_rss_feeds:
+    - name: "CNBC Top News"
+      url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"
+    - name: "MarketWatch Top Stories"
+      url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"
+    - name: "Investing.com News"
+      url: "https://www.investing.com/rss/news.rss"
+    - name: "Yahoo Finance"
+      url: "https://finance.yahoo.com/news/rssindex"
+  max_headlines_per_ticker: 8
+  max_macro_headlines: 15
+
+  # -----------------------------------------------------------
+  # Newsy HISTORYCZNE (do roku wstecz) - przez Finnhub API
+  # -----------------------------------------------------------
+  # Darmowy klucz: zarejestruj się na https://finnhub.io/register,
+  # skopiuj "API key" z panelu i wklej poniżej.
+  use_historical_news: true
+  finnhub_api_key: "Your_Key"
+  historical_lookback_days: 365   # ile dni wstecz przeglądać
+  max_headlines_per_month: 4      # limit nagłówków pobieranych na miesiąc na spółkę
+
+# -------------------------------------------------------------
+# Lokalny LLM (Ollama) do analizy sentymentu newsów
+# -------------------------------------------------------------
+llm:
+  enabled: true                       # ustaw false, jeśli nie masz uruchomionego Ollama
+  provider: "ollama"
+  base_url: "http://localhost:11434"
+  model: "llama3.1:8b"                # dostosuj do modelu, który masz pobrany
+  request_timeout_seconds: 60
+  fallback_to_lexicon: true           # jeśli LLM niedostępny -> prosty analizator słownikowy
+
+# -------------------------------------------------------------
+# Analiza fundamentalna (P/E, P/B, wzrost przychodów, marże, zadłużenie)
+# -------------------------------------------------------------
+fundamentals:
+  enabled: true
+  pe_high_threshold: 40             # P/E >= tyle -> flaga "wysoka wycena" (chyba że silny wzrost przychodów)
+  pe_low_threshold: 12              # P/E <= tyle -> flaga "niska wycena" (do zweryfikowania, czemu tak tanio)
+  revenue_growth_good_pct: 10       # wzrost przychodów r/r >= tyle% -> flaga pozytywna
+  debt_to_equity_high: 150          # D/E (w %) >= tyle -> flaga "wysokie zadłużenie"
+
+# -------------------------------------------------------------
+# Szeroki kontekst makro (VIX, rentowność obligacji) - filtr ryzyka
+# -------------------------------------------------------------
+macro:
+  enabled: true
+  vix_elevated_threshold: 20        # VIX >= tyle -> reżim "PODWYZSZONY"
+  vix_high_threshold: 30            # VIX >= tyle -> reżim "WYSOKI"
+  # w dniach podwyższonego ryzyka podnosimy próg sugestii kupna (surowsze kryteria),
+  # zamiast całkowicie blokować sugestie - decyzję i tak podejmuje użytkownik
+  threshold_increase_on_elevated_risk: 0.05
+  threshold_increase_on_high_risk: 0.10
+
+# -------------------------------------------------------------
+# Wagi łączenia wyniku technicznego, sentymentu i fundamentów (suma = 1)
+# -------------------------------------------------------------
+scoring:
+  technical_weight: 0.55
+  sentiment_weight: 0.30
+  fundamentals_weight: 0.15
+  # próg, powyżej którego spółka trafia do sekcji "warto obserwować"
+  # (w dniach podwyższonego ryzyka makro zostaje automatycznie podniesiony - patrz sekcja "macro")
+  suggestion_threshold: 0.55
+  # jeśli technical_signal == "AT_TOP", spółka NIGDY nie trafia do sugestii kupna,
+  # niezależnie od wyniku sentymentu (ochrona przed kupowaniem na górce)
+  hard_block_on_top: true
+  hard_block_on_sharp_decline: true  # jak hard_block_on_top, ale dla świeżych krachów
+
+output:
+  reports_dir: "reports"
+  save_json: true
+  save_markdown: true
+
+# -------------------------------------------------------------
+# Odkrywanie nowych spółek (LLM proponuje kandydatów spoza watchlisty)
+# -------------------------------------------------------------
+discovery:
+  enabled: true                # wymaga włączonego llm.enabled - bez LLM ta funkcja nic nie zrobi
+  max_candidates: 5            # ile nowych spółek maksymalnie zaproponować dziennie
+  run_full_analysis_on_candidates: true   # czy od razu przepuścić kandydatów przez pełną analizę tech.+newsową
+  cooldown_days: 14            # przez ile dni nie proponować ponownie tej samej spółki po odkryciu
+
+# -------------------------------------------------------------
+# Dashboard webowy (src/web_app.py)
+# -------------------------------------------------------------
+web:
+  host: "127.0.0.1"
+  port: 8000
+  refresh_interval_minutes: 60     # co ile minut serwer sam odświeża analizę w tle
+  run_analysis_on_startup: true    # czy uruchomić pierwszy cykl analizy zaraz po starcie serwera
+  manual_refresh_cooldown_seconds: 45   # min. odstęp między ręcznymi odświeżeniami TEJ SAMEJ spółki (chroni yfinance/Finnhub)
+  price_alert_interval_seconds: 180     # co ile sekund sprawdzać TYLKO ceny pozycji portfela (0 = wyłączone)
+
+# -------------------------------------------------------------
+# Panel skuteczności narzędzia (na podstawie historii werdyktów)
+# -------------------------------------------------------------
+effectiveness:
+  min_signal_age_days: 14   # ile dni musi minąć od werdyktu, żeby wliczyć go do statystyk

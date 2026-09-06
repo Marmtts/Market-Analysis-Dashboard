@@ -85,7 +85,7 @@ def analyze_company(company: dict, cfg: dict, threshold_adjustment: float = 0.0,
     trend = None
     if cfg["news"].get("use_historical_news", False):
         api_key = cfg["news"].get("finnhub_api_key", "")
-        if api_key and api_key != "d8ls8jhr01qnkjl8jfb0d8ls8jhr01qnkjl8jfbg":
+        if api_key:
             progress(f"  Pobieram newsy historyczne dla {ticker} (Finnhub, "
                       f"{cfg['news'].get('historical_lookback_days', 365)} dni wstecz)...", "info")
             monthly_headlines = fetch_historical_news_by_month(
