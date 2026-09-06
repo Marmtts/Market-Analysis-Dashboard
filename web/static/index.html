@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTB Trend Watch — Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="ticker-tape" id="tickerTape">
+  <div class="ticker-tape__inner" id="tickerTapeInner">
+    <span class="ticker-tape__item">XTB TREND WATCH — TERMINAL ANALITYCZNY</span>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="topbar__brand">
+    <span class="topbar__mark">◆</span>
+    <div>
+      <h1>XTB Trend&nbsp;Watch</h1>
+      <p class="topbar__subtitle">Terminal analityczny — nie porada inwestycyjna</p>
+    </div>
+  </div>
+
+  <div class="topbar__status">
+    <div class="status-pill" id="connPill">
+      <span class="status-pill__dot"></span>
+      <span id="connLabel">łączę…</span>
+    </div>
+    <div class="status-pill status-pill--muted" id="nextRunPill">
+      <span id="nextRunLabel">—</span>
+    </div>
+    <button class="btn" id="notifyBtn" title="Włącz powiadomienia przeglądarki o ważnych zmianach">🔔</button>
+    <button class="btn btn--primary" id="runNowBtn">Odśwież teraz</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn is-active" data-tab="analysis">Analiza</button>
+  <button class="tab-btn" data-tab="portfolio">Portfel</button>
+  <button class="tab-btn" data-tab="closed">Zamknięte transakcje</button>
+</nav>
+
+<main class="layout" id="tab-analysis">
+
+  <!-- ============ LEWA KOLUMNA: makro + watchlist mgmt ============ -->
+  <aside class="sidebar">
+
+    <section class="panel" id="macroPanel">
+      <h2 class="panel__title">Kontekst makro</h2>
+      <div class="macro-readout" id="macroReadout">
+        <div class="macro-readout__row">
+          <span class="macro-readout__label">Reżim ryzyka</span>
+          <span class="macro-readout__value" id="riskRegime">—</span>
+        </div>
+        <div class="macro-readout__row">
+          <span class="macro-readout__label">VIX</span>
+          <span class="macro-readout__value" id="vixValue">—</span>
+        </div>
+        <div class="macro-readout__row">
+          <span class="macro-readout__label">Obligacje 10Y (USA)</span>
+          <span class="macro-readout__value" id="tnxValue">—</span>
+        </div>
+      </div>
+      <p class="macro-notes" id="macroNotes"></p>
+    </section>
+
+    <section class="panel" id="sectorPanel">
+      <h2 class="panel__title">Koncentracja sektorowa</h2>
+      <div id="sectorBody">
+        <p class="empty-state">Brak ostrzeżeń.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel__title">Skuteczność narzędzia</h2>
+    <section class="panel" id="effectivenessPanel">
+      <h2 class="panel__title">Skuteczność narzędzia</h2>
+      <div id="effectivenessBody">
+        <p class="empty-state">Zbieram dane historyczne — wróć za kilka dni.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel__title">Watchlista</h2>
+
+    <section class="panel">
+      <h2 class="panel__title">Watchlista</h2>
+      <form class="add-form" id="addForm">
+        <input type="text" id="addTicker" placeholder="Ticker (np. AAPL)" required autocomplete="off">
+        <input type="text" id="addName" placeholder="Nazwa spółki" autocomplete="off">
+        <input type="text" id="addXtb" placeholder="Symbol w XTB (opcjonalnie)" autocomplete="off">
+        <button type="submit" class="btn btn--secondary">+ Dodaj</button>
+      </form>
+      <ul class="watchlist" id="watchlistUl"></ul>
+    </section>
+
+    <section class="panel panel--log">
+      <h2 class="panel__title">Log na żywo</h2>
+      <div class="log" id="logPanel"></div>
+    </section>
+
+  </aside>
+
+  <!-- ============ GŁÓWNA KOLUMNA: wyniki ============ -->
+  <section class="main">
+
+    <div class="daily-brief" id="dailyBriefCard" style="display:none">
+      <div class="daily-brief__label">📋 Brief dnia</div>
+      <p class="daily-brief__text" id="dailyBriefText"></p>
+    </div>
+
+    <div class="section-header">
+      <h2>Stała watchlista</h2>
+      <span class="section-header__meta" id="mainGeneratedAt">brak danych</span>
+    </div>
+    <div class="results-header" data-sort-group="main">
+      <span></span>
+      <span data-sort-key="name">Spółka</span>
+      <span data-sort-key="target" title="Średnia cena docelowa analityków Wall Street i różnica względem obecnej ceny">Cena docelowa</span>
+      <span data-sort-key="signal" title="Sygnał z analizy technicznej: RSI, SMA, Bollinger, potwierdzenie z interwału tygodniowego">Sygnał tech.</span>
+      <span data-sort-key="score" title="Łączny wynik 0-1 (technika + sentyment + fundamenty) / kierunek trendu sentymentu z 12 mies.">Wynik / trend</span>
+      <span data-sort-key="category">Kategoria</span>
+    </div>
+    <div class="results-grid" id="resultsGrid">
+      <p class="empty-state">Czekam na pierwszy cykl analizy…</p>
+    </div>
+
+    <div class="section-header section-header--discovery">
+      <h2>Propozycje AI <span class="tag-warn">wymaga weryfikacji</span></h2>
+    </div>
+    <div class="results-header" data-sort-group="discovered">
+      <span></span>
+      <span data-sort-key="name">Spółka</span>
+      <span data-sort-key="target" title="Średnia cena docelowa analityków Wall Street i różnica względem obecnej ceny">Cena docelowa</span>
+      <span data-sort-key="signal" title="Sygnał z analizy technicznej: RSI, SMA, Bollinger, potwierdzenie z interwału tygodniowego">Sygnał tech.</span>
+      <span data-sort-key="score" title="Łączny wynik 0-1 (technika + sentyment + fundamenty) / kierunek trendu sentymentu z 12 mies.">Wynik / trend</span>
+      <span data-sort-key="category">Kategoria</span>
+    </div>
+    <div class="results-grid" id="discoveredGrid">
+      <p class="empty-state">Brak propozycji w tym cyklu.</p>
+    </div>
+
+  </section>
+</main>
+
+<main class="layout" id="tab-portfolio" style="display:none">
+  <aside class="sidebar">
+    <section class="panel">
+      <h2 class="panel__title">Dodaj pozycję</h2>
+      <form class="add-form" id="portfolioForm">
+        <input type="hidden" id="posEditId" value="">
+        <input type="text" id="posTicker" placeholder="Ticker (np. MSFT)" required autocomplete="off">
+        <input type="number" id="posShares" placeholder="Liczba akcji" step="0.0001" min="0" required>
+        <input type="number" id="posBuyPrice" placeholder="Cena zakupu" step="0.01" min="0" required>
+        <input type="date" id="posBuyDate" required>
+        <input type="text" id="posNotes" placeholder="Notatka (opcjonalnie)" autocomplete="off">
+        <div class="form-btn-row">
+          <button type="submit" class="btn btn--secondary" id="posSubmitBtn">+ Dodaj pozycję</button>
+          <button type="button" class="btn" id="posCancelEditBtn" style="display:none">Anuluj edycję</button>
+        </div>
+      </form>
+        <p class="detail-disclaimer">Wpisz cenę zakupu w walucie notowania spółki (np. USD dla spółek amerykańskich, PLN dla polskich jak XTB.WA). To nie jest porada inwestycyjna ani podatkowa. Dane portfela są przechowywane lokalnie w bazie tego dashboardu.</p>
+    </section>
+  </aside>
+  <section class="main">
+    <div class="section-header">
+      <h2>Twój portfel</h2>
+    </div>
+    <div id="portfolioSummaryBar"></div>
+
+    <div class="section-header">
+      <h2>Ryzyko i ekspozycja</h2>
+    </div>
+    <div id="portfolioRiskPanel"></div>
+
+    <div class="section-header">
+      <h2>Krzywa kapitału</h2>
+      <span class="section-header__meta" id="equityDrawdownLabel"></span>
+    </div>
+    <div id="equityCurrencySwitcher"></div>
+    <div class="equity-chart-wrap">
+      <div id="equityChartContainer" class="equity-chart-container"></div>
+      <p class="empty-state" id="equityEmptyState" style="display:none">Za mało danych historycznych — krzywa pojawi się po kilku cyklach analizy.</p>
+    </div>
+
+    <div class="results-header" data-sort-group="portfolio">
+      <span></span>
+      <span data-sort-key="name">Spółka</span>
+      <span data-sort-key="price">Cena bieżąca</span>
+      <span data-sort-key="pl_pct">Zysk/strata</span>
+      <span data-sort-key="pl_value">Wartość P/L</span>
+      <span data-sort-key="action">Rekomendacja</span>
+    </div>
+    <div class="results-grid" id="portfolioGrid">
+      <p class="empty-state">Brak pozycji — dodaj pierwszą po lewej stronie.</p>
+    </div>
+  </section>
+<main class="layout" id="tab-closed" style="display:none">
+  <section class="main" style="grid-column: 1 / -1;">
+    <div class="section-header">
+      <h2>Zamknięte transakcje</h2>
+    </div>
+    <div id="closedSummaryBar"></div>
+    <div class="results-header" data-sort-group="closed">
+      <span></span>
+      <span data-sort-key="name">Spółka</span>
+      <span data-sort-key="buy">Kupno</span>
+      <span data-sort-key="sell">Sprzedaż</span>
+      <span data-sort-key="pl_pct">Wynik</span>
+      <span></span>
+    </div>
+    <div class="results-grid" id="closedGrid">
+      <p class="empty-state">Brak zamkniętych transakcji.</p>
+    </div>
+  </section>
+</main>
+
+<!-- ============ MODAL WYKRESU ============ -->
+<div class="modal" id="chartModal">
+  <div class="modal__backdrop" id="chartModalBackdrop"></div>
+  <div class="modal__panel">
+    <div class="modal__header">
+      <div>
+        <h3 id="chartModalTitle">—</h3>
+        <span id="liveRefreshIndicator" class="live-refresh-indicator is-hidden"></span>
+      </div>
+      <button class="btn btn--icon" id="chartModalClose">✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="chart-wrap">
+        <div id="chartContainer" class="chart-container"></div>
+        <div id="chartLoading" class="chart-loading">
+          <div class="chart-loading__spinner"></div>
+          <span>Pobieram dane z Yahoo Finance…</span>
+        </div>
+      </div>
+      <div class="modal__legend">
+        <span><i class="legend-swatch legend-swatch--ma50"></i> SMA 50</span>
+        <span><i class="legend-swatch legend-swatch--ma200"></i> SMA 200</span>
+        <span class="modal__legend-sep">|</span>
+        <span class="legend-marker legend-marker--buy">▲ KUP</span>
+        <span class="legend-marker legend-marker--avoid">▼ SZCZYT</span>
+        <span class="legend-marker legend-marker--neutral">● N</span>
+        <span class="modal__legend-note">— historyczne werdykty narzędzia na tej spółce</span>
+      </div>
+      <div class="modal__details" id="modalDetails"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

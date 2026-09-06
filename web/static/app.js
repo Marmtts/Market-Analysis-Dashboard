@@ -1,0 +1,1480 @@
+// ============================================================
+// XTB Trend Watch — Terminal — logika frontendu (vanilla JS)
+// ============================================================
+
+const state = {
+  ws: null,
+  wsReconnectDelay: 1500,
+  nextRunAt: null,
+  chart: null,
+  candleSeries: null,
+  ma50Series: null,
+  ma200Series: null,
+  resultsByTicker: new Map(),
+  lastPayload: null,
+  openTicker: null,
+  categoryByTicker: new Map(),
+  portfolioTickers: new Set(),
+};
+
+const el = (id) => document.getElementById(id);
+
+// ---------------- Kategoria -> klasa/etykieta pieczęci ----------------
+function stampInfo(category) {
+  if (category.startsWith("WARTO OBSERWOWAĆ")) return { cls: "buy", label: "WARTO\nOBSERWOWAĆ" };
+  if (category.startsWith("NEUTRALNIE")) return { cls: "watch", label: "NEUTRALNIE" };
+  if (category.startsWith("UNIKAJ")) return { cls: "avoid", label: "UNIKAJ" };
+  return { cls: "wait", label: "CZEKAJ" };
+}
+
+// ---------------- Renderowanie kart wyników ----------------
+function renderResultCard(r) {
+  const stamp = stampInfo(r.combined.category);
+  const trend = r.sentiment_trend ? r.sentiment_trend.trend_direction : "-";
+  const fund = r.fundamentals;
+  const currency = r.technical.metrics.currency || "USD";
+  const target = fund && fund.available ? fund.metrics.analyst_target_mean : null;
+  const upside = fund && fund.available ? fund.metrics.analyst_upside_pct : null;
+  const targetLabel = target != null
+    ? `${target} ${currency}${upside != null ? ` (${upside > 0 ? "+" : ""}${upside}%)` : ""}`
+    : "—";
+
+  const age = timeAgo(r.analyzed_at);
+  const ageHtml = age
+    ? `<span class="data-age ${age.isStale ? "data-age--stale" : ""}" title="Ostatnia analiza tej spółki">🕐 ${age.label}</span>`
+    : "";
+
+  const card = document.createElement("div");
+  card.className = "result-card";
+  card.innerHTML = `
+    <div class="stamp stamp--${stamp.cls}" title="${escapeHtml(r.combined.category)}">${stamp.label.replace("\n", "<br>")}</div>
+    <div class="result-card__info">
+      <div>
+        <span class="result-card__ticker">${r.ticker}</span>
+        <span class="result-card__name">${r.name}</span>
+        ${ageHtml}
+      </div>
+      <div class="result-card__xtb">XTB: ${r.xtb_symbol}</div>
+      ${r.discovery_reason ? `<div class="result-card__reason">💡 ${escapeHtml(r.discovery_reason)}</div>` : ""}
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${targetLabel}</div>
+      <div class="result-card__metric-label">Cena docelowa</div>
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${r.technical.signal}</div>
+      <div class="result-card__metric-label">Sygnał tech.</div>
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${r.combined.final_score}</div>
+      <div class="result-card__metric-label">Wynik / ${trend}</div>
+    </div>
+    <div class="result-card__category category--${stamp.cls}">${r.combined.category}</div>
+  `;
+  card.addEventListener("click", () => openChart(r.ticker, r.name));
+  return card;
+}
+
+const _categoryOrder = {
+  "WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia": 0,
+  "NEUTRALNIE POZYTYWNIE - brak jednoznacznego sygnału wejścia": 1,
+  "BRAK SYGNAŁU / POCZEKAJ": 2,
+  "UNIKAJ - świeży gwałtowny spadek (sprawdź przyczynę)": 3,
+  "UNIKAJ - blisko szczytu trendu": 4,
+};
+
+function resultSortValue(r, key) {
+  switch (key) {
+    case "name": return r.name.toLowerCase();
+    case "target": {
+      const f = r.fundamentals;
+      return f && f.available ? (f.metrics.analyst_upside_pct ?? -Infinity) : -Infinity;
+    }
+    case "signal": return r.technical.signal;
+    case "score": return r.combined.final_score;
+    case "category": return _categoryOrder[r.combined.category] ?? 9;
+    default: return "";
+  }
+}
+
+function renderResultsGrid(containerId, results, emptyMessage, sortState) {
+  const container = el(containerId);
+  container.innerHTML = "";
+  if (!results || results.length === 0) {
+    const p = document.createElement("p");
+    p.className = "empty-state";
+    p.textContent = emptyMessage;
+    container.appendChild(p);
+    return;
+  }
+
+  let sorted;
+  if (sortState && sortState.key) {
+    sorted = [...results].sort((a, b) => {
+      const va = resultSortValue(a, sortState.key);
+      const vb = resultSortValue(b, sortState.key);
+      const cmp = typeof va === "string" ? va.localeCompare(vb) : va - vb;
+      return sortState.dir === "asc" ? cmp : -cmp;
+    });
+  } else {
+    sorted = [...results].sort(
+      (a, b) => (_categoryOrder[a.combined.category] ?? 9) - (_categoryOrder[b.combined.category] ?? 9)
+    );
+  }
+  sorted.forEach((r) => container.appendChild(renderResultCard(r)));
+}
+
+// ---------------- Sortowanie klikalnych nagłówków ----------------
+const state_sort = { main: { key: null, dir: "asc" }, discovered: { key: null, dir: "asc" }, portfolio: { key: null, dir: "asc" }, closed: { key: null, dir: "asc" } };
+
+function setupSortableHeaders() {
+  document.querySelectorAll(".results-header[data-sort-group]").forEach((header) => {
+    const group = header.dataset.sortGroup;
+    header.querySelectorAll("[data-sort-key]").forEach((span) => {
+      span.addEventListener("click", () => {
+        const key = span.dataset.sortKey;
+        const s = state_sort[group];
+        if (s.key === key) {
+          s.dir = s.dir === "asc" ? "desc" : "asc";
+        } else {
+          s.key = key;
+          s.dir = "asc";
+        }
+        header.querySelectorAll("[data-sort-key]").forEach((el2) => {
+          el2.classList.toggle("is-sorted", el2 === span);
+          el2.dataset.sortArrow = s.dir === "asc" ? "▲" : "▼";
+        });
+
+        if (group === "main" && state.lastPayload) {
+          renderResultsGrid("resultsGrid", state.lastPayload.results, "Czekam na pierwszy cykl analizy…", s);
+        } else if (group === "discovered" && state.lastPayload) {
+          renderResultsGrid("discoveredGrid", state.lastPayload.discovered_results, "Brak propozycji w tym cyklu.", s);
+        } else if (group === "portfolio" && state.lastPortfolio) {
+          renderPortfolio(state.lastPortfolio, s);
+        } else if (group === "closed") {
+          loadClosedPortfolio();
+        }
+      });
+    });
+  });
+}
+
+function renderMacro(macroContext) {
+  const regimeEl = el("riskRegime");
+  const vixEl = el("vixValue");
+  const tnxEl = el("tnxValue");
+  const notesEl = el("macroNotes");
+
+  if (!macroContext || !macroContext.available) {
+    regimeEl.textContent = "brak danych";
+    regimeEl.className = "macro-readout__value";
+    vixEl.textContent = "—";
+    tnxEl.textContent = "—";
+    notesEl.textContent = "";
+    return;
+  }
+
+  const regimeClassMap = { SPOKOJNY: "regime-spokojny", PODWYZSZONY: "regime-podwyzszony", WYSOKI: "regime-wysoki" };
+  regimeEl.textContent = macroContext.risk_regime;
+  regimeEl.className = "macro-readout__value " + (regimeClassMap[macroContext.risk_regime] || "");
+  vixEl.textContent = macroContext.vix_last ?? "—";
+  tnxEl.textContent = macroContext.treasury_10y_yield_pct != null ? `${macroContext.treasury_10y_yield_pct}%` : "—";
+  notesEl.textContent = (macroContext.notes || []).join(" ");
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---------------- Watchlista ----------------
+async function loadWatchlist() {
+  const res = await fetch("/api/watchlist");
+  const items = await res.json();
+  const ul = el("watchlistUl");
+  ul.innerHTML = "";
+  items.forEach((c) => {
+    const li = document.createElement("li");
+    li.className = "watchlist__item";
+    li.innerHTML = `
+      <div>
+        <span class="watchlist__ticker">${c.ticker}</span>
+        <span class="watchlist__name">${escapeHtml(c.name)}</span>
+      </div>
+      <button class="watchlist__remove" title="Usuń z watchlisty" data-ticker="${c.ticker}">✕</button>
+    `;
+    ul.appendChild(li);
+  });
+  ul.querySelectorAll(".watchlist__remove").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const ticker = btn.dataset.ticker;
+      if (!confirm(`Usunąć ${ticker} z watchlisty?`)) return;
+      await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: "DELETE" });
+      await loadWatchlist();
+    });
+  });
+}
+
+el("addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ticker = el("addTicker").value.trim();
+  const name = el("addName").value.trim();
+  const xtb = el("addXtb").value.trim();
+  if (!ticker) return;
+
+  const res = await fetch("/api/watchlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticker, name, xtb_symbol: xtb }),
+  });
+
+  if (res.ok) {
+    el("addForm").reset();
+    await loadWatchlist();
+    appendLog({ level: "info", message: `Dodano ${ticker.toUpperCase()} do watchlisty. Pojawi się w kolejnym cyklu analizy.` });
+  } else {
+    const body = await res.json().catch(() => ({}));
+    alert(body.detail || "Nie udało się dodać spółki.");
+  }
+});
+
+// ---------------- Wyniki (cache + odświeżanie po WS) ----------------
+async function loadResults() {
+  const res = await fetch("/api/results");
+  const payload = await res.json();
+  applyResultsPayload(payload);
+}
+
+function applyResultsPayload(payload) {
+  state.lastPayload = payload;
+  state.resultsByTicker = new Map();
+  (payload.results || []).forEach((r) => state.resultsByTicker.set(r.ticker, r));
+  (payload.discovered_results || []).forEach((r) => state.resultsByTicker.set(r.ticker, r));
+
+  renderDailyBrief(payload.daily_brief);
+  renderMacro(payload.macro_context);
+  renderSectorConcentration(payload.sector_concentration);
+  renderResultsGrid("resultsGrid", payload.results, "Czekam na pierwszy cykl analizy…", state_sort.main);
+  renderResultsGrid("discoveredGrid", payload.discovered_results, "Brak propozycji w tym cyklu.", state_sort.discovered);
+  el("mainGeneratedAt").textContent = payload.generated_at
+    ? `ostatnia aktualizacja: ${formatDateTime(payload.generated_at)}`
+    : "brak danych";
+
+  checkForAlerts(payload.results, payload.discovered_results);
+}
+
+function renderDailyBrief(brief) {
+  const card = el("dailyBriefCard");
+  if (!brief) {
+    card.style.display = "none";
+    return;
+  }
+  el("dailyBriefText").textContent = brief;
+  card.style.display = "";
+}
+
+function renderSectorConcentration(list) {
+  const body = el("sectorBody");
+  if (!body) return;
+  if (!list || list.length === 0) {
+    body.innerHTML = `<p class="empty-state">Brak koncentracji — sygnały "WARTO OBSERWOWAĆ" są rozproszone sektorowo.</p>`;
+    return;
+  }
+  const rows = list.map((s) => `
+    <div class="eff-row">
+      <span class="eff-row__cat">${escapeHtml(s.sector)}</span>
+      <span class="eff-row__stat">${s.count} spółki: ${escapeHtml(s.tickers.join(", "))}</span>
+    </div>`).join("");
+  body.innerHTML = rows + `<p class="eff-note">Kilka sygnałów "WARTO OBSERWOWAĆ" z tego samego sektora naraz to często jeden skoncentrowany zakład, a nie kilka niezależnych okazji.</p>`;
+}
+
+function formatDateTime(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
+
+// ---------------- Log na żywo ----------------
+function appendLog({ level, message, ts }) {
+  const panel = el("logPanel");
+  const line = document.createElement("div");
+  line.className = `log__line log__line--${level || "info"}`;
+  const time = ts ? ts.split(" ")[1] || ts : new Date().toLocaleTimeString("pl-PL");
+  line.innerHTML = `<span class="log__ts">${time}</span>${escapeHtml(message)}`;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+  // limit widocznych linii, żeby DOM nie rósł bez końca
+  while (panel.children.length > 300) panel.removeChild(panel.firstChild);
+}
+
+async function loadLogs() {
+  const res = await fetch("/api/logs?limit=80");
+  const logs = await res.json();
+  el("logPanel").innerHTML = "";
+  logs.forEach((l) => appendLog(l));
+}
+
+// ---------------- Status / next run countdown ----------------
+function setConnected(connected, isError = false) {
+  const dot = document.querySelector("#connPill .status-pill__dot");
+  const label = el("connLabel");
+  dot.classList.toggle("is-live", connected && !isError);
+  dot.classList.toggle("is-error", isError);
+  label.textContent = isError ? "błąd połączenia" : connected ? "live" : "łączę…";
+}
+
+function updateNextRunLabel() {
+  const labelEl = el("nextRunLabel");
+  if (!state.nextRunAt) {
+    labelEl.textContent = "—";
+    return;
+  }
+  const diffSec = Math.max(0, Math.round(state.nextRunAt - Date.now() / 1000));
+  const m = Math.floor(diffSec / 60);
+  const s = diffSec % 60;
+  labelEl.textContent = `kolejny cykl za ${m}:${String(s).padStart(2, "0")}`;
+}
+setInterval(updateNextRunLabel, 1000);
+
+async function loadStatus() {
+  const res = await fetch("/api/status");
+  const status = await res.json();
+  state.nextRunAt = status.next_run_at;
+  el("runNowBtn").disabled = status.is_running;
+  if (status.is_running) el("runNowBtn").textContent = "Analiza w toku…";
+}
+
+el("runNowBtn").addEventListener("click", async () => {
+  el("runNowBtn").disabled = true;
+  el("runNowBtn").textContent = "Analiza w toku…";
+  await fetch("/api/run-now", { method: "POST" });
+});
+
+// ---------------- WebSocket ----------------
+function connectWebSocket() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+  state.ws = ws;
+
+  ws.onopen = () => {
+    setConnected(true);
+    state.wsReconnectDelay = 1500;
+  };
+
+  ws.onclose = () => {
+    setConnected(false, true);
+    setTimeout(connectWebSocket, state.wsReconnectDelay);
+    state.wsReconnectDelay = Math.min(state.wsReconnectDelay * 1.5, 15000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    handleWsMessage(msg);
+  };
+}
+
+function handleWsMessage(msg) {
+  switch (msg.type) {
+    case "progress":
+      appendLog({ level: msg.level, message: msg.message });
+      break;
+    case "run_started":
+      el("runNowBtn").disabled = true;
+      el("runNowBtn").textContent = "Analiza w toku…";
+      appendLog({ level: "info", message: "— Rozpoczęto nowy cykl analizy —" });
+      break;
+    case "results":
+      applyResultsPayload(msg.payload);
+      break;
+    case "run_finished":
+      el("runNowBtn").disabled = false;
+      el("runNowBtn").textContent = "Odśwież teraz";
+      state.nextRunAt = msg.next_run_at;
+      appendLog({ level: "success", message: "— Cykl analizy zakończony —" });
+      break;
+    case "watchlist_changed":
+      loadWatchlist();
+      break;
+    case "ticker_updated":
+      applyTickerUpdate(msg.result);
+      checkForAlerts([msg.result], []);
+      break;
+    case "price_alert":
+      maybeNotify(msg.title, msg.body);
+      appendLog({
+        level: msg.type === "stop_loss" ? "error" : "success",
+        message: `🔔 ${msg.title}: ${msg.body}`,
+      });
+      break;
+    default:
+      break;
+  }
+}
+
+// ---------------- Wykres (TradingView Lightweight Charts) ----------------
+async function openChart(ticker, name) {
+  state.openTicker = ticker;
+  el("chartModalTitle").textContent = `${name} (${ticker})`;
+  el("chartModal").classList.add("is-open");
+
+  const r = state.resultsByTicker.get(ticker);
+  el("modalDetails").innerHTML = r
+    ? renderDetailsHtml(r)
+    : `<p class="empty-state">Brak jeszcze danych analizy dla tej spółki — pojawią się po najbliższym cyklu.</p>`;
+  if (r) setupPositionCalculator(r);
+
+  // Nie czekamy na to - dashboard od razu pokazuje cache, a świeże dane
+  // (ceny, sentyment LLM, fundamenty) podmienią się w tle, gdy będą gotowe.
+  refreshTickerLive(ticker);
+
+  const container = el("chartContainer");
+  container.innerHTML = "";
+
+  const chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 420,
+    layout: { background: { color: "transparent" }, textColor: "#8A93A8", fontFamily: "IBM Plex Mono, monospace" },
+    grid: { vertLines: { color: "#2A3346" }, horzLines: { color: "#2A3346" } },
+    timeScale: { borderColor: "#2A3346" },
+    rightPriceScale: { borderColor: "#2A3346" },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  const candleSeries = chart.addCandlestickSeries({
+    upColor: "#4F9D69", downColor: "#C1533D",
+    borderUpColor: "#6DBE85", borderDownColor: "#DA6A52",
+    wickUpColor: "#4F9D69", wickDownColor: "#C1533D",
+  });
+  const ma50Series = chart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
+  const ma200Series = chart.addLineSeries({ color: "#DA6A52", lineWidth: 2 });
+
+  state.chart = chart;
+
+  const loading = el("chartLoading");
+  loading.classList.remove("is-hidden");
+
+  try {
+    const res = await fetch(`/api/chart/${encodeURIComponent(ticker)}?period=1y`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const cleanCandles = data.candles.filter(
+      (c) => c.open != null && c.high != null && c.low != null && c.close != null
+    );
+    candleSeries.setData(cleanCandles);
+
+    const cleanMa50 = data.ma50.filter((p) => p.value != null);
+    const cleanMa200 = data.ma200.filter((p) => p.value != null);
+    ma50Series.setData(cleanMa50);
+    ma200Series.setData(cleanMa200);
+    chart.timeScale().fitContent();
+    loading.classList.add("is-hidden");
+
+    // Znaczniki historycznych werdyktów narzędzia (WARTO/UNIKAJ/NEUTRALNIE)
+    // naniesione na oś czasu wykresu - osobny fetch, żeby jego ewentualny
+    // błąd nie psuł już wyrenderowanego wykresu ceny.
+    try {
+      const candleDates = cleanCandles.map((c) => c.time);
+      const histRes = await fetch(`/api/score-history/${encodeURIComponent(ticker)}?limit=400`);
+      if (histRes.ok) {
+        const history = await histRes.json();
+        const markers = buildVerdictMarkers(history, candleDates);
+        candleSeries.setMarkers(markers);
+      }
+    } catch (markerErr) {
+      console.warn("Nie udało się nanieść znaczników historii werdyktów:", markerErr);
+    }
+  } catch (err) {
+    loading.classList.add("is-hidden");
+    container.innerHTML = `<p class="empty-state">Nie udało się pobrać danych wykresu: ${escapeHtml(String(err))}</p>`;
+  }
+}
+
+// ---------------- Znaczniki werdyktów na wykresie ----------------
+function verdictMarkerStyle(category) {
+  if (category.startsWith("WARTO OBSERWOWAĆ")) {
+    return { color: "#6DBE85", shape: "arrowUp", position: "belowBar", text: "KUP" };
+  }
+  if (category.startsWith("UNIKAJ - świeży")) {
+    return { color: "#DA6A52", shape: "arrowDown", position: "aboveBar", text: "SPADEK" };
+  }
+  if (category.startsWith("UNIKAJ")) {
+    return { color: "#DA6A52", shape: "arrowDown", position: "aboveBar", text: "SZCZYT" };
+  }
+  if (category.startsWith("NEUTRALNIE")) {
+    return { color: "#D9A441", shape: "circle", position: "aboveBar", text: "N" };
+  }
+  // "BRAK SYGNAŁU / POCZEKAJ" celowo pomijamy - to najczęstsza kategoria,
+  // pokazywanie jej znacznika za każdym razem zaśmiecałoby wykres bez
+  // dodatkowej wartości informacyjnej.
+  return null;
+}
+
+/**
+ * Zamienia historię werdyktów (z dowolnymi znacznikami czasu, łącznie z
+ * dniami bez sesji giełdowej - np. analiza uruchomiona w weekend) na
+ * znaczniki Lightweight Charts, których "time" MUSI odpowiadać realnej
+ * świecy. Każdy wpis jest "przyklejany" do najbliższej wcześniejszej sesji
+ * giełdowej, a duplikaty tego samego dnia są redukowane do ostatniego
+ * (najbardziej aktualnego) werdyktu z danego dnia.
+ */
+function buildVerdictMarkers(scoreHistory, candleDates) {
+  if (!candleDates || candleDates.length === 0) return [];
+
+  const byDay = new Map(); // snapped date -> marker (nadpisywany -> zostaje ostatni z dnia)
+
+  for (const entry of scoreHistory) {
+    const style = verdictMarkerStyle(entry.category);
+    if (!style) continue;
+
+    const entryDate = entry.ts.split(" ")[0]; // "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DD"
+    const snapped = snapToTradingDay(entryDate, candleDates);
+    if (!snapped) continue;
+
+    byDay.set(snapped, {
+      time: snapped,
+      position: style.position,
+      color: style.color,
+      shape: style.shape,
+      text: style.text,
+    });
+  }
+
+  return Array.from(byDay.values()).sort((a, b) => (a.time < b.time ? -1 : 1));
+}
+
+function snapToTradingDay(dateStr, sortedCandleDates) {
+  // sortedCandleDates jest posortowane rosnąco (tak zwraca yfinance/pandas)
+  let best = null;
+  for (const d of sortedCandleDates) {
+    if (d <= dateStr) best = d;
+    else break;
+  }
+  return best || sortedCandleDates[0];
+}
+
+function closeChart() {
+  state.openTicker = null;
+  el("chartModal").classList.remove("is-open");
+  if (state.chart) {
+    state.chart.remove();
+    state.chart = null;
+  }
+}
+el("chartModalClose").addEventListener("click", closeChart);
+el("chartModalBackdrop").addEventListener("click", closeChart);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChart(); });
+
+// Dynamiczne skalowanie wykresów przy zmianie rozmiaru okna/panelu.
+window.addEventListener("resize", () => {
+  const container = el("chartContainer");
+  if (state.chart && container) {
+    state.chart.applyOptions({ width: container.clientWidth });
+  }
+  const equityContainer = el("equityChartContainer");
+  if (equityChart && equityContainer) {
+    equityChart.applyOptions({ width: equityContainer.clientWidth });
+  }
+});
+
+// ---------------- Zakładki ----------------
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("is-active"));
+    btn.classList.add("is-active");
+    const tab = btn.dataset.tab;
+    el("tab-analysis").style.display = tab === "analysis" ? "" : "none";
+    el("tab-portfolio").style.display = tab === "portfolio" ? "" : "none";
+    el("tab-closed").style.display = tab === "closed" ? "" : "none";
+    if (tab === "portfolio") {
+      loadPortfolio();
+      loadPortfolioEquitySection();
+    }
+    if (tab === "closed") loadClosedPortfolio();
+  });
+});
+
+// ---------------- Portfel ----------------
+async function loadPortfolio() {
+  try {
+    const res = await fetch("/api/portfolio");
+    const positions = await res.json();
+    state.portfolioTickers = new Set(positions.map((p) => p.ticker));
+    renderPortfolio(positions, state_sort.portfolio);
+    loadPortfolioRisk();
+  } catch (err) {
+    console.warn("Nie udało się pobrać portfela:", err);
+  }
+}
+
+function actionClass(action) {
+  if (action === "ROZWAŻ SPRZEDAŻ" || action === "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE") return "avoid";
+  if (action === "ROZWAŻ REALIZACJĘ ZYSKU") return "watch";
+  if (action === "BRAK DANYCH") return "wait";
+  return "buy";
+}
+
+function portfolioGroupSortValue(group, key) {
+  switch (key) {
+    case "name": return group.ticker;
+    case "price": return group.currentPrice ?? -Infinity;
+    case "pl_pct": return group.totalPlPct ?? -Infinity;
+    case "pl_value": return group.totalPl;
+    case "action": return group.actionPriority;
+    default: return "";
+  }
+}
+
+function renderPortfolio(positions, sortState) {
+  state.lastPortfolio = positions;
+  const grid = el("portfolioGrid");
+  grid.innerHTML = "";
+
+  if (!positions || positions.length === 0) {
+    grid.innerHTML = `<p class="empty-state">Brak pozycji — dodaj pierwszą po lewej stronie.</p>`;
+    el("sumInvested").textContent = "—";
+    el("sumValue").textContent = "—";
+    el("sumPl").textContent = "—";
+    el("sumPlPct").textContent = "—";
+    return;
+  }
+
+  const actionPriority = {
+    "ROZWAŻ SPRZEDAŻ": 0,
+    "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE": 1,
+    "ROZWAŻ REALIZACJĘ ZYSKU": 2,
+    "TRZYMAJ": 3,
+    "BRAK DANYCH": 4,
+  };
+
+  const byTicker = new Map();
+  positions.forEach((p) => {
+    if (!byTicker.has(p.ticker)) byTicker.set(p.ticker, []);
+    byTicker.get(p.ticker).push(p);
+  });
+
+  const groups = [];
+  const byCurrency = new Map(); // waluta -> {cost, value}
+
+  byTicker.forEach((lots, ticker) => {
+    const currency = lots.find((l) => l.currency)?.currency || "USD";
+    const totalShares = lots.reduce((s, l) => s + l.shares, 0);
+    const totalCost = lots.reduce((s, l) => s + (l.cost_basis ?? l.shares * l.buy_price), 0);
+    const totalValue = lots.reduce((s, l) => s + (l.market_value ?? 0), 0);
+    const avgBuyPrice = totalCost / totalShares;
+    const currentPrice = lots.find((l) => l.current_price != null)?.current_price ?? null;
+    const totalPl = totalValue - totalCost;
+    const totalPlPct = totalCost > 0 ? (totalPl / totalCost * 100) : null;
+    const bestLot = [...lots].sort((a, b) => (actionPriority[a.action] ?? 9) - (actionPriority[b.action] ?? 9))[0];
+
+    if (!byCurrency.has(currency)) byCurrency.set(currency, { cost: 0, value: 0 });
+    const curSums = byCurrency.get(currency);
+    curSums.cost += totalCost;
+    curSums.value += totalValue;
+
+    const groupAge = timeAgo(lots.find((l) => l.analyzed_at)?.analyzed_at);
+    const ageHtml = groupAge
+      ? ` <span class="data-age ${groupAge.isStale ? "data-age--stale" : ""}">🕐 ${groupAge.label}</span>`
+      : "";
+
+    groups.push({
+      ticker, lots, currency, totalShares, totalCost, totalValue, avgBuyPrice, currentPrice,
+      totalPl, totalPlPct, action: bestLot.action, actionPriority: actionPriority[bestLot.action] ?? 9,
+      ageHtml,
+    });
+  });
+
+  let sortedGroups = groups;
+  if (sortState && sortState.key) {
+    sortedGroups = [...groups].sort((a, b) => {
+      const va = portfolioGroupSortValue(a, sortState.key);
+      const vb = portfolioGroupSortValue(b, sortState.key);
+      const cmp = typeof va === "string" ? va.localeCompare(vb) : va - vb;
+      return sortState.dir === "asc" ? cmp : -cmp;
+    });
+  }
+
+  sortedGroups.forEach((g) => grid.appendChild(renderPortfolioGroupCard(g)));
+
+  renderCurrencySummaryBar(byCurrency);
+}
+
+function renderCurrencySummaryBar(byCurrency) {
+  const bar = el("portfolioSummaryBar");
+  bar.innerHTML = "";
+
+  byCurrency.forEach((sums, currency) => {
+    const pl = sums.value - sums.cost;
+    const plPct = sums.cost > 0 ? (pl / sums.cost * 100) : 0;
+    const wrap = document.createElement("div");
+    wrap.className = "portfolio-summary-currency";
+    wrap.innerHTML = `
+      <div class="portfolio-summary-currency__label">Podsumowanie — ${escapeHtml(currency)}</div>
+      <div class="portfolio-summary-bar">
+        <div class="portfolio-summary-bar__item"><span>Zainwestowano</span><strong>${sums.cost.toFixed(2)}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Wartość bieżąca</span><strong>${sums.value.toFixed(2)}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Zysk / strata</span><strong class="${pl >= 0 ? "positive" : "negative"}">${pl >= 0 ? "+" : ""}${pl.toFixed(2)}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Zysk / strata %</span><strong class="${plPct >= 0 ? "positive" : "negative"}">${plPct >= 0 ? "+" : ""}${plPct.toFixed(1)}%</strong></div>
+      </div>
+    `;
+    bar.appendChild(wrap);
+  });
+}
+
+function renderPortfolioGroupCard(g) {
+  const cls = actionClass(g.action);
+  const groupWrap = document.createElement("div");
+  groupWrap.className = "portfolio-group";
+
+  const header = document.createElement("div");
+  header.className = "result-card portfolio-card portfolio-group__header";
+  header.innerHTML = `
+    <div class="stamp stamp--${cls}" title="${escapeHtml(g.action)}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
+    <div class="result-card__info">
+      <div>
+        <span class="result-card__ticker">${g.ticker}</span>
+        <span class="result-card__name">${g.lots.length} ${g.lots.length === 1 ? "pozycja" : "pozycje/i"} • śr. ${fmtMoney(g.avgBuyPrice.toFixed(2), g.currency)}</span>
+      </div>
+      <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}<span class="portfolio-group__toggle">▾ rozwiń</span></div>
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${fmtMoney(g.currentPrice, g.currency)}</div>
+      <div class="result-card__metric-label">Cena bieżąca</div>
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${g.totalPlPct != null ? (g.totalPlPct >= 0 ? "+" : "") + g.totalPlPct.toFixed(1) + "%" : "—"}</div>
+      <div class="result-card__metric-label">Zysk/strata</div>
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${fmtMoney(g.totalPl.toFixed(2), g.currency)}</div>
+      <div class="result-card__metric-label">Wartość P/L</div>
+    </div>
+    <div class="result-card__category category--${cls}">
+      <button class="portfolio-group__ai-btn" title="Zobacz pełną analizę techniczną, sentyment i fundamenty">🔍 Analiza AI</button>
+      ${escapeHtml(g.action)}
+    </div>
+  `;
+  header.querySelector(".portfolio-group__toggle").addEventListener("click", (e) => {
+    e.stopPropagation();
+    groupWrap.classList.toggle("is-expanded");
+  });
+  header.querySelector(".portfolio-group__ai-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openChart(g.ticker, g.ticker);
+  });
+  header.addEventListener("click", () => groupWrap.classList.toggle("is-expanded"));
+
+  const lotsWrap = document.createElement("div");
+  lotsWrap.className = "portfolio-group__lots";
+  g.lots.forEach((p) => lotsWrap.appendChild(renderLotCard(p)));
+
+  groupWrap.appendChild(header);
+  groupWrap.appendChild(lotsWrap);
+  return groupWrap;
+}
+
+function renderLotCard(p) {
+  const cls = actionClass(p.action);
+  const pctSign = p.unrealized_pct >= 0 ? "+" : "";
+  const card = document.createElement("div");
+  card.className = "result-card portfolio-card lot-card";
+  card.innerHTML = `
+    <div class="stamp stamp--${cls}" title="${escapeHtml(p.action || "—")}">${escapeHtml((p.action || "—")).split(" ")[0]}</div>
+    <div class="result-card__info">
+      <div>
+        <span class="result-card__ticker">${p.shares} szt.</span>
+        <span class="result-card__name">@ ${fmtMoney(p.buy_price, p.currency)}</span>
+      </div>
+      <div class="result-card__xtb">Kupione: ${p.buy_date} (${p.horizon || "—"})</div>
+      ${p.notes ? `<div class="result-card__reason">📝 ${escapeHtml(p.notes)}</div>` : ""}
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${p.unrealized_pct != null ? pctSign + p.unrealized_pct + "%" : "—"}</div>
+      <div class="result-card__metric-label">Zysk/strata</div>
+    </div>
+    <div class="result-card__metric">
+      <div class="result-card__metric-value">${fmtMoney(p.unrealized_value, p.currency)}</div>
+      <div class="result-card__metric-label">Wartość P/L</div>
+    </div>
+    <div class="lot-actions">
+      <button class="lot-sell" title="Sprzedaj" data-id="${p.id}">💰</button>
+      <button class="lot-edit" title="Edytuj" data-id="${p.id}">✎</button>
+      <button class="lot-duplicate" title="Kopiuj jako nową pozycję" data-id="${p.id}">⧉</button>
+      <button class="lot-delete" title="Usuń trwale" data-id="${p.id}">✕</button>
+    </div>
+  `;
+  card.dataset.position = JSON.stringify(p);
+
+  card.querySelector(".lot-sell").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const sellPrice = prompt(`Cena sprzedaży dla ${p.ticker} (${p.shares} szt. @ ${p.buy_price} ${p.currency || ""})?`);
+    if (sellPrice === null || sellPrice.trim() === "") return;
+    const parsed = parseFloat(sellPrice);
+    if (isNaN(parsed) || parsed <= 0) {
+      alert("Nieprawidłowa cena.");
+      return;
+    }
+    const sellDate = new Date().toISOString().slice(0, 10);
+    const res = await fetch(`/api/portfolio/${p.id}/close`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sell_price: parsed, sell_date: sellDate }),
+    });
+    if (res.ok) {
+      await loadPortfolio();
+    } else {
+      const b = await res.json().catch(() => ({}));
+      alert(b.detail || "Nie udało się zamknąć pozycji.");
+    }
+  });
+  card.querySelector(".lot-duplicate").addEventListener("click", (e) => {
+    e.stopPropagation();
+    duplicatePosition(p);
+  });
+  card.querySelector(".lot-delete").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Usunąć tę pozycję z portfela?")) return;
+    await fetch(`/api/portfolio/${p.id}`, { method: "DELETE" });
+    await loadPortfolio();
+  });
+
+  return card;
+}
+
+function startEditPosition(p) {
+  el("posEditId").value = p.id;
+  el("posTicker").value = p.ticker;
+  el("posShares").value = p.shares;
+  el("posBuyPrice").value = p.buy_price;
+  el("posBuyDate").value = p.buy_date;
+  el("posNotes").value = p.notes || "";
+  el("posSubmitBtn").textContent = "Zapisz zmiany";
+  el("posCancelEditBtn").style.display = "";
+  el("posTicker").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function duplicatePosition(p) {
+  el("posEditId").value = "";
+  el("posTicker").value = p.ticker;
+  el("posShares").value = p.shares;
+  el("posBuyPrice").value = p.buy_price;
+  el("posBuyDate").value = new Date().toISOString().slice(0, 10);
+  el("posNotes").value = p.notes || "";
+  el("posSubmitBtn").textContent = "+ Dodaj pozycję";
+  el("posCancelEditBtn").style.display = "none";
+  el("posTicker").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function resetPortfolioForm() {
+  el("portfolioForm").reset();
+  el("posEditId").value = "";
+  el("posSubmitBtn").textContent = "+ Dodaj pozycję";
+  el("posCancelEditBtn").style.display = "none";
+}
+
+el("posCancelEditBtn").addEventListener("click", resetPortfolioForm);
+
+el("portfolioForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = {
+    ticker: el("posTicker").value.trim(),
+    shares: parseFloat(el("posShares").value),
+    buy_price: parseFloat(el("posBuyPrice").value),
+    buy_date: el("posBuyDate").value,
+    notes: el("posNotes").value.trim(),
+  };
+  if (!body.ticker || !body.shares || !body.buy_price || !body.buy_date) return;
+
+  const editId = el("posEditId").value;
+  const url = editId ? `/api/portfolio/${editId}` : "/api/portfolio";
+  const method = editId ? "PUT" : "POST";
+
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) {
+    resetPortfolioForm();
+    await loadPortfolio();
+  } else {
+    const b = await res.json().catch(() => ({}));
+    alert(b.detail || "Nie udało się zapisać pozycji.");
+  }
+});
+
+// ---------------- Powiadomienia przeglądarki ----------------
+el("notifyBtn").addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    alert("Ta przeglądarka nie wspiera powiadomień.");
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  localStorage.setItem("notificationsEnabled", perm === "granted" ? "1" : "0");
+  el("notifyBtn").textContent = perm === "granted" ? "🔔 Włączone" : "🔕";
+});
+
+if ("Notification" in window && Notification.permission === "granted" &&
+    localStorage.getItem("notificationsEnabled") === "1") {
+  el("notifyBtn").textContent = "🔔 Włączone";
+}
+
+function maybeNotify(title, body) {
+  if (localStorage.getItem("notificationsEnabled") !== "1") return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  new Notification(title, { body });
+}
+
+function checkForAlerts(results, discovered) {
+  const all = [...(results || []), ...(discovered || [])];
+  const prev = state.categoryByTicker;
+  const next = new Map();
+
+  all.forEach((r) => {
+    const cat = r.combined.category;
+    next.set(r.ticker, cat);
+    const before = prev.get(r.ticker);
+    if (before === cat) return;
+
+    const isHeld = state.portfolioTickers.has(r.ticker);
+    if (isHeld && (r.technical.signal === "AT_TOP" || r.technical.signal === "SHARP_DECLINE")) {
+      maybeNotify(
+        `${r.ticker}: ${r.technical.signal === "AT_TOP" ? "blisko szczytu trendu" : "gwałtowny spadek"}`,
+        "Masz tę spółkę w portfelu — sprawdź zakładkę Portfel w dashboardzie."
+      );
+    } else if (!isHeld && before !== undefined && cat.startsWith("WARTO OBSERWOWAĆ")) {
+      maybeNotify(`${r.ticker}: nowy sygnał WARTO OBSERWOWAĆ`, "Możliwy dobry punkt wejścia wg narzędzia.");
+    }
+  });
+
+  state.categoryByTicker = next;
+}
+
+// ---------------- Panel szczegółów spółki ----------------
+function fmtPct(v) { return v == null ? "—" : `${v}%`; }
+
+function timeAgo(isoString) {
+  if (!isoString) return null;
+  const then = new Date(isoString).getTime();
+  if (isNaN(then)) return null;
+  const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
+
+  let label;
+  if (diffSec < 60) label = "przed chwilą";
+  else if (diffSec < 3600) label = `${Math.floor(diffSec / 60)} min temu`;
+  else if (diffSec < 86400) label = `${Math.floor(diffSec / 3600)} godz. temu`;
+  else label = `${Math.floor(diffSec / 86400)} dni temu`;
+
+  // Próg ostrzegawczy: dane starsze niż 2h sugerują, że coś mogło nie
+  // zadziałać w automatycznym cyklu (domyślnie co 60 min) - warto to
+  // wizualnie odróżnić, nie tylko podać liczbę.
+  const isStale = diffSec > 2 * 3600;
+  return { label, isStale };
+}
+function fmtMoney(v, currency) {
+  if (v == null) return "—";
+  return `${v} ${currency || ""}`.trim();
+}
+
+function renderDetailsHtml(r) {
+  const t = r.technical, s = r.sentiment, c = r.combined;
+  const trend = r.sentiment_trend, fund = r.fundamentals;
+  const news = r.news_headlines || [];
+  const catClass = stampInfo(c.category).cls;
+
+  const detailAge = timeAgo(r.analyzed_at);
+  const detailAgeHtml = detailAge
+    ? `<span class="data-age ${detailAge.isStale ? "data-age--stale" : ""}">🕐 Dane z: ${detailAge.label}</span>`
+    : "";
+
+  let html = `
+    <div class="detail-section detail-summary">
+      <span class="detail-summary__badge category--${catClass}">${escapeHtml(c.category)}</span>
+      <span class="detail-summary__score">Wynik łączny: <strong>${c.final_score}</strong> (próg: ${c.effective_threshold})</span>
+      ${c.hard_blocked ? `<span class="detail-summary__blocked">🚫 Zablokowane twardo (blisko szczytu)</span>` : ""}
+      ${detailAgeHtml}
+    </div>`;
+
+  html += `
+    <div class="detail-section">
+      <h4 class="detail-section__title">Analiza techniczna — ${escapeHtml(t.signal)} (score ${t.score})</h4>
+      <ul class="detail-list">${t.reasons.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
+      <div class="metric-grid">
+        <div><span>RSI</span><strong>${t.metrics.rsi ?? "—"}</strong></div>
+        <div><span>Trend (SMA)</span><strong>${t.metrics.uptrend ? "wzrostowy" : "brak"}</strong></div>
+        <div><span>Do 52-tyg. maks.</span><strong>${fmtPct(t.metrics.dist_from_52w_high_pct)}</strong></div>
+        <div><span>Wolumen (anomalia)</span><strong>${t.metrics.volume_spike ? "tak" : "nie"}</strong></div>
+      </div>
+    </div>`;
+
+  html += `
+    <div class="detail-section">
+      <h4 class="detail-section__title">Sentyment newsów (${escapeHtml(s.method)}) — wynik ${s.score}</h4>
+      <p class="detail-text">${escapeHtml(s.summary)}</p>
+    </div>`;
+
+  if (news.length) {
+    html += `
+      <div class="detail-section">
+        <h4 class="detail-section__title">Aktualne nagłówki</h4>
+        <ul class="news-list">${news.map((h) => `
+          <li class="news-item">
+            ${h.link ? `<a href="${h.link}" target="_blank" rel="noopener">${escapeHtml(h.title)}</a>` : escapeHtml(h.title)}
+            <span class="news-item__source">${escapeHtml(h.source || "")}</span>
+          </li>`).join("")}
+        </ul>
+      </div>`;
+  }
+
+  if (trend && trend.monthly && trend.monthly.length) {
+    html += `
+      <div class="detail-section">
+        <h4 class="detail-section__title">Trend sentymentu (12 mies.) — ${escapeHtml(trend.trend_direction)}</h4>
+        <p class="detail-text">${escapeHtml(trend.llm_narrative)}</p>
+      </div>`;
+  }
+
+  if (fund && fund.available) {
+    html += `
+      <div class="detail-section">
+        <h4 class="detail-section__title">Fundamenty (wynik ${fund.score})</h4>
+        <div class="metric-grid">
+          <div><span>P/E</span><strong>${fund.metrics.trailing_pe ?? "—"}</strong></div>
+          <div><span>Wzrost przychodów</span><strong>${fmtPct(fund.metrics.revenue_growth_pct)}</strong></div>
+          <div><span>Marża netto</span><strong>${fmtPct(fund.metrics.profit_margins_pct)}</strong></div>
+          <div><span>Dług/kapitał</span><strong>${fund.metrics.debt_to_equity ?? "—"}</strong></div>
+          <div><span>Cena docelowa (śr.)</span><strong>${fmtMoney(fund.metrics.analyst_target_mean, t.metrics.currency)}</strong></div>
+          <div><span>Potencjał wg analityków</span><strong>${fmtPct(fund.metrics.analyst_upside_pct)}</strong></div>
+        </div>
+        <ul class="detail-list">${fund.flags.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
+      </div>`;
+  } else if (fund) {
+    html += `<div class="detail-section"><p class="detail-text detail-text--muted">Dane fundamentalne niedostępne dla tej spółki.</p></div>`;
+  }
+
+  if (t.metrics.last_price != null && t.metrics.atr != null) {
+    html += `
+      <div class="detail-section">
+        <h4 class="detail-section__title">Kalkulator wielkości pozycji</h4>
+        <div class="metric-grid">
+          <div><span>Cena bieżąca</span><strong>${fmtMoney(t.metrics.last_price.toFixed(2), t.metrics.currency)}</strong></div>
+          <div><span>ATR (14)</span><strong>${fmtMoney(t.metrics.atr.toFixed(2), t.metrics.currency)}</strong></div>
+          <div><span>Sugerowany stop-loss</span><strong>${fmtMoney(t.metrics.suggested_stop_loss.toFixed(2), t.metrics.currency)}</strong></div>
+          <div><span>Odległość stopu</span><strong>${fmtPct(t.metrics.stop_distance_pct)}</strong></div>
+        </div>
+        <div class="calc-inputs">
+          <label>Kapitał (${escapeHtml(t.metrics.currency || "USD")})
+            <input type="number" id="calcCapital" min="0" step="100">
+          </label>
+          <label>Ryzyko na transakcję (%)
+            <input type="number" id="calcRisk" min="0.1" max="10" step="0.1">
+          </label>
+        </div>
+        <div class="calc-result" id="calcResult"></div>
+        <p class="detail-disclaimer">Stop-loss = cena − 2×ATR(14). Kapitał wpisuj w walucie notowania spółki (${escapeHtml(t.metrics.currency || "USD")}). To punkt wyjścia do własnego zarządzania ryzykiem, nie gotowa rekomendacja.</p>
+      </div>`;
+  } else {
+    html += `
+      <div class="detail-section">
+        <h4 class="detail-section__title">Kalkulator wielkości pozycji</h4>
+        <p class="detail-text detail-text--muted">Za mało danych historycznych, by policzyć ATR i sugerowany stop-loss.</p>
+      </div>`;
+  }
+
+  if (r.discovery_reason) {
+    html += `
+      <div class="detail-section">
+        <h4 class="detail-section__title">💡 Dlaczego zaproponowane przez AI</h4>
+        <p class="detail-text">${escapeHtml(r.discovery_reason)}</p>
+      </div>`;
+  }
+
+  html += `<p class="detail-disclaimer">To analiza narzędziowa, nie porada inwestycyjna — zweryfikuj samodzielnie przed decyzją.</p>`;
+  return html;
+}
+
+// ---------------- Kalkulator wielkości pozycji - logika interaktywna ----------------
+function setupPositionCalculator(r) {
+  const capitalInput = el("calcCapital");
+  const riskInput = el("calcRisk");
+  const resultEl = el("calcResult");
+  if (!capitalInput || !riskInput || !resultEl) return;
+
+  const lastPrice = r.technical.metrics.last_price;
+  const stopLoss = r.technical.metrics.suggested_stop_loss;
+
+  const saved = JSON.parse(localStorage.getItem("posCalcSettings") || "{}");
+  capitalInput.value = saved.capital ?? 10000;
+  riskInput.value = saved.riskPct ?? 1;
+
+  function recalc() {
+    const capital = parseFloat(capitalInput.value) || 0;
+    const riskPct = parseFloat(riskInput.value) || 0;
+    localStorage.setItem("posCalcSettings", JSON.stringify({ capital, riskPct }));
+
+    const riskAmount = capital * (riskPct / 100);
+    const riskPerShare = lastPrice - stopLoss;
+    if (riskPerShare <= 0) {
+      resultEl.innerHTML = `<p class="detail-text detail-text--muted">Nieprawidłowe dane (stop-loss ≥ cena bieżąca).</p>`;
+      return;
+    }
+    const shares = Math.floor(riskAmount / riskPerShare);
+    const positionValue = shares * lastPrice;
+
+    const currency = r.technical.metrics.currency || "USD";
+    resultEl.innerHTML = `
+      <div class="calc-highlight"><span>Ryzykujesz</span><strong>${riskAmount.toFixed(2)} ${currency}</strong></div>
+      <div class="calc-highlight"><span>Sugerowana liczba akcji</span><strong>${shares}</strong></div>
+      <div class="calc-highlight"><span>Wartość pozycji</span><strong>${positionValue.toFixed(2)} ${currency}</strong></div>
+    `;
+  }
+
+  capitalInput.addEventListener("input", recalc);
+  riskInput.addEventListener("input", recalc);
+  recalc();
+}
+
+// ---------------- Panel skuteczności narzędzia ----------------
+async function loadEffectiveness() {
+  try {
+    const res = await fetch("/api/effectiveness");
+    const stats = await res.json();
+    renderEffectiveness(stats);
+  } catch (err) {
+    console.warn("Nie udało się pobrać statystyk skuteczności:", err);
+  }
+}
+
+function renderEffectiveness(stats) {
+  const body = el("effectivenessBody");
+  const categories = Object.keys(stats || {});
+  if (categories.length === 0) {
+    body.innerHTML = `<p class="empty-state">Zbieram dane historyczne — wróć za kilka dni.</p>`;
+    return;
+  }
+
+  const rows = categories.map((cat) => {
+    const s = stats[cat];
+    const cls = stampInfo(cat).cls;
+    const sign = s.avg_return_pct >= 0 ? "+" : "";
+    return `
+      <div class="eff-row">
+        <span class="eff-row__cat category--${cls}">${escapeHtml(cat)}</span>
+        <span class="eff-row__stat">${s.count} sygn.</span>
+        <span class="eff-row__stat">win rate ${s.win_rate_pct}%</span>
+        <span class="eff-row__stat eff-row__return">${sign}${s.avg_return_pct}% śr.</span>
+      </div>`;
+  }).join("");
+
+  body.innerHTML = rows + `<p class="eff-note">Zmiana ceny od danego werdyktu do najnowszej znanej ceny (min. ${14} dni odstępu). Orientacyjna miara, nie pełny backtest.</p>`;
+}
+
+// ---------------- Odświeżanie na żywo pojedynczej spółki ----------------
+async function refreshTickerLive(ticker) {
+  const indicator = el("liveRefreshIndicator");
+  if (indicator) {
+    indicator.textContent = "Odświeżam dane na żywo (ceny, sentyment, fundamenty)…";
+    indicator.classList.remove("is-hidden");
+  }
+  try {
+    const res = await fetch(`/api/refresh/${encodeURIComponent(ticker)}`, { method: "POST" });
+    if (res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      if (indicator) indicator.textContent = body.detail || "Poczekaj przed kolejnym odświeżeniem.";
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const result = await res.json();
+    applyTickerUpdate(result);
+    if (indicator) indicator.textContent = `Zaktualizowano na żywo: ${new Date().toLocaleTimeString("pl-PL")}`;
+  } catch (err) {
+    if (indicator) indicator.textContent = "Nie udało się odświeżyć na żywo — pokazuję ostatnie znane dane.";
+    console.warn("Live refresh error:", err);
+  }
+}
+
+function applyTickerUpdate(result) {
+  state.resultsByTicker.set(result.ticker, result);
+
+  if (state.lastPayload) {
+    for (const key of ["results", "discovered_results"]) {
+      const arr = state.lastPayload[key] || [];
+      const idx = arr.findIndex((r) => r.ticker === result.ticker);
+      if (idx !== -1) arr[idx] = result;
+    }
+    renderResultsGrid("resultsGrid", state.lastPayload.results, "Czekam na pierwszy cykl analizy…", state_sort.main);
+    renderResultsGrid("discoveredGrid", state.lastPayload.discovered_results, "Brak propozycji w tym cyklu.", state_sort.discovered);
+  }
+
+  // Jeśli modal jest właśnie otwarty dla tej samej spółki - podmień panel na żywo.
+  if (state.openTicker === result.ticker) {
+    el("modalDetails").innerHTML = renderDetailsHtml(result);
+    setupPositionCalculator(result);
+  }
+}
+
+// ---------------- Zamknięte transakcje ----------------
+
+async function loadClosedPortfolio() {
+  try {
+    const res = await fetch("/api/portfolio/closed");
+    const data = await res.json();
+    renderClosedPortfolio(data.positions, data.summary);
+  } catch (err) {
+    console.warn("Nie udało się pobrać zamkniętych transakcji:", err);
+  }
+}
+
+function renderClosedSummaryBar(summary) {
+  const bar = el("closedSummaryBar");
+  bar.innerHTML = "";
+  const currencies = Object.keys(summary || {});
+  if (currencies.length === 0) return;
+
+  currencies.forEach((currency) => {
+    const s = summary[currency];
+    const wrap = document.createElement("div");
+    wrap.className = "portfolio-summary-currency";
+    wrap.innerHTML = `
+      <div class="portfolio-summary-currency__label">Zrealizowane — ${escapeHtml(currency)}</div>
+      <div class="portfolio-summary-bar">
+        <div class="portfolio-summary-bar__item"><span>Liczba transakcji</span><strong>${s.count}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Win rate</span><strong>${s.win_rate_pct}%</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Zrealizowany zysk/strata</span>
+          <strong class="${s.realized_pl >= 0 ? "positive" : "negative"}">${s.realized_pl >= 0 ? "+" : ""}${s.realized_pl.toFixed(2)}</strong>
+        </div>
+      </div>
+    `;
+    bar.appendChild(wrap);
+  });
+}
+
+function renderClosedPortfolio(positions, summary) {
+  renderClosedSummaryBar(summary);
+  const grid = el("closedGrid");
+  grid.innerHTML = "";
+
+  if (!positions || positions.length === 0) {
+    grid.innerHTML = `<p class="empty-state">Brak zamkniętych transakcji.</p>`;
+    return;
+  }
+
+  let sorted = positions;
+  if (state_sort.closed.key) {
+    sorted = [...positions].sort((a, b) => {
+      let va, vb;
+      switch (state_sort.closed.key) {
+        case "name": va = a.ticker; vb = b.ticker; break;
+        case "buy": va = a.buy_price; vb = b.buy_price; break;
+        case "sell": va = a.sell_price; vb = b.sell_price; break;
+        case "pl_pct": va = a.realized_pl_pct; vb = b.realized_pl_pct; break;
+        default: va = vb = 0;
+      }
+      const cmp = typeof va === "string" ? va.localeCompare(vb) : va - vb;
+      return state_sort.closed.dir === "asc" ? cmp : -cmp;
+    });
+  }
+
+  sorted.forEach((p) => {
+    const cls = p.realized_pl >= 0 ? "buy" : "avoid";
+    const card = document.createElement("div");
+    card.className = "result-card portfolio-card closed-card";
+    card.innerHTML = `
+      <div class="stamp stamp--${cls}">${p.realized_pl >= 0 ? "ZYSK" : "STRATA"}</div>
+      <div class="result-card__info">
+        <div>
+          <span class="result-card__ticker">${p.ticker}</span>
+          <span class="result-card__name">${p.shares} szt. (${p.holding_days ?? "?"} dni)</span>
+        </div>
+        ${p.notes ? `<div class="result-card__reason">📝 ${escapeHtml(p.notes)}</div>` : ""}
+      </div>
+      <div class="result-card__metric">
+        <div class="result-card__metric-value">${fmtMoney(p.buy_price, p.currency)}</div>
+        <div class="result-card__metric-label">${p.buy_date}</div>
+      </div>
+      <div class="result-card__metric">
+        <div class="result-card__metric-value">${fmtMoney(p.sell_price, p.currency)}</div>
+        <div class="result-card__metric-label">${p.sell_date}</div>
+      </div>
+      <div class="result-card__metric">
+        <div class="result-card__metric-value">${p.realized_pl_pct >= 0 ? "+" : ""}${p.realized_pl_pct}%</div>
+        <div class="result-card__metric-label">${fmtMoney(p.realized_pl, p.currency)}</div>
+      </div>
+      <div class="result-card__category category--${cls}">
+        <button class="watchlist__remove" title="Cofnij sprzedaż" data-id="${p.id}">↺</button>
+      </div>
+    `;
+    card.querySelector(".watchlist__remove").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Cofnąć sprzedaż ${p.ticker}? Pozycja wróci do aktywnego portfela.`)) return;
+      await fetch(`/api/portfolio/${p.id}/reopen`, { method: "POST" });
+      await loadClosedPortfolio();
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ---------------- Panel ryzyka portfela ----------------
+async function loadPortfolioRisk() {
+  try {
+    const res = await fetch("/api/portfolio/risk");
+    const data = await res.json();
+    renderPortfolioRisk(data);
+  } catch (err) {
+    console.warn("Nie udało się pobrać ryzyka portfela:", err);
+  }
+}
+
+function renderPortfolioRisk(data) {
+  const panel = el("portfolioRiskPanel");
+  const riskByCurrency = (data.risk && data.risk.by_currency) || {};
+  const currencies = Object.keys(riskByCurrency);
+
+  let html = "";
+  if (currencies.length === 0) {
+    html += `<p class="empty-state">Brak otwartych pozycji do oceny ryzyka.</p>`;
+  } else {
+    html += `<div class="risk-cards">`;
+    currencies.forEach((currency) => {
+      const r = riskByCurrency[currency];
+      html += `
+        <div class="risk-card">
+          <div class="risk-card__label">Ryzyko przy stop-lossach (${escapeHtml(currency)})</div>
+          <div class="risk-card__value">${r.risk_amount.toFixed(2)} ${escapeHtml(currency)}</div>
+          <div class="risk-card__sub">${r.risk_pct != null ? r.risk_pct + "% wartości portfela" : "brak danych %"}</div>
+        </div>`;
+    });
+    html += `</div>`;
+    if (data.risk.positions_without_stop_loss > 0) {
+      html += `<p class="detail-disclaimer">${data.risk.positions_without_stop_loss} pozycji pominięto (brak jeszcze danych stop-loss — poczekaj na analizę).</p>`;
+    }
+  }
+
+  const exposure = data.sector_exposure || [];
+  if (exposure.length > 0) {
+    html += `<div class="detail-section"><h4 class="detail-section__title">Ekspozycja sektorowa portfela</h4>`;
+    html += exposure.map((s) => `
+      <div class="eff-row">
+        <span class="eff-row__cat">${escapeHtml(s.sector)}</span>
+        <span class="eff-row__stat">${s.pct_of_portfolio}% (${escapeHtml(s.tickers.join(", "))})</span>
+      </div>`).join("");
+    html += `</div>`;
+  }
+
+  panel.innerHTML = html;
+}
+
+// ---------------- Krzywa kapitału portfela ----------------
+let equityChart = null;
+let equityCurrentCurrency = null;
+
+async function loadPortfolioEquitySection() {
+  try {
+    const res = await fetch("/api/portfolio/equity-currencies");
+    const currencies = await res.json();
+    renderEquityCurrencySwitcher(currencies);
+    if (currencies.length > 0) {
+      equityCurrentCurrency = (equityCurrentCurrency && currencies.includes(equityCurrentCurrency))
+        ? equityCurrentCurrency : currencies[0];
+      await loadPortfolioEquity(equityCurrentCurrency);
+    } else {
+      el("equityEmptyState").style.display = "";
+      el("equityChartContainer").innerHTML = "";
+      el("equityDrawdownLabel").textContent = "";
+    }
+  } catch (err) {
+    console.warn("Nie udało się pobrać walut krzywej kapitału:", err);
+  }
+}
+
+function renderEquityCurrencySwitcher(currencies) {
+  const wrap = el("equityCurrencySwitcher");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  if (currencies.length <= 1) return;
+  currencies.forEach((c) => {
+    const btn = document.createElement("button");
+    btn.className = "btn btn--icon";
+    btn.textContent = c;
+    btn.addEventListener("click", async () => {
+      equityCurrentCurrency = c;
+      await loadPortfolioEquity(c);
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+async function loadPortfolioEquity(currency) {
+  const res = await fetch(`/api/portfolio/equity/${encodeURIComponent(currency)}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  const container = el("equityChartContainer");
+  const emptyState = el("equityEmptyState");
+
+  if (!data.points || data.points.length < 2) {
+    emptyState.style.display = "";
+    container.innerHTML = "";
+    el("equityDrawdownLabel").textContent = "";
+    return;
+  }
+  emptyState.style.display = "none";
+  container.innerHTML = "";
+
+  if (equityChart) {
+    equityChart.remove();
+    equityChart = null;
+  }
+
+  equityChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 260,
+    layout: { background: { color: "transparent" }, textColor: "#8A93A8", fontFamily: "IBM Plex Mono, monospace" },
+    grid: { vertLines: { color: "#2A3346" }, horzLines: { color: "#2A3346" } },
+    timeScale: { borderColor: "#2A3346" },
+    rightPriceScale: { borderColor: "#2A3346" },
+  });
+  const valueSeries = equityChart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
+  const costSeries = equityChart.addLineSeries({ color: "#8A93A8", lineWidth: 1, lineStyle: 2 });
+
+  const toTime = (ts) => ts.split(" ")[0];
+  const seen = new Set();
+  const valuePoints = [];
+  const costPoints = [];
+  data.points.forEach((p) => {
+    const t = toTime(p.ts);
+    if (seen.has(t)) return; // Lightweight Charts wymaga unikalnych, rosnących dat
+    seen.add(t);
+    valuePoints.push({ time: t, value: p.total_value });
+    costPoints.push({ time: t, value: p.total_cost });
+  });
+  valueSeries.setData(valuePoints);
+  costSeries.setData(costPoints);
+  equityChart.timeScale().fitContent();
+
+  const dd = data.drawdown;
+  if (dd && dd.available) {
+    el("equityDrawdownLabel").textContent =
+      `maks. obsunięcie: -${dd.max_drawdown_pct}% (${dd.max_drawdown_peak_date.split(" ")[0]} → ${dd.max_drawdown_trough_date.split(" ")[0]})` +
+      (dd.current_drawdown_pct > 0 ? `, bieżące: -${dd.current_drawdown_pct}%` : "");
+  }
+}
+
+// ---------------- Start ----------------
+(async function init() {
+  // Zabezpieczenie: modal MUSI być bezpośrednim dzieckiem <body>, inaczej
+  // (jeśli w HTML przypadkiem wylądował zagnieżdżony w jednej z zakładek
+  // <main> o display:none) w ogóle by się nie renderował, mimo że JS
+  // poprawnie dodaje klasę "is-open" - przenosimy go tutaj na pewniaka.
+  document.body.appendChild(el("chartModal"));
+
+  setupSortableHeaders();
+  await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness()]);
+  connectWebSocket();
+  updateNextRunLabel();
+})();
