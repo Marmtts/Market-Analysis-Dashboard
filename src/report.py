@@ -478,3 +478,58 @@ def compute_portfolio_sector_exposure(open_positions_evaluated: list[dict],
     ]
     exposure.sort(key=lambda x: -x["pct_of_portfolio"])
     return exposure
+
+def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN") -> dict:
+    """Grupuje ZREALIZOWANE transakcje wg roku sprzedaży i liczy orientacyjny
+    wynik podatkowy (podatek od zysków kapitałowych, 19% w Polsce - tzw.
+    'podatek Belki'). TO NIE JEST OFICJALNE ROZLICZENIE - kursy walut obcych
+    liczone są kursem RYNKOWYM z dnia transakcji (yfinance), a nie
+    oficjalnym średnim kursem NBP wymaganym przepisami do PIT-38. Zawsze
+    zweryfikuj dokładne kwoty przed złożeniem deklaracji."""
+    from .fx_rates import get_historical_fx_rate
+
+    by_year: dict[str, dict] = {}
+    conversion_notes: list[str] = []
+
+    for p in closed_positions:
+        sell_date = p.get("sell_date")
+        if not sell_date:
+            continue
+        sell_year = sell_date[:4]
+        currency = p.get("currency") or "USD"
+
+        buy_rate = 1.0 if currency == base_currency else get_historical_fx_rate(currency, base_currency, p["buy_date"])
+        sell_rate = 1.0 if currency == base_currency else get_historical_fx_rate(currency, base_currency, sell_date)
+
+        if buy_rate is None or sell_rate is None:
+            conversion_notes.append(
+                f"{p['ticker']} ({p['buy_date']} -> {sell_date}): brak kursu {currency}->{base_currency}, pominięto."
+            )
+            continue
+
+        cost = p["buy_price"] * p["shares"] * buy_rate
+        proceeds = p["sell_price"] * p["shares"] * sell_rate
+        gain = proceeds - cost
+
+        bucket = by_year.setdefault(sell_year, {"gains": 0.0, "losses": 0.0, "count": 0, "trades": []})
+        bucket["count"] += 1
+        if gain >= 0:
+            bucket["gains"] += gain
+        else:
+            bucket["losses"] += -gain
+        bucket["trades"].append({"ticker": p["ticker"], "sell_date": sell_date,
+                                  "gain": round(gain, 2), "currency": currency})
+
+    result = {}
+    for year, b in sorted(by_year.items()):
+        net = b["gains"] - b["losses"]
+        result[year] = {
+            "trade_count": b["count"],
+            "total_gains": round(b["gains"], 2),
+            "total_losses": round(b["losses"], 2),
+            "net_result": round(net, 2),
+            "estimated_tax_19pct": round(max(0.0, net) * 0.19, 2),
+            "trades": b["trades"],
+        }
+
+    return {"base_currency": base_currency, "by_year": result, "conversion_notes": conversion_notes}

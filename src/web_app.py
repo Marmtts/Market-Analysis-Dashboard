@@ -56,8 +56,10 @@ from src.json_utils import sanitize_for_json
 from src.report import (
     evaluate_portfolio_position, compute_max_drawdown,
     compute_portfolio_risk_summary, compute_portfolio_sector_exposure,
+    compute_tax_summary,
 )
 from src.daily_brief import generate_daily_brief
+from src.fx_rates import get_fx_rate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("xtb_trend_watch.web_app")
@@ -206,6 +208,26 @@ def _get_enriched_open_positions(cached: dict | None = None) -> list[dict]:
         enriched.append({**p, **evaluation})
     return enriched
 
+def _build_combined_portfolio_view(enriched_positions: list[dict], base_currency: str) -> tuple[list[dict], set]:
+    """Przelicza kwoty pieniężne KAŻDEJ pozycji na base_currency, żeby móc
+    je bezpiecznie zsumować (bez tego mieszalibyśmy np. USD i PLN jak tę
+    samą jednostkę - patrz naprawiony bug w compute_portfolio_sector_exposure).
+    Zwraca (przeliczone_pozycje, zbiór_walut_ktorych_nie_udalo_sie_przeliczyc)."""
+    converted = []
+    skipped = set()
+    for p in enriched_positions:
+        currency = p.get("currency") or "USD"
+        rate = get_fx_rate(currency, base_currency)
+        if rate is None:
+            skipped.add(currency)
+            continue
+        p2 = dict(p)
+        for key in ("market_value", "cost_basis", "unrealized_value", "current_price", "suggested_stop_loss"):
+            if p2.get(key) is not None:
+                p2[key] = p2[key] * rate
+        p2["currency"] = base_currency  # dla compute_portfolio_risk_summary - jeden wspólny "koszyk"
+        converted.append(p2)
+    return converted, skipped
 
 def _run_analysis_blocking() -> dict:
     watchlist = db.get_watchlist()
@@ -251,6 +273,18 @@ def _run_analysis_blocking() -> dict:
     for currency, totals in equity_by_currency.items():
         db.record_portfolio_equity_snapshot(currency, totals["value"], totals["cost"])
 
+    # Widok ŁĄCZNY (wszystkie waluty przeliczone na jedną, base_currency) -
+    # kursem AKTUALNYM W TYM CYKLU, więc historia w czasie jest dokładna.
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    combined_positions, skipped_currencies = _build_combined_portfolio_view(enriched_positions, base_currency)
+    combined_value = sum(p.get("market_value") or 0.0 for p in combined_positions)
+    combined_cost = sum(p.get("cost_basis") or 0.0 for p in combined_positions)
+    if combined_positions or not equity_by_currency:
+        db.record_portfolio_equity_combined_snapshot(base_currency, combined_value, combined_cost)
+    if skipped_currencies:
+        logger.warning("Nie udało się przeliczyć walut %s na %s - pominięte w widoku łącznym.",
+                        skipped_currencies, base_currency)
+
     # Codzienny brief AI - generowany na końcu, gdy mamy już PEŁEN obraz
     # (wyniki + portfel + ryzyko) do podsumowania w jednym spójnym tekście.
     portfolio_summary_for_brief = None
@@ -264,6 +298,11 @@ def _run_analysis_blocking() -> dict:
                 "value": totals["value"], "cost": totals["cost"], "pl_pct": pl_pct,
                 "risk_pct": risk_for_currency.get("risk_pct"),
             }
+        combined_pl_pct = ((combined_value - combined_cost) / combined_cost * 100) if combined_cost > 0 else 0.0
+        portfolio_summary_for_brief["combined"] = {
+            "base_currency": base_currency, "value": combined_value,
+            "cost": combined_cost, "pl_pct": combined_pl_pct,
+        }
 
     try:
         payload["daily_brief"] = generate_daily_brief(payload, portfolio_summary_for_brief, _cfg["llm"])
@@ -484,14 +523,40 @@ async def api_get_portfolio():
 @app.get("/api/portfolio/risk")
 async def api_get_portfolio_risk():
     enriched = _get_enriched_open_positions()
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
     cached = db.load_results_cache() or {}
     fundamentals_by_ticker = {
         r["ticker"]: r.get("fundamentals")
         for r in (cached.get("results") or []) + (cached.get("discovered_results") or [])
     }
-    risk = compute_portfolio_risk_summary(enriched)
-    exposure = compute_portfolio_sector_exposure(enriched, fundamentals_by_ticker)
-    return sanitize_for_json({"risk": risk, "sector_exposure": exposure})
+
+    risk = compute_portfolio_risk_summary(enriched)  # per-natywna-waluta, bez zmian
+
+    # Widok łączny - konwersja na base_currency NAPRAWIA też stary bug:
+    # ekspozycja sektorowa wcześniej sumowała market_value z różnych walut
+    # BEZ przeliczenia (np. 100 USD + 100 PLN liczone jako "200" tej samej
+    # jednostki) - teraz liczona na przeliczonych, spójnych kwotach.
+    combined_positions, skipped = _build_combined_portfolio_view(enriched, base_currency)
+    combined_value = sum(p.get("market_value") or 0.0 for p in combined_positions)
+    combined_cost = sum(p.get("cost_basis") or 0.0 for p in combined_positions)
+    combined_pl_pct = ((combined_value - combined_cost) / combined_cost * 100) if combined_cost > 0 else None
+    combined_risk = compute_portfolio_risk_summary(combined_positions)
+    combined_risk_bucket = combined_risk.get("by_currency", {}).get(base_currency, {})
+    sector_exposure = compute_portfolio_sector_exposure(combined_positions, fundamentals_by_ticker)
+
+    return sanitize_for_json({
+        "risk": risk,
+        "sector_exposure": sector_exposure,
+        "combined": {
+            "base_currency": base_currency,
+            "value": round(combined_value, 2),
+            "cost": round(combined_cost, 2),
+            "pl_pct": round(combined_pl_pct, 2) if combined_pl_pct is not None else None,
+            "risk_amount": combined_risk_bucket.get("risk_amount"),
+            "risk_pct": combined_risk_bucket.get("risk_pct"),
+            "skipped_currencies": sorted(skipped),
+        },
+    })
 
 
 @app.get("/api/portfolio/equity-currencies")
@@ -504,6 +569,14 @@ async def api_get_portfolio_equity(currency: str):
     points = db.get_portfolio_equity_curve(currency)
     drawdown = compute_max_drawdown(points)
     return sanitize_for_json({"points": points, "drawdown": drawdown})
+
+
+@app.get("/api/portfolio/equity/combined")
+async def api_get_portfolio_equity_combined():
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    points = db.get_portfolio_equity_combined_curve(base_currency)
+    drawdown = compute_max_drawdown(points)
+    return sanitize_for_json({"points": points, "drawdown": drawdown, "base_currency": base_currency})
 
 
 @app.get("/api/portfolio/closed")
@@ -520,6 +593,14 @@ async def api_get_closed_portfolio():
             p["holding_days"] = None
     return sanitize_for_json({"positions": positions, "summary": db.get_closed_summary()})
 
+@app.get("/api/portfolio/tax-summary")
+async def api_get_tax_summary():
+    closed = db.get_portfolio(status="closed")
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    # Wywołania kursów historycznych (yfinance) mogą chwilę potrwać przy
+    # wielu transakcjach - w osobnym wątku, żeby nie blokować pętli asyncio.
+    summary = await asyncio.to_thread(compute_tax_summary, closed, base_currency)
+    return sanitize_for_json(summary)
 
 @app.post("/api/portfolio/{position_id}/close")
 async def api_close_position(position_id: int, req: ClosePositionRequest):

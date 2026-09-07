@@ -86,6 +86,15 @@ CREATE TABLE IF NOT EXISTS portfolio_equity_history (
 );
 CREATE INDEX IF NOT EXISTS idx_portfolio_equity_currency ON portfolio_equity_history(currency, ts);
 
+CREATE TABLE IF NOT EXISTS portfolio_equity_combined (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL DEFAULT (datetime('now')),
+    base_currency TEXT NOT NULL,
+    total_value REAL NOT NULL,
+    total_cost REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_equity_combined ON portfolio_equity_combined(base_currency, ts);
+
 
 CREATE TABLE IF NOT EXISTS training_examples (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -593,3 +602,31 @@ def get_equity_currencies() -> list[str]:
     with _connect() as conn:
         rows = conn.execute("SELECT DISTINCT currency FROM portfolio_equity_history").fetchall()
         return [r["currency"] for r in rows]
+
+
+def record_portfolio_equity_combined_snapshot(base_currency: str, total_value: float, total_cost: float) -> None:
+    """Zapisuje 'zdjęcie' ŁĄCZNEJ wartości portfela (wszystkie waluty
+    przeliczone na base_currency KURSEM Z MOMENTU TEGO CYKLU) - dzięki temu
+    historia w czasie jest dokładna, nie przybliżeniem dzisiejszym kursem
+    zastosowanym wstecz."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO portfolio_equity_combined (base_currency, total_value, total_cost) VALUES (?, ?, ?)",
+            (base_currency.upper(), total_value, total_cost),
+        )
+        conn.execute(
+            "DELETE FROM portfolio_equity_combined WHERE base_currency = ? AND id NOT IN "
+            "(SELECT id FROM portfolio_equity_combined WHERE base_currency = ? ORDER BY ts DESC LIMIT 2000)",
+            (base_currency.upper(), base_currency.upper()),
+        )
+        conn.commit()
+
+
+def get_portfolio_equity_combined_curve(base_currency: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT ts, total_value, total_cost FROM portfolio_equity_combined "
+            "WHERE base_currency = ? ORDER BY ts ASC",
+            (base_currency.upper(),),
+        ).fetchall()
+        return [dict(r) for r in rows]

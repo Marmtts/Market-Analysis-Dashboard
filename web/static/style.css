@@ -743,3 +743,42 @@ html, body {
   color: var(--text);
   margin: 0;
 }
+
+/* ---------------- Podsumowanie łączne (wszystkie waluty) ---------------- */
+.combined-summary {
+  background: linear-gradient(135deg, var(--bg-elevated-2), var(--bg-elevated));
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+.combined-summary__label {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-gold-bright);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.1rem;
+}
+.combined-summary__note {
+  grid-column: 1 / -1;
+  font-size: 0.68rem; color: var(--text-faint); font-style: italic; margin-top: 0.2rem;
+}
+
+.currency-switch-btn {
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
+  padding: 0.35rem 0.75rem; border-radius: 999px;
+  border: 1px solid var(--border-bright); background: var(--bg-elevated-2); color: var(--text-dim);
+  cursor: pointer;
+}
+.currency-switch-btn.is-active { border-color: var(--accent-gold); color: var(--accent-gold-bright); }
+
+.tax-year-card {
+  background: var(--bg-elevated-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.75rem 1rem; margin-bottom: 0.6rem;
+}
+.tax-year-card__header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 0.5rem; font-family: var(--font-display); font-size: 1rem;
+}
+.tax-year-card__header span { font-size: 0.72rem; color: var(--text-faint); font-family: var(--font-mono); }

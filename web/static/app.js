@@ -406,7 +406,6 @@ function handleWsMessage(msg) {
       checkForAlerts([msg.result], []);
       break;
     case "price_alert":
-      maybeNotify(msg.title, msg.body);
       appendLog({
         level: msg.type === "stop_loss" ? "error" : "success",
         message: `🔔 ${msg.title}: ${msg.body}`,
@@ -596,7 +595,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
       loadPortfolio();
       loadPortfolioEquitySection();
     }
-    if (tab === "closed") loadClosedPortfolio();
+    if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
   });
 });
 
@@ -909,27 +908,6 @@ el("portfolioForm").addEventListener("submit", async (e) => {
   }
 });
 
-// ---------------- Powiadomienia przeglądarki ----------------
-el("notifyBtn").addEventListener("click", async () => {
-  if (!("Notification" in window)) {
-    alert("Ta przeglądarka nie wspiera powiadomień.");
-    return;
-  }
-  const perm = await Notification.requestPermission();
-  localStorage.setItem("notificationsEnabled", perm === "granted" ? "1" : "0");
-  el("notifyBtn").textContent = perm === "granted" ? "🔔 Włączone" : "🔕";
-});
-
-if ("Notification" in window && Notification.permission === "granted" &&
-    localStorage.getItem("notificationsEnabled") === "1") {
-  el("notifyBtn").textContent = "🔔 Włączone";
-}
-
-function maybeNotify(title, body) {
-  if (localStorage.getItem("notificationsEnabled") !== "1") return;
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  new Notification(title, { body });
-}
 
 function checkForAlerts(results, discovered) {
   const all = [...(results || []), ...(discovered || [])];
@@ -944,12 +922,12 @@ function checkForAlerts(results, discovered) {
 
     const isHeld = state.portfolioTickers.has(r.ticker);
     if (isHeld && (r.technical.signal === "AT_TOP" || r.technical.signal === "SHARP_DECLINE")) {
-      maybeNotify(
-        `${r.ticker}: ${r.technical.signal === "AT_TOP" ? "blisko szczytu trendu" : "gwałtowny spadek"}`,
-        "Masz tę spółkę w portfelu — sprawdź zakładkę Portfel w dashboardzie."
-      );
+      appendLog({
+        level: "error",
+        message: `🔔 ${r.ticker}: ${r.technical.signal === "AT_TOP" ? "blisko szczytu trendu" : "gwałtowny spadek"} — sprawdź zakładkę Portfel.`,
+      });
     } else if (!isHeld && before !== undefined && cat.startsWith("WARTO OBSERWOWAĆ")) {
-      maybeNotify(`${r.ticker}: nowy sygnał WARTO OBSERWOWAĆ`, "Możliwy dobry punkt wejścia wg narzędzia.");
+      appendLog({ level: "success", message: `🔔 ${r.ticker}: nowy sygnał WARTO OBSERWOWAĆ.` });
     }
   });
 
@@ -1325,10 +1303,39 @@ async function loadPortfolioRisk() {
   try {
     const res = await fetch("/api/portfolio/risk");
     const data = await res.json();
+    renderCombinedSummary(data.combined);
     renderPortfolioRisk(data);
   } catch (err) {
     console.warn("Nie udało się pobrać ryzyka portfela:", err);
   }
+}
+
+function renderCombinedSummary(combined) {
+  const bar = el("combinedSummaryBar");
+  if (!combined || combined.value == null) {
+    bar.innerHTML = "";
+    return;
+  }
+  const pl = combined.value - combined.cost;
+  const plCls = pl >= 0 ? "positive" : "negative";
+  const riskLine = combined.risk_pct != null
+    ? `<div class="portfolio-summary-bar__item"><span>Ryzyko (stop-lossy)</span><strong>${combined.risk_amount.toFixed(2)} (${combined.risk_pct}%)</strong></div>`
+    : "";
+  const skippedNote = (combined.skipped_currencies && combined.skipped_currencies.length)
+    ? `<div class="combined-summary__note">Nie udało się przeliczyć kursu dla: ${combined.skipped_currencies.join(", ")} - pominięte w sumie łącznej.</div>`
+    : "";
+
+  bar.innerHTML = `
+    <div class="combined-summary">
+      <div class="combined-summary__label">Podsumowanie łączne — ${escapeHtml(combined.base_currency)}</div>
+      <div class="portfolio-summary-bar__item"><span>Zainwestowano</span><strong>${combined.cost.toFixed(2)}</strong></div>
+      <div class="portfolio-summary-bar__item"><span>Wartość bieżąca</span><strong>${combined.value.toFixed(2)}</strong></div>
+      <div class="portfolio-summary-bar__item"><span>Zysk / strata</span><strong class="${plCls}">${pl >= 0 ? "+" : ""}${pl.toFixed(2)}</strong></div>
+      <div class="portfolio-summary-bar__item"><span>Zysk / strata %</span><strong class="${combined.pl_pct >= 0 ? "positive" : "negative"}">${combined.pl_pct != null ? (combined.pl_pct >= 0 ? "+" : "") + combined.pl_pct + "%" : "—"}</strong></div>
+      ${riskLine}
+      ${skippedNote}
+    </div>
+  `;
 }
 
 function renderPortfolioRisk(data) {
@@ -1378,32 +1385,28 @@ async function loadPortfolioEquitySection() {
   try {
     const res = await fetch("/api/portfolio/equity-currencies");
     const currencies = await res.json();
-    renderEquityCurrencySwitcher(currencies);
-    if (currencies.length > 0) {
-      equityCurrentCurrency = (equityCurrentCurrency && currencies.includes(equityCurrentCurrency))
-        ? equityCurrentCurrency : currencies[0];
-      await loadPortfolioEquity(equityCurrentCurrency);
-    } else {
-      el("equityEmptyState").style.display = "";
-      el("equityChartContainer").innerHTML = "";
-      el("equityDrawdownLabel").textContent = "";
-    }
+    const options = ["COMBINED", ...currencies]; // "Łącznie" zawsze pierwsze
+    renderEquityCurrencySwitcher(options);
+    equityCurrentCurrency = (equityCurrentCurrency && options.includes(equityCurrentCurrency))
+      ? equityCurrentCurrency : "COMBINED";
+    await loadPortfolioEquity(equityCurrentCurrency);
   } catch (err) {
     console.warn("Nie udało się pobrać walut krzywej kapitału:", err);
   }
 }
 
-function renderEquityCurrencySwitcher(currencies) {
+function renderEquityCurrencySwitcher(options) {
   const wrap = el("equityCurrencySwitcher");
   if (!wrap) return;
   wrap.innerHTML = "";
-  if (currencies.length <= 1) return;
-  currencies.forEach((c) => {
+  options.forEach((c) => {
     const btn = document.createElement("button");
-    btn.className = "btn btn--icon";
-    btn.textContent = c;
+    btn.className = "currency-switch-btn" + (c === equityCurrentCurrency ? " is-active" : "");
+    btn.textContent = c === "COMBINED" ? "Łącznie" : c;
     btn.addEventListener("click", async () => {
       equityCurrentCurrency = c;
+      wrap.querySelectorAll(".currency-switch-btn").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
       await loadPortfolioEquity(c);
     });
     wrap.appendChild(btn);
@@ -1411,7 +1414,8 @@ function renderEquityCurrencySwitcher(currencies) {
 }
 
 async function loadPortfolioEquity(currency) {
-  const res = await fetch(`/api/portfolio/equity/${encodeURIComponent(currency)}`);
+  const endpoint = currency === "COMBINED" ? "/api/portfolio/equity/combined" : `/api/portfolio/equity/${encodeURIComponent(currency)}`;
+  const res = await fetch(endpoint);
   if (!res.ok) return;
   const data = await res.json();
   const container = el("equityChartContainer");
@@ -1463,6 +1467,51 @@ async function loadPortfolioEquity(currency) {
       `maks. obsunięcie: -${dd.max_drawdown_pct}% (${dd.max_drawdown_peak_date.split(" ")[0]} → ${dd.max_drawdown_trough_date.split(" ")[0]})` +
       (dd.current_drawdown_pct > 0 ? `, bieżące: -${dd.current_drawdown_pct}%` : "");
   }
+}
+
+// ---------------- Orientacyjne podsumowanie podatkowe ----------------
+async function loadTaxSummary() {
+  try {
+    const res = await fetch("/api/portfolio/tax-summary");
+    const data = await res.json();
+    renderTaxSummary(data);
+  } catch (err) {
+    console.warn("Nie udało się pobrać podsumowania podatkowego:", err);
+  }
+}
+
+function renderTaxSummary(data) {
+  const panel = el("taxSummaryPanel");
+  const years = Object.keys(data.by_year || {}).sort().reverse();
+  if (years.length === 0) {
+    panel.innerHTML = "";
+    return;
+  }
+
+  let html = `<div class="detail-section">
+    <h4 class="detail-section__title">📊 Orientacyjne podsumowanie podatkowe (${escapeHtml(data.base_currency)})</h4>`;
+
+  years.forEach((year) => {
+    const y = data.by_year[year];
+    html += `
+      <div class="tax-year-card">
+        <div class="tax-year-card__header"><strong>${year}</strong><span>${y.trade_count} transakcji</span></div>
+        <div class="metric-grid">
+          <div><span>Zyski</span><strong class="positive">+${y.total_gains.toFixed(2)}</strong></div>
+          <div><span>Straty</span><strong class="negative">-${y.total_losses.toFixed(2)}</strong></div>
+          <div><span>Wynik netto</span><strong class="${y.net_result >= 0 ? "positive" : "negative"}">${y.net_result >= 0 ? "+" : ""}${y.net_result.toFixed(2)}</strong></div>
+          <div><span>Szac. podatek (19%)</span><strong>${y.estimated_tax_19pct.toFixed(2)}</strong></div>
+        </div>
+      </div>`;
+  });
+
+  if (data.conversion_notes && data.conversion_notes.length) {
+    html += `<ul class="detail-list">${data.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+  }
+
+  html += `<p class="detail-disclaimer">⚠️ To orientacyjne wyliczenie, NIE oficjalne rozliczenie podatkowe. Kursy walut obcych liczone są kursem rynkowym z dnia transakcji, a NIE oficjalnym średnim kursem NBP wymaganym przez polskie przepisy do PIT-38. Przed złożeniem deklaracji zweryfikuj dokładne kwoty w tabelach kursów NBP i skonsultuj się z doradcą podatkowym.</p></div>`;
+
+  panel.innerHTML = html;
 }
 
 // ---------------- Start ----------------
