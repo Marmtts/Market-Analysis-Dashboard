@@ -25,6 +25,12 @@ import numpy as np
 import pandas as pd
 
 
+# Kara za bliskość 52-tyg. maksimum - wydzielona jako stała, żeby móc ją
+# precyzyjnie COFNĄĆ dla ETF-ów w analysis_engine.py (patrz sekcja o ETF-ach),
+# zamiast zgadywać, ile dokładnie odjąć.
+AT_TOP_DISTANCE_PENALTY = 0.30
+
+
 @dataclass
 class TechnicalResult:
     ticker: str
@@ -132,7 +138,7 @@ def analyze(ticker: str, history: pd.DataFrame, fifty_two_week_high: float,
 
     # --- Kara za bycie blisko szczytu 52-tygodniowego (unikanie "górek") ---
     if dist_from_52w_high_pct <= cfg["distance_from_high_52w_warning_pct"]:
-        score -= 0.30
+        score -= AT_TOP_DISTANCE_PENALTY
         reasons.append(
             f"Cena jest zaledwie {dist_from_52w_high_pct:.1f}% poniżej 52-tyg. maksimum - "
             f"wysokie ryzyko kupna blisko szczytu."
@@ -328,3 +334,19 @@ def analyze_multi_timeframe(ticker: str, daily_history: pd.DataFrame,
             result.reasons.append(reason)
 
     return result
+
+def compute_relative_strength(stock_history: pd.DataFrame, benchmark_history: pd.DataFrame,
+                               lookback_days: int) -> dict | None:
+    """Porównuje zwrot spółki ze zwrotem benchmarku w tym samym oknie czasowym -
+    odróżnia 'rośnie, bo cały rynek rośnie' od 'rośnie SZYBCIEJ niż rynek'
+    (prawdziwa siła względna, dobrze udokumentowany czynnik w analizie
+    technicznej - np. metodologia CANSLIM)."""
+    if len(stock_history) <= lookback_days or len(benchmark_history) <= lookback_days:
+        return None
+    stock_return = (stock_history["Close"].iloc[-1] / stock_history["Close"].iloc[-lookback_days - 1] - 1) * 100
+    bench_return = (benchmark_history["Close"].iloc[-1] / benchmark_history["Close"].iloc[-lookback_days - 1] - 1) * 100
+    return {
+        "stock_return_pct": round(float(stock_return), 2),
+        "benchmark_return_pct": round(float(bench_return), 2),
+        "relative_strength_pct": round(float(stock_return - bench_return), 2),
+    }

@@ -118,6 +118,20 @@ CREATE INDEX IF NOT EXISTS idx_training_examples_ticker ON training_examples(tic
 -- (np. po przerwaniu w połowie) - pozwala bezpiecznie wznowić od miejsca przerwania.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_training_examples_unique
     ON training_examples(ticker, headline, published_date);
+
+CREATE TABLE IF NOT EXISTS news_cache (
+    ticker TEXT NOT NULL,
+    month_key TEXT NOT NULL,        -- "YYYY-MM"
+    headlines_json TEXT NOT NULL,   -- lista Headline zserializowana jako JSON
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (ticker, month_key)
+);
+
+CREATE TABLE IF NOT EXISTS fx_rate_cache (
+    cache_key TEXT PRIMARY KEY,
+    rate REAL NOT NULL,
+    stored_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # Ile "zdjęć" werdyktu trzymamy na spółkę w score_history - zapobiega
@@ -605,10 +619,6 @@ def get_equity_currencies() -> list[str]:
 
 
 def record_portfolio_equity_combined_snapshot(base_currency: str, total_value: float, total_cost: float) -> None:
-    """Zapisuje 'zdjęcie' ŁĄCZNEJ wartości portfela (wszystkie waluty
-    przeliczone na base_currency KURSEM Z MOMENTU TEGO CYKLU) - dzięki temu
-    historia w czasie jest dokładna, nie przybliżeniem dzisiejszym kursem
-    zastosowanym wstecz."""
     with _connect() as conn:
         conn.execute(
             "INSERT INTO portfolio_equity_combined (base_currency, total_value, total_cost) VALUES (?, ?, ?)",
@@ -630,3 +640,63 @@ def get_portfolio_equity_combined_curve(base_currency: str) -> list[dict]:
             (base_currency.upper(),),
         ).fetchall()
         return [dict(r) for r in rows]
+
+# =====================================================================
+# Cache newsów historycznych (Finnhub) - unika ponownego pobierania tych
+# samych miesięcy nagłówków w KAŻDYM cyklu. Miesiące STARSZE niż bieżący
+# są traktowane jako "zamknięte" (nigdy się nie zmienią) i cache'owane
+# BEZTERMINOWO - tylko bieżący, wciąż "otwarty" miesiąc jest odświeżany
+# przy każdym cyklu (patrz news_history.py).
+# =====================================================================
+
+def get_cached_news_months(ticker: str) -> dict[str, list[dict]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT month_key, headlines_json FROM news_cache WHERE ticker = ?",
+            (ticker.upper(),),
+        ).fetchall()
+        return {r["month_key"]: json.loads(r["headlines_json"]) for r in rows}
+
+
+def save_news_month_to_cache(ticker: str, month_key: str, headlines: list[dict]) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO news_cache (ticker, month_key, headlines_json, fetched_at) "
+            "VALUES (?, ?, ?, datetime('now')) "
+            "ON CONFLICT(ticker, month_key) DO UPDATE SET "
+            "headlines_json = excluded.headlines_json, fetched_at = excluded.fetched_at",
+            (ticker.upper(), month_key, json.dumps(headlines, ensure_ascii=False)),
+        )
+        conn.commit()
+
+# =====================================================================
+# Trwały cache kursów walut - przetrwa restart serwera. Kurs HISTORYCZNY
+# (konkretny dzień, do podsumowania podatkowego) nie zmienia się nigdy,
+# więc cache'ujemy go WIECZNIE (ttl_seconds=None). Kurs BIEŻĄCY ma krótkie
+# TTL (patrz fx_rates.py) - trwałość na dysku i tak oszczędza jedno
+# zapytanie sieciowe zaraz po restarcie serwera.
+# =====================================================================
+
+def get_cached_fx_rate(cache_key: str, ttl_seconds: int | None) -> float | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT rate, stored_at FROM fx_rate_cache WHERE cache_key = ?", (cache_key,)
+        ).fetchone()
+    if not row:
+        return None
+    if ttl_seconds is not None:
+        stored_at = datetime.strptime(row["stored_at"], "%Y-%m-%d %H:%M:%S")
+        age_seconds = (datetime.utcnow() - stored_at).total_seconds()
+        if age_seconds > ttl_seconds:
+            return None
+    return row["rate"]
+
+
+def save_fx_rate_to_cache(cache_key: str, rate: float) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO fx_rate_cache (cache_key, rate, stored_at) VALUES (?, ?, datetime('now')) "
+            "ON CONFLICT(cache_key) DO UPDATE SET rate = excluded.rate, stored_at = excluded.stored_at",
+            (cache_key, rate),
+        )
+        conn.commit()

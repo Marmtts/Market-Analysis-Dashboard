@@ -48,9 +48,30 @@ def _fetch_currency(ticker: str) -> str:
         return "USD"
 
 
+# Cache w pamięci procesu (nie w SQLite - dane cenowe zmieniają się codziennie,
+# więc trwały cache na dysku miałby minimalną wartość, a dodałby złożoność).
+# Chroni przed WIELOKROTNYM pobieraniem TEJ SAMEJ spółki w krótkim odstępie
+# czasu w ramach jednego "przebiegu" dashboardu - np. pełny cykl analizy +
+# odświeżenie na żywo tej samej karty + alert cenowy mogą dziś niezależnie
+# odpytać yfinance o te same dane w ciągu kilku minut.
+_history_cache: dict[tuple[str, str, str], tuple[pd.DataFrame, float]] = {}
+_HISTORY_CACHE_TTL_SECONDS = 300  # 5 minut - krótko, żeby NIGDY nie pokazać
+                                    # istotnie nieaktualnej ceny, tylko oszczędzić
+                                    # powtórki w obrębie tej samej "paczki" akcji.
+
+
 def fetch_history(ticker: str, period: str = "1y", interval: str = "1d",
-                   max_retries: int = 3, retry_delay_sec: float = 2.0) -> pd.DataFrame:
-    """Pobiera historyczne notowania z prostym mechanizmem ponawiania prób."""
+                   max_retries: int = 3, retry_delay_sec: float = 2.0,
+                   use_cache: bool = True) -> pd.DataFrame:
+    """Pobiera historyczne notowania z prostym mechanizmem ponawiania prób.
+    use_cache=False wymusza świeże pobranie - używane tam, gdzie absolutna
+    świeżość jest ważniejsza niż oszczędność zapytań (np. alert cenowy)."""
+    cache_key = (ticker, period, interval)
+    if use_cache:
+        cached = _history_cache.get(cache_key)
+        if cached and (time.time() - cached[1]) < _HISTORY_CACHE_TTL_SECONDS:
+            return cached[0]
+
     last_exc = None
     for attempt in range(1, max_retries + 1):
         try:
@@ -68,6 +89,7 @@ def fetch_history(ticker: str, period: str = "1y", interval: str = "1d",
             df = df.dropna(subset=["Open", "High", "Low", "Close"])
             if df.empty:
                 raise ValueError(f"Brak kompletnych danych OHLC dla {ticker} po odfiltrowaniu NaN")
+            _history_cache[cache_key] = (df, time.time())
             return df
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
@@ -103,3 +125,19 @@ def get_ticker_data(ticker: str, period: str = "1y", interval: str = "1d") -> Ti
         last_price=last_price,
         currency=_fetch_currency(ticker),
     )
+
+import time
+
+_benchmark_cache: dict[str, tuple[pd.DataFrame, float]] = {}
+_BENCHMARK_CACHE_TTL = 3600  # 1h - benchmark jest wspólny dla wielu spółek w tym samym cyklu,
+                              # nie ma sensu pobierać SPY osobno dla każdej z 19 spółek w watchliście
+
+
+def fetch_benchmark_history(benchmark_ticker: str, period: str = "1y") -> pd.DataFrame:
+    now = time.time()
+    cached = _benchmark_cache.get(benchmark_ticker)
+    if cached and (now - cached[1]) < _BENCHMARK_CACHE_TTL:
+        return cached[0]
+    hist = fetch_history(benchmark_ticker, period=period, interval="1d")
+    _benchmark_cache[benchmark_ticker] = (hist, now)
+    return hist

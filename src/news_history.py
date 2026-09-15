@@ -46,6 +46,38 @@ def _month_ranges(days_back: int) -> list[tuple[date, date]]:
     return ranges
 
 
+def _fetch_one_month(ticker: str, api_key: str, start: date, end: date, max_per_month: int) -> list[Headline] | None:
+    """Zwraca None przy 403 (spółka poza planem Finnhub - sygnał do
+    przerwania CAŁEGO pobierania dla tego tickera), pustą listę przy innych
+    błędach (spróbujemy ponownie w kolejnym cyklu, bez blokowania reszty)."""
+    params = {"symbol": ticker, "from": start.isoformat(), "to": end.isoformat(), "token": api_key}
+    try:
+        resp = requests.get(FINNHUB_BASE_URL, params=params, timeout=20)
+        if resp.status_code == 403:
+            logger.warning(
+                "Finnhub: dostęp zabroniony (403) dla %s - prawdopodobnie ten instrument "
+                "nie jest objęty darmowym planem Finnhub (typowe dla spółek spoza głównych "
+                "giełd US, np. GPW). Pomijam newsy historyczne dla tej spółki.", ticker
+            )
+            return None
+        resp.raise_for_status()
+        items = resp.json() or []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Finnhub: błąd pobierania newsów dla %s (%s - %s): %s", ticker, start, end, exc)
+        return []
+
+    headlines = []
+    for item in items[:max_per_month]:
+        title = item.get("headline", "")
+        if not title:
+            continue
+        headlines.append(Headline(
+            title=title, source=item.get("source", "Finnhub"),
+            link=item.get("url", ""), published=str(item.get("datetime", "")),
+        ))
+    return headlines
+
+
 def fetch_historical_news_by_month(
     ticker: str,
     api_key: str,
@@ -54,60 +86,51 @@ def fetch_historical_news_by_month(
     request_delay_sec: float = 1.1,
 ) -> dict[str, list[Headline]]:
     """
-    Zwraca słownik {"YYYY-MM": [Headline, ...]} obejmujący ~days_back dni
-    wstecz. Limituje liczbę nagłówków na miesiąc do max_per_month (żeby nie
-    zalać LLM setkami nagłówków - i tak liczymy analizę słownikową na
-    WSZYSTKICH pobranych nagłówkach z danego miesiąca, a do LLM trafia tylko
-    krótka próbka reprezentatywna).
+    PRZYROSTOWA wersja: miesiące STARSZE niż bieżący są traktowane jako
+    "zamknięte" (dane historyczne z Finnhub się dla nich nie zmieniają) i
+    pobierane z Finnhub TYLKO RAZ - przy każdym kolejnym cyklu są czytane
+    z lokalnego cache'u (db.py: news_cache), bez żadnego zapytania do API.
+    Tylko BIEŻĄCY miesiąc (wciąż "otwarty", mogą się w nim pojawiać nowe
+    newsy) jest odpytywany na świeżo przy każdym cyklu.
+
+    To redukuje ~12 zapytań/spółkę/cykl do typowo 1 zapytania/spółkę/cykl
+    (poza pierwszym, "rozgrzewającym" uruchomieniem) - główny koszt czasowy
+    (throttling Finnhub) znika niemal całkowicie po pierwszym pełnym przebiegu.
     """
+    from . import db  # import lokalny - unika cyklicznego importu na starcie modułu
+
     if not api_key:
         logger.warning("Brak klucza Finnhub API - pomijam newsy historyczne dla %s.", ticker)
         return {}
 
+    current_month_key = date.today().strftime("%Y-%m")
+    cached = db.get_cached_news_months(ticker)
     monthly_headlines: dict[str, list[Headline]] = {}
+    fetched_any_new = False
 
     for start, end in _month_ranges(days_back):
         month_key = start.strftime("%Y-%m")
-        params = {
-            "symbol": ticker,
-            "from": start.isoformat(),
-            "to": end.isoformat(),
-            "token": api_key,
-        }
-        try:
-            resp = requests.get(FINNHUB_BASE_URL, params=params, timeout=20)
-            if resp.status_code == 403:
-                # Darmowy plan Finnhub zwykle nie obejmuje spółek spoza głównych
-                # giełd amerykańskich (np. GPW). Nie ma sensu próbować kolejnych
-                # 11 miesięcy - to nie jest błąd przejściowy, tylko ograniczenie planu.
-                logger.warning(
-                    "Finnhub: dostęp zabroniony (403) dla %s - prawdopodobnie ten "
-                    "instrument nie jest objęty darmowym planem Finnhub (typowe dla "
-                    "spółek spoza głównych giełd US, np. GPW). Pomijam newsy "
-                    "historyczne dla tej spółki.", ticker
-                )
-                return {}
-            resp.raise_for_status()
-            items = resp.json() or []
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Finnhub: błąd pobierania newsów dla %s (%s - %s): %s",
-                            ticker, start, end, exc)
-            items = []
 
-        headlines = monthly_headlines.setdefault(month_key, [])
-        for item in items[:max_per_month]:
-            title = item.get("headline", "")
-            if not title:
-                continue
-            headlines.append(
-                Headline(
-                    title=title,
-                    source=item.get("source", "Finnhub"),
-                    link=item.get("url", ""),
-                    published=str(item.get("datetime", "")),
-                )
-            )
+        # Miesiąc ZAMKNIĘTY i już w cache'u - czytamy lokalnie, ZERO zapytań do API.
+        if month_key != current_month_key and month_key in cached:
+            monthly_headlines[month_key] = [Headline(**h) for h in cached[month_key]]
+            continue
 
-        time.sleep(request_delay_sec)  # prosty throttling pod darmowy limit Finnhub
+        # Miesiąc bieżący (zawsze odświeżamy) albo brakujący w cache'u (pierwsze
+        # uruchomienie, albo nowo dodana spółka) - pobieramy z Finnhub.
+        result = _fetch_one_month(ticker, api_key, start, end, max_per_month)
+        if result is None:  # 403 - ten instrument nigdy nie będzie dostępny, przerywamy całkiem
+            return monthly_headlines
+        monthly_headlines[month_key] = result
+        fetched_any_new = True
+
+        # Cache'ujemy TYLKO miesiące zamknięte - bieżący miesiąc zapisujemy też
+        # (nadpisując), żeby przy kolejnym uruchomieniu w tym samym miesiącu
+        # mieć chociaż punkt startowy, ale i tak zostanie odświeżony ponownie.
+        db.save_news_month_to_cache(ticker, month_key, [h.__dict__ for h in result])
+        time.sleep(request_delay_sec)  # throttling tylko dla FAKTYCZNIE wykonanych zapytań
+
+    if not fetched_any_new:
+        logger.info("Newsy historyczne dla %s: wszystkie miesiące z lokalnego cache'u, 0 zapytań do Finnhub.", ticker)
 
     return monthly_headlines

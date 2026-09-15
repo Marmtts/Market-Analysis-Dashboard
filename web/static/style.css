@@ -244,18 +244,47 @@ html, body {
 }
 .watchlist__remove:hover { color: var(--accent-red-bright); }
 
-/* ---------------- Log panel ---------------- */
-.panel--log { flex: 1; min-height: 200px; display: flex; flex-direction: column; }
+/* ---------------- Log jako zwijana szufladka na dole ekranu ---------------- */
+.log-drawer {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 90;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-bright);
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.35);
+  transition: transform 0.25s ease;
+}
+.log-drawer__toggle {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-elevated-2);
+  border: none;
+  color: var(--accent-gold-bright);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+}
+.log-drawer__arrow { transition: transform 0.2s ease; color: var(--text-faint); }
+.log-drawer.is-collapsed .log-drawer__arrow { transform: rotate(180deg); }
+.log-drawer__body {
+  max-height: 260px;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.log-drawer.is-collapsed .log-drawer__body { max-height: 0; }
 .log {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   line-height: 1.6;
   color: var(--text-dim);
   overflow-y: auto;
-  max-height: 320px;
-  flex: 1;
+  max-height: 260px;
+  padding: 0.6rem 1.2rem;
 }
 .log__line { padding: 0.15rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby nic jej nie zasłaniało */
 .log__line--warning { color: var(--accent-amber); }
 .log__line--error { color: var(--accent-red-bright); }
 .log__line--success { color: var(--accent-green-bright); }
@@ -782,3 +811,55 @@ html, body {
   margin-bottom: 0.5rem; font-family: var(--font-display); font-size: 1rem;
 }
 .tax-year-card__header span { font-size: 0.72rem; color: var(--text-faint); font-family: var(--font-mono); }
+
+/* ---------------- Przycisk ręcznego odświeżenia w panelu szczegółów ---------------- */
+.detail-refresh-row {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  background: transparent; border: none; padding: 0 0 0.25rem;
+}
+.detail-refresh-row .btn { font-size: 0.78rem; }
+.detail-refresh-row .btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* ---------------- Drobne dopracowanie ogólne UI ---------------- */
+.panel { transition: border-color 0.15s ease; }
+.panel:hover { border-color: var(--border-bright); }
+.btn--primary:not(:disabled):hover { box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.15); }
+.modal__panel { max-height: 90vh; }
+::selection { background: rgba(201, 162, 39, 0.35); color: var(--text); }
+
+/* ---------------- Widget czatu z asystentem ---------------- */
+.chat-widget { position: fixed; bottom: 54px; right: 20px; z-index: 95; }
+.chat-widget__toggle {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--accent-gold); border: none; font-size: 1.4rem;
+  cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.chat-widget__panel {
+  display: none;
+  position: absolute; bottom: 64px; right: 0;
+  width: 340px; height: 460px;
+  background: var(--bg-elevated); border: 1px solid var(--border-bright);
+  border-radius: var(--radius); box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  flex-direction: column; overflow: hidden;
+}
+.chat-widget__panel.is-open { display: flex; }
+.chat-widget__header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.65rem 0.9rem; background: var(--bg-elevated-2);
+  font-family: var(--font-display); font-size: 0.85rem; color: var(--accent-gold-bright);
+  border-bottom: 1px solid var(--border);
+}
+.chat-widget__messages { flex: 1; overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.chat-msg {
+  max-width: 85%; padding: 0.5rem 0.7rem; border-radius: 10px;
+  font-size: 0.82rem; line-height: 1.45; white-space: pre-wrap;
+}
+.chat-msg--user { align-self: flex-end; background: var(--accent-gold); color: #14100A; }
+.chat-msg--assistant { align-self: flex-start; background: var(--bg-elevated-2); color: var(--text); }
+.chat-msg--thinking { opacity: 0.6; font-style: italic; }
+.chat-widget__input-row { display: flex; gap: 0.5rem; padding: 0.6rem; border-top: 1px solid var(--border); }
+.chat-widget__input-row input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border-bright); border-radius: var(--radius);
+  color: var(--text); padding: 0.5rem 0.7rem; font-size: 0.82rem;
+}
+.chat-widget__input-row input:focus { outline: none; border-color: var(--accent-gold); }

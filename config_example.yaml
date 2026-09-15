@@ -73,6 +73,11 @@ technical:
   sharp_decline_threshold_pct: 15   # spadek >= tyle% w tym oknie -> traktuj jako "spadający nóż"
   atr_period: 14                    # okres liczenia ATR (Average True Range)
   atr_stop_multiplier: 2.0          # sugerowany stop-loss = cena - tyle x ATR
+  benchmark_by_currency:
+    USD: "SPY"
+    PLN: "^WIG20"
+    EUR: "^STOXX50E"
+  relative_strength_lookback_days: 60
 
   # -----------------------------------------------------------
   # Potwierdzenie wielointerwałowe (sygnał dzienny + kontekst tygodniowy)
@@ -109,7 +114,7 @@ news:
   # Darmowy klucz: zarejestruj się na https://finnhub.io/register,
   # skopiuj "API key" z panelu i wklej poniżej.
   use_historical_news: true
-  finnhub_api_key: "Your_Key"
+  finnhub_api_key: "TWOJ_KLUCZ"
   historical_lookback_days: 365   # ile dni wstecz przeglądać
   max_headlines_per_month: 4      # limit nagłówków pobieranych na miesiąc na spółkę
 
@@ -185,6 +190,12 @@ web:
   run_analysis_on_startup: true    # czy uruchomić pierwszy cykl analizy zaraz po starcie serwera
   manual_refresh_cooldown_seconds: 45   # min. odstęp między ręcznymi odświeżeniami TEJ SAMEJ spółki (chroni yfinance/Finnhub)
   price_alert_interval_seconds: 180     # co ile sekund sprawdzać TYLKO ceny pozycji portfela (0 = wyłączone)
+
+# -------------------------------------------------------------
+# Portfel - waluta bazowa do widoku łącznego (sumowanie wszystkich walut)
+# -------------------------------------------------------------
+portfolio:
+  base_currency: "PLN"   # w tej walucie liczony jest łączny wykres/podsumowanie portfela
 
 # -------------------------------------------------------------
 # Panel skuteczności narzędzia (na podstawie historii werdyktów)

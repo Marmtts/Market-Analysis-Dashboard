@@ -18,8 +18,8 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Callable
 
-from src.market_data import get_ticker_data
-from src.technical_analysis import analyze_multi_timeframe
+from src.market_data import get_ticker_data, fetch_benchmark_history
+from src.technical_analysis import analyze_multi_timeframe, AT_TOP_DISTANCE_PENALTY, compute_relative_strength
 from src.news_sources import get_ticker_news, get_macro_headlines
 from src.news_history import fetch_historical_news_by_month
 from src.llm_sentiment import analyze_sentiment, analyze_historical_trend
@@ -99,6 +99,59 @@ def analyze_company(company: dict, cfg: dict, threshold_adjustment: float = 0.0,
     fundamentals = None
     if cfg.get("fundamentals", {}).get("enabled", False):
         fundamentals = fetch_fundamentals(ticker, cfg["fundamentals"], current_price=data.last_price)
+
+    # --- Siła względna wobec benchmarku (np. S&P500 dla USD, WIG20 dla PLN) ---
+    # Niewielki, celowo ograniczony wpływ na wynik (+/-0.05, analogicznie do
+    # trend_adjustment w report.py) - to dodatkowy kontekst, nie dominujący
+    # czynnik, bo już mamy wagę techniczną 0.55 opartą o absolutną cenę.
+    try:
+        benchmark_ticker = cfg["technical"].get("benchmark_by_currency", {}).get(data.currency, "SPY")
+        benchmark_hist = fetch_benchmark_history(benchmark_ticker, period=cfg["technical"]["history_period"])
+        lookback = cfg["technical"].get("relative_strength_lookback_days", 60)
+        rel_strength = compute_relative_strength(data.history, benchmark_hist, lookback)
+    except Exception as exc:  # noqa: BLE001
+        progress(f"  Nie udało się policzyć siły względnej dla {ticker}: {exc}", "warning")
+        rel_strength = None
+
+    if rel_strength:
+        rel_strength["benchmark"] = benchmark_ticker
+        technical.metrics["relative_strength"] = rel_strength
+        rs = rel_strength["relative_strength_pct"]
+        if rs >= 10:
+            technical.score = float(min(1.0, technical.score + 0.05))
+            technical.reasons.append(
+                f"Spółka bije benchmark ({benchmark_ticker}) o {rs:+.1f} pkt proc. w ostatnich "
+                f"{lookback} sesjach - silna siła względna, nie tylko 'płynie z rynkiem'."
+            )
+        elif rs <= -10:
+            technical.score = float(max(0.0, technical.score - 0.05))
+            technical.reasons.append(
+                f"Spółka wyraźnie przegrywa z benchmarkiem ({benchmark_ticker}): {rs:+.1f} pkt proc. "
+                f"w ostatnich {lookback} sesjach - wzrost ceny może być głównie efektem rynku, nie siły spółki."
+            )
+
+    # --- Korekta dla ETF-ów: bliskość 52-tyg. maksimum to co innego dla
+    # zdywersyfikowanego funduszu indeksowego (normalne w długoterminowej
+    # hossie) niż dla pojedynczej spółki (ryzyko kupna "na szczycie" hype'u).
+    # Cofamy karę TYLKO jeśli blokada wynikała WYŁĄCZNIE z bliskości maksimum,
+    # a nie z wykupienia wg RSI - ekstremalne RSI wciąż jest sygnałem
+    # ostrożności nawet dla szerokiego ETF-u.
+    if (fundamentals and fundamentals.available
+            and fundamentals.metrics.get("quote_type") == "ETF"
+            and technical.signal == "AT_TOP"):
+        rsi_val = technical.metrics.get("rsi")
+        rsi_overbought = cfg["technical"]["rsi_overbought"]
+        if rsi_val is None or rsi_val < rsi_overbought:
+            technical.score = float(min(1.0, technical.score + AT_TOP_DISTANCE_PENALTY))
+            technical.signal = (
+                "GOOD_ENTRY" if (technical.score >= 0.65 and technical.metrics.get("uptrend"))
+                else "NEUTRAL"
+            )
+            technical.reasons.append(
+                "To ETF (fundusz indeksowy) - bliskość historycznych maksimów w silnym, "
+                "długoterminowym trendzie wzrostowym jest tu normalna i NIE jest traktowana "
+                "jako sygnał 'kupna na szczycie', w przeciwieństwie do pojedynczej spółki."
+            )
 
     combined = combine_scores(
         technical, sentiment, cfg["scoring"],

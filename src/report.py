@@ -482,14 +482,16 @@ def compute_portfolio_sector_exposure(open_positions_evaluated: list[dict],
 def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN") -> dict:
     """Grupuje ZREALIZOWANE transakcje wg roku sprzedaży i liczy orientacyjny
     wynik podatkowy (podatek od zysków kapitałowych, 19% w Polsce - tzw.
-    'podatek Belki'). TO NIE JEST OFICJALNE ROZLICZENIE - kursy walut obcych
-    liczone są kursem RYNKOWYM z dnia transakcji (yfinance), a nie
-    oficjalnym średnim kursem NBP wymaganym przepisami do PIT-38. Zawsze
-    zweryfikuj dokładne kwoty przed złożeniem deklaracji."""
-    from .fx_rates import get_historical_fx_rate
+    'podatek Belki'). Dla base_currency='PLN' używa OFICJALNEGO średniego
+    kursu NBP z dnia poprzedzającego transakcję (zgodnie z art. 11a ustawy
+    o PIT) - to JEST poprawny prawnie kurs. Jeśli NBP jest niedostępny dla
+    danej waluty/daty, spada na przybliżony kurs rynkowy (yfinance) i
+    WYRAŹNIE to odnotowuje w conversion_notes oraz w polu 'nbp_compliant'."""
+    from .fx_rates import get_historical_fx_rate, get_nbp_rate
 
     by_year: dict[str, dict] = {}
     conversion_notes: list[str] = []
+    any_fallback_used = False
 
     for p in closed_positions:
         sell_date = p.get("sell_date")
@@ -498,8 +500,22 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
         sell_year = sell_date[:4]
         currency = p.get("currency") or "USD"
 
-        buy_rate = 1.0 if currency == base_currency else get_historical_fx_rate(currency, base_currency, p["buy_date"])
-        sell_rate = 1.0 if currency == base_currency else get_historical_fx_rate(currency, base_currency, sell_date)
+        if currency == base_currency:
+            buy_rate = sell_rate = 1.0
+        elif base_currency == "PLN":
+            buy_rate = get_nbp_rate(currency, p["buy_date"], for_tax_purposes=True)
+            sell_rate = get_nbp_rate(currency, sell_date, for_tax_purposes=True)
+            if buy_rate is None or sell_rate is None:
+                any_fallback_used = True
+                buy_rate = buy_rate or get_historical_fx_rate(currency, base_currency, p["buy_date"])
+                sell_rate = sell_rate or get_historical_fx_rate(currency, base_currency, sell_date)
+                conversion_notes.append(
+                    f"{p['ticker']}: kurs NBP niedostępny dla {currency} - użyto przybliżonego kursu rynkowego."
+                )
+        else:
+            any_fallback_used = True
+            buy_rate = get_historical_fx_rate(currency, base_currency, p["buy_date"])
+            sell_rate = get_historical_fx_rate(currency, base_currency, sell_date)
 
         if buy_rate is None or sell_rate is None:
             conversion_notes.append(
@@ -532,4 +548,29 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
             "trades": b["trades"],
         }
 
-    return {"base_currency": base_currency, "by_year": result, "conversion_notes": conversion_notes}
+    return {
+        "base_currency": base_currency,
+        "by_year": result,
+        "conversion_notes": conversion_notes,
+        "nbp_compliant": base_currency == "PLN" and not any_fallback_used,
+    }
+
+def summarize_portfolio_by_currency(open_positions_evaluated: list[dict]) -> dict:
+    """Grupuje otwarte pozycje po walucie (wartość/koszt/P&L%/ryzyko) -
+    reużywane przez daily_brief i chatbota, żeby nie duplikować tej samej
+    logiki agregującej w dwóch miejscach."""
+    by_currency: dict[str, dict] = {}
+    for p in open_positions_evaluated:
+        currency = p.get("currency") or "USD"
+        bucket = by_currency.setdefault(currency, {"value": 0.0, "cost": 0.0})
+        bucket["value"] += p.get("market_value") or 0.0
+        bucket["cost"] += p.get("cost_basis") or 0.0
+
+    risk = compute_portfolio_risk_summary(open_positions_evaluated)
+    result = {}
+    for currency, totals in by_currency.items():
+        pl_pct = ((totals["value"] - totals["cost"]) / totals["cost"] * 100) if totals["cost"] > 0 else 0.0
+        risk_bucket = risk.get("by_currency", {}).get(currency, {})
+        result[currency] = {"value": totals["value"], "cost": totals["cost"],
+                             "pl_pct": pl_pct, "risk_pct": risk_bucket.get("risk_pct")}
+    return {"by_currency": result}

@@ -59,6 +59,8 @@ from src.report import (
     compute_tax_summary,
 )
 from src.daily_brief import generate_daily_brief
+from src.chatbot import answer_chat_question
+from src.report import summarize_portfolio_by_currency
 from src.fx_rates import get_fx_rate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -275,15 +277,26 @@ def _run_analysis_blocking() -> dict:
 
     # Widok ŁĄCZNY (wszystkie waluty przeliczone na jedną, base_currency) -
     # kursem AKTUALNYM W TYM CYKLU, więc historia w czasie jest dokładna.
+    # ZAWSZE zapisujemy snapshot, nawet jeśli część walut nie dała się
+    # przeliczyć - inaczej jedna chwilowo niedostępna para walutowa
+    # (np. przejściowy problem Yahoo Finance) wstrzymywałaby całą krzywą
+    # kapitału w nieskończoność, mimo że mamy częściowe, sensowne dane.
     base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
     combined_positions, skipped_currencies = _build_combined_portfolio_view(enriched_positions, base_currency)
     combined_value = sum(p.get("market_value") or 0.0 for p in combined_positions)
     combined_cost = sum(p.get("cost_basis") or 0.0 for p in combined_positions)
-    if combined_positions or not equity_by_currency:
-        db.record_portfolio_equity_combined_snapshot(base_currency, combined_value, combined_cost)
+
+    _sync_progress_to_broadcast(
+        f"Widok łączny portfela: {len(combined_positions)}/{len(enriched_positions)} pozycji przeliczonych "
+        f"na {base_currency}, wartość={combined_value:.2f}, koszt={combined_cost:.2f}.", "info"
+    )
+    db.record_portfolio_equity_combined_snapshot(base_currency, combined_value, combined_cost)
+
     if skipped_currencies:
-        logger.warning("Nie udało się przeliczyć walut %s na %s - pominięte w widoku łącznym.",
-                        skipped_currencies, base_currency)
+        msg = (f"Nie udało się pobrać kursu dla walut {sorted(skipped_currencies)} -> {base_currency} - "
+               f"pominięte w widoku łącznym portfela w tym cyklu (spróbuję ponownie w kolejnym).")
+        logger.warning(msg)
+        _sync_progress_to_broadcast(msg, "warning")
 
     # Codzienny brief AI - generowany na końcu, gdy mamy już PEŁEN obraz
     # (wyniki + portfel + ryzyko) do podsumowania w jednym spójnym tekście.
@@ -381,7 +394,7 @@ def _check_price_alerts_blocking() -> list[dict]:
 
     for ticker, lots in by_ticker.items():
         try:
-            history = fetch_history(ticker, period="5d", interval="1d")
+            history = fetch_history(ticker, period="5d", interval="1d", use_cache=False)
             current_price = float(history["Close"].iloc[-1])
             currency = "USD"
             try:
@@ -482,6 +495,10 @@ class ClosePositionRequest(BaseModel):
     sell_date: str  # "YYYY-MM-DD"
 
 
+class ChatRequest(BaseModel):
+    messages: list[dict]  # [{"role": "user"|"assistant", "content": "..."}]
+
+
 @app.get("/api/watchlist")
 async def api_get_watchlist():
     return db.get_watchlist()
@@ -564,19 +581,19 @@ async def api_get_equity_currencies():
     return db.get_equity_currencies()
 
 
-@app.get("/api/portfolio/equity/{currency}")
-async def api_get_portfolio_equity(currency: str):
-    points = db.get_portfolio_equity_curve(currency)
-    drawdown = compute_max_drawdown(points)
-    return sanitize_for_json({"points": points, "drawdown": drawdown})
-
-
 @app.get("/api/portfolio/equity/combined")
 async def api_get_portfolio_equity_combined():
     base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
     points = db.get_portfolio_equity_combined_curve(base_currency)
     drawdown = compute_max_drawdown(points)
     return sanitize_for_json({"points": points, "drawdown": drawdown, "base_currency": base_currency})
+
+
+@app.get("/api/portfolio/equity/{currency}")
+async def api_get_portfolio_equity(currency: str):
+    points = db.get_portfolio_equity_curve(currency)
+    drawdown = compute_max_drawdown(points)
+    return sanitize_for_json({"points": points, "drawdown": drawdown})
 
 
 @app.get("/api/portfolio/closed")
@@ -668,6 +685,15 @@ async def api_update_position(position_id: int, req: AddPositionRequest):
 async def api_get_logs(limit: int = 100):
     return db.get_recent_logs(limit=limit)
 
+@app.post("/api/chat")
+async def api_chat(req: ChatRequest):
+    cached = db.load_results_cache() or {}
+    enriched_positions = _get_enriched_open_positions(cached)
+    portfolio_summary = summarize_portfolio_by_currency(enriched_positions)
+    reply = await asyncio.to_thread(
+        answer_chat_question, req.messages, cached, portfolio_summary, _cfg["llm"]
+    )
+    return {"reply": reply}
 
 @app.get("/api/score-history/{ticker}")
 async def api_get_score_history(ticker: str, limit: int = 400):

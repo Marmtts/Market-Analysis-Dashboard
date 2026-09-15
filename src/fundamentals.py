@@ -72,6 +72,7 @@ def fetch_fundamentals(ticker: str, cfg: dict, current_price: float | None = Non
     dividend_yield = _safe_get(info, "dividendYield")
     market_cap = _safe_get(info, "marketCap")
     sector = info.get("sector")  # string, nie liczba - brak potrzeby _safe_get/NaN-check
+    quote_type = info.get("quoteType")  # "EQUITY" | "ETF" | "MUTUALFUND" | "INDEX" itd.
 
     # --- Konsensus analityków Wall Street (cena docelowa, rekomendacja) ---
     # To NIE jest nasza własna analiza - to zagregowana opinia analityków
@@ -106,6 +107,7 @@ def fetch_fundamentals(ticker: str, cfg: dict, current_price: float | None = Non
         "analyst_recommendation": recommendation_key,
         "analyst_upside_pct": analyst_upside_pct,
         "sector": sector,
+        "quote_type": quote_type,
     }
 
     flags: list[str] = []

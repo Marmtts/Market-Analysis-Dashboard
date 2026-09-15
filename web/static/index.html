@@ -97,11 +97,6 @@
       <ul class="watchlist" id="watchlistUl"></ul>
     </section>
 
-    <section class="panel panel--log">
-      <h2 class="panel__title">Log na żywo</h2>
-      <div class="log" id="logPanel"></div>
-    </section>
-
   </aside>
 
   <!-- ============ GŁÓWNA KOLUMNA: wyniki ============ -->
@@ -234,7 +229,7 @@
     <div class="modal__body">
       <div class="chart-wrap">
         <div id="chartContainer" class="chart-container"></div>
-        <div id="chartLoading" class="chart-loading">
+        <div id="chartLoading" class="chart-loading is-hidden">
           <div class="chart-loading__spinner"></div>
           <span>Pobieram dane z Yahoo Finance…</span>
         </div>
@@ -250,6 +245,33 @@
       </div>
       <div class="modal__details" id="modalDetails"></div>
     </div>
+  </div>
+</div>
+
+<div class="chat-widget" id="chatWidget">
+  <button class="chat-widget__toggle" id="chatToggleBtn" title="Zapytaj asystenta o dane w dashboardzie">💬</button>
+  <div class="chat-widget__panel" id="chatPanel">
+    <div class="chat-widget__header">
+      <span>💬 Asystent dashboardu</span>
+      <button class="btn btn--icon" id="chatCloseBtn">✕</button>
+    </div>
+    <div class="chat-widget__messages" id="chatMessages">
+      <div class="chat-msg chat-msg--assistant">Cześć! Zapytaj mnie o dzisiejsze wyniki analizy, Twój portfel albo kontekst makro.</div>
+    </div>
+    <form class="chat-widget__input-row" id="chatForm">
+      <input type="text" id="chatInput" placeholder="Zadaj pytanie..." autocomplete="off">
+      <button type="submit" class="btn btn--primary">Wyślij</button>
+    </form>
+  </div>
+</div>
+
+<div class="log-drawer" id="logDrawer">
+  <button class="log-drawer__toggle" id="logDrawerToggle">
+    <span>📋 Log na żywo</span>
+    <span class="log-drawer__arrow">▲</span>
+  </button>
+  <div class="log-drawer__body" id="logDrawerBody">
+    <div class="log" id="logPanel"></div>
   </div>
 </div>
 

@@ -426,11 +426,11 @@ async function openChart(ticker, name) {
   el("modalDetails").innerHTML = r
     ? renderDetailsHtml(r)
     : `<p class="empty-state">Brak jeszcze danych analizy dla tej spółki — pojawią się po najbliższym cyklu.</p>`;
-  if (r) setupPositionCalculator(r);
-
-  // Nie czekamy na to - dashboard od razu pokazuje cache, a świeże dane
-  // (ceny, sentyment LLM, fundamenty) podmienią się w tle, gdy będą gotowe.
-  refreshTickerLive(ticker);
+  if (r) {
+    setupPositionCalculator(r);
+    const btn = document.getElementById("manualRefreshBtn");
+    if (btn) btn.addEventListener("click", () => refreshTickerLive(btn.dataset.ticker));
+  }
 
   const container = el("chartContainer");
   container.innerHTML = "";
@@ -966,29 +966,30 @@ function renderDetailsHtml(r) {
   const news = r.news_headlines || [];
   const catClass = stampInfo(c.category).cls;
 
-  const detailAge = timeAgo(r.analyzed_at);
-  const detailAgeHtml = detailAge
-    ? `<span class="data-age ${detailAge.isStale ? "data-age--stale" : ""}">🕐 Dane z: ${detailAge.label}</span>`
-    : "";
-
   let html = `
+    <div class="detail-section detail-refresh-row">
+      <button class="btn btn--secondary" id="manualRefreshBtn" data-ticker="${escapeHtml(r.ticker)}">
+        🔄 Odśwież tę spółkę (ceny, sentyment, newsy)
+      </button>
+      <span id="liveRefreshIndicator" class="live-refresh-indicator is-hidden"></span>
+    </div>
     <div class="detail-section detail-summary">
       <span class="detail-summary__badge category--${catClass}">${escapeHtml(c.category)}</span>
       <span class="detail-summary__score">Wynik łączny: <strong>${c.final_score}</strong> (próg: ${c.effective_threshold})</span>
       ${c.hard_blocked ? `<span class="detail-summary__blocked">🚫 Zablokowane twardo (blisko szczytu)</span>` : ""}
-      ${detailAgeHtml}
     </div>`;
 
   html += `
     <div class="detail-section">
       <h4 class="detail-section__title">Analiza techniczna — ${escapeHtml(t.signal)} (score ${t.score})</h4>
       <ul class="detail-list">${t.reasons.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
-      <div class="metric-grid">
-        <div><span>RSI</span><strong>${t.metrics.rsi ?? "—"}</strong></div>
-        <div><span>Trend (SMA)</span><strong>${t.metrics.uptrend ? "wzrostowy" : "brak"}</strong></div>
-        <div><span>Do 52-tyg. maks.</span><strong>${fmtPct(t.metrics.dist_from_52w_high_pct)}</strong></div>
-        <div><span>Wolumen (anomalia)</span><strong>${t.metrics.volume_spike ? "tak" : "nie"}</strong></div>
-      </div>
+        <div class="metric-grid">
+          <div><span>RSI</span><strong>${t.metrics.rsi ?? "—"}</strong></div>
+          <div><span>Trend (SMA)</span><strong>${t.metrics.uptrend ? "wzrostowy" : "brak"}</strong></div>
+          <div><span>Do 52-tyg. maks.</span><strong>${fmtPct(t.metrics.dist_from_52w_high_pct)}</strong></div>
+          <div><span>Wolumen (anomalia)</span><strong>${t.metrics.volume_spike ? "tak" : "nie"}</strong></div>
+          ${t.metrics.relative_strength ? `<div><span>Siła wzgl. vs ${escapeHtml(t.metrics.relative_strength.benchmark)}</span><strong>${t.metrics.relative_strength.relative_strength_pct >= 0 ? "+" : ""}${t.metrics.relative_strength.relative_strength_pct} pkt%</strong></div>` : ""}
+        </div>
     </div>`;
 
   html += `
@@ -1156,8 +1157,10 @@ function renderEffectiveness(stats) {
 // ---------------- Odświeżanie na żywo pojedynczej spółki ----------------
 async function refreshTickerLive(ticker) {
   const indicator = el("liveRefreshIndicator");
+  const btn = document.getElementById("manualRefreshBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Odświeżam…"; }
   if (indicator) {
-    indicator.textContent = "Odświeżam dane na żywo (ceny, sentyment, fundamenty)…";
+    indicator.textContent = "Odświeżam dane na żywo (ceny, sentyment, newsy)…";
     indicator.classList.remove("is-hidden");
   }
   try {
@@ -1174,6 +1177,9 @@ async function refreshTickerLive(ticker) {
   } catch (err) {
     if (indicator) indicator.textContent = "Nie udało się odświeżyć na żywo — pokazuję ostatnie znane dane.";
     console.warn("Live refresh error:", err);
+  } finally {
+    const freshBtn = document.getElementById("manualRefreshBtn");
+    if (freshBtn) { freshBtn.disabled = false; freshBtn.textContent = "🔄 Odśwież tę spółkę (ceny, sentyment, newsy)"; }
   }
 }
 
@@ -1194,6 +1200,8 @@ function applyTickerUpdate(result) {
   if (state.openTicker === result.ticker) {
     el("modalDetails").innerHTML = renderDetailsHtml(result);
     setupPositionCalculator(result);
+    const btn = document.getElementById("manualRefreshBtn");
+    if (btn) btn.addEventListener("click", () => refreshTickerLive(btn.dataset.ticker));
   }
 }
 
@@ -1386,9 +1394,9 @@ async function loadPortfolioEquitySection() {
     const res = await fetch("/api/portfolio/equity-currencies");
     const currencies = await res.json();
     const options = ["COMBINED", ...currencies]; // "Łącznie" zawsze pierwsze
-    renderEquityCurrencySwitcher(options);
     equityCurrentCurrency = (equityCurrentCurrency && options.includes(equityCurrentCurrency))
       ? equityCurrentCurrency : "COMBINED";
+    renderEquityCurrencySwitcher(options);
     await loadPortfolioEquity(equityCurrentCurrency);
   } catch (err) {
     console.warn("Nie udało się pobrać walut krzywej kapitału:", err);
@@ -1509,18 +1517,83 @@ function renderTaxSummary(data) {
     html += `<ul class="detail-list">${data.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
   }
 
-  html += `<p class="detail-disclaimer">⚠️ To orientacyjne wyliczenie, NIE oficjalne rozliczenie podatkowe. Kursy walut obcych liczone są kursem rynkowym z dnia transakcji, a NIE oficjalnym średnim kursem NBP wymaganym przez polskie przepisy do PIT-38. Przed złożeniem deklaracji zweryfikuj dokładne kwoty w tabelach kursów NBP i skonsultuj się z doradcą podatkowym.</p></div>`;
+  const disclaimer = data.nbp_compliant
+    ? `⚠️ To orientacyjne wyliczenie pomocnicze, nie zastępuje samodzielnego rozliczenia PIT-38. Kursy walut obcych zostały przeliczone OFICJALNYM średnim kursem NBP z dnia poprzedzającego transakcję (zgodnie z art. 11a ustawy o PIT). Mimo to zawsze zweryfikuj kwoty przed złożeniem deklaracji i skonsultuj się z doradcą podatkowym.`
+    : `⚠️ To orientacyjne wyliczenie, NIE oficjalne rozliczenie podatkowe. Część transakcji przeliczono PRZYBLIŻONYM kursem rynkowym (NBP był niedostępny dla części dat/walut) - patrz uwagi wyżej. Przed złożeniem deklaracji zweryfikuj dokładne kwoty w tabelach kursów NBP i skonsultuj się z doradcą podatkowym.`;
+  html += `<p class="detail-disclaimer">${disclaimer}</p></div>`;
 
   panel.innerHTML = html;
 }
 
+// ---------------- Szufladka logu (zwijana, zapamiętuje stan) ----------------
+const logDrawer = el("logDrawer");
+const logDrawerToggle = el("logDrawerToggle");
+
+function setLogDrawerCollapsed(collapsed) {
+  logDrawer.classList.toggle("is-collapsed", collapsed);
+  localStorage.setItem("logDrawerCollapsed", collapsed ? "1" : "0");
+}
+
+logDrawerToggle.addEventListener("click", () => {
+  setLogDrawerCollapsed(!logDrawer.classList.contains("is-collapsed"));
+});
+
+setLogDrawerCollapsed(localStorage.getItem("logDrawerCollapsed") === "1");
+
+// ---------------- Czat z asystentem (lokalny LLM) ----------------
+state.chatHistory = [];
+
+el("chatToggleBtn").addEventListener("click", () => {
+  el("chatPanel").classList.toggle("is-open");
+});
+el("chatCloseBtn").addEventListener("click", () => el("chatPanel").classList.remove("is-open"));
+
+function appendChatMessage(role, text) {
+  const wrap = el("chatMessages");
+  const div = document.createElement("div");
+  div.className = `chat-msg chat-msg--${role}`;
+  div.textContent = text;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+
+el("chatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = el("chatInput");
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  appendChatMessage("user", question);
+  state.chatHistory.push({ role: "user", content: question });
+
+  const thinking = appendChatMessage("assistant", "…");
+  thinking.classList.add("chat-msg--thinking");
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: state.chatHistory }),
+    });
+    const data = await res.json();
+    thinking.remove();
+    appendChatMessage("assistant", data.reply);
+    state.chatHistory.push({ role: "assistant", content: data.reply });
+  } catch (err) {
+    thinking.remove();
+    appendChatMessage("assistant", "Błąd połączenia z asystentem — sprawdź, czy serwer działa.");
+  }
+});
+
 // ---------------- Start ----------------
 (async function init() {
-  // Zabezpieczenie: modal MUSI być bezpośrednim dzieckiem <body>, inaczej
-  // (jeśli w HTML przypadkiem wylądował zagnieżdżony w jednej z zakładek
-  // <main> o display:none) w ogóle by się nie renderował, mimo że JS
-  // poprawnie dodaje klasę "is-open" - przenosimy go tutaj na pewniaka.
+  // Zabezpieczenie: modal, szufladka logu i widget czatu MUSZĄ być
+  // bezpośrednimi dziećmi <body> - patrz komentarz przy poprzednich
+  // naprawach tego samego problemu (zagnieżdżenie w display:none).
   document.body.appendChild(el("chartModal"));
+  document.body.appendChild(el("logDrawer"));
+  document.body.appendChild(el("chatWidget"));
 
   setupSortableHeaders();
   await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness()]);
