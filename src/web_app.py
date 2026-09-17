@@ -56,11 +56,10 @@ from src.json_utils import sanitize_for_json
 from src.report import (
     evaluate_portfolio_position, compute_max_drawdown,
     compute_portfolio_risk_summary, compute_portfolio_sector_exposure,
-    compute_tax_summary,
+    compute_tax_summary, summarize_portfolio_by_currency,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
-from src.report import summarize_portfolio_by_currency
 from src.fx_rates import get_fx_rate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -690,8 +689,34 @@ async def api_chat(req: ChatRequest):
     cached = db.load_results_cache() or {}
     enriched_positions = _get_enriched_open_positions(cached)
     portfolio_summary = summarize_portfolio_by_currency(enriched_positions)
+
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    combined_positions, _ = _build_combined_portfolio_view(enriched_positions, base_currency)
+    fundamentals_by_ticker = {
+        r["ticker"]: r.get("fundamentals")
+        for r in (cached.get("results") or []) + (cached.get("discovered_results") or [])
+    }
+
+    portfolio_risk = compute_portfolio_risk_summary(enriched_positions)
+    sector_exposure = compute_portfolio_sector_exposure(combined_positions, fundamentals_by_ticker)
+
+    closed_positions = db.get_portfolio(status="closed")
+    tax_summary = (await asyncio.to_thread(compute_tax_summary, closed_positions, base_currency)
+                   if closed_positions else None)
+
+    effectiveness_stats = db.get_effectiveness_stats(
+        min_age_days=_cfg.get("effectiveness", {}).get("min_signal_age_days", 14)
+    )
+
+    extra_context = {
+        "portfolio_risk": portfolio_risk,
+        "sector_exposure": sector_exposure,
+        "tax_summary": tax_summary,
+        "effectiveness_stats": effectiveness_stats,
+    }
+
     reply = await asyncio.to_thread(
-        answer_chat_question, req.messages, cached, portfolio_summary, _cfg["llm"]
+        answer_chat_question, req.messages, cached, portfolio_summary, extra_context, _cfg["llm"]
     )
     return {"reply": reply}
 

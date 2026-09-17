@@ -128,6 +128,8 @@ llm:
   model: "llama3.1:8b"                # dostosuj do modelu, który masz pobrany
   request_timeout_seconds: 60
   fallback_to_lexicon: true           # jeśli LLM niedostępny -> prosty analizator słownikowy
+  chat_num_ctx: 8192   # rozmiar kontekstu (tokeny) dla czatu - większy niż domyślny,
+                        # bo czat dostaje dużo danych naraz (cała watchlista + portfel)
 
 # -------------------------------------------------------------
 # Analiza fundamentalna (P/E, P/B, wzrost przychodów, marże, zadłużenie)
