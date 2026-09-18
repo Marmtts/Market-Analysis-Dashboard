@@ -739,6 +739,7 @@ function renderPortfolioGroupCard(g) {
       <div>
         <span class="result-card__ticker">${g.ticker}</span>
         <span class="result-card__name">${g.lots.length} ${g.lots.length === 1 ? "pozycja" : "pozycje/i"} • śr. ${fmtMoney(g.avgBuyPrice.toFixed(2), g.currency)}</span>
+        <span class="sparkline" id="spark-${g.ticker.replace(/\./g, "_")}"></span>
       </div>
       <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}<span class="portfolio-group__toggle">▾ rozwiń</span></div>
     </div>
@@ -775,7 +776,35 @@ function renderPortfolioGroupCard(g) {
 
   groupWrap.appendChild(header);
   groupWrap.appendChild(lotsWrap);
+  loadSparkline(g.ticker);
   return groupWrap;
+}
+
+function buildSparklineSvg(closes) {
+  const w = 68, h = 22, pad = 2;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const range = max - min || 1;
+  const stepX = (w - pad * 2) / (closes.length - 1);
+  const points = closes.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = closes[closes.length - 1] >= closes[0] ? "#6DBE85" : "#DA6A52";
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+async function loadSparkline(ticker) {
+  try {
+    const res = await fetch(`/api/portfolio/sparkline/${encodeURIComponent(ticker)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.closes || data.closes.length < 2) return;
+    const target = document.getElementById(`spark-${ticker.replace(/\./g, "_")}`);
+    if (target) target.innerHTML = buildSparklineSvg(data.closes);
+  } catch (err) {
+    // cicho pomijamy - sparkline to tylko wizualny dodatek, nie może psuć reszty karty
+  }
 }
 
 function renderLotCard(p) {
@@ -1336,11 +1365,13 @@ function renderCombinedSummary(combined) {
   bar.innerHTML = `
     <div class="combined-summary">
       <div class="combined-summary__label">Podsumowanie łączne — ${escapeHtml(combined.base_currency)}</div>
-      <div class="portfolio-summary-bar__item"><span>Zainwestowano</span><strong>${combined.cost.toFixed(2)}</strong></div>
-      <div class="portfolio-summary-bar__item"><span>Wartość bieżąca</span><strong>${combined.value.toFixed(2)}</strong></div>
-      <div class="portfolio-summary-bar__item"><span>Zysk / strata</span><strong class="${plCls}">${pl >= 0 ? "+" : ""}${pl.toFixed(2)}</strong></div>
-      <div class="portfolio-summary-bar__item"><span>Zysk / strata %</span><strong class="${combined.pl_pct >= 0 ? "positive" : "negative"}">${combined.pl_pct != null ? (combined.pl_pct >= 0 ? "+" : "") + combined.pl_pct + "%" : "—"}</strong></div>
-      ${riskLine}
+      <div class="combined-summary__grid">
+        <div class="portfolio-summary-bar__item"><span>Zainwestowano</span><strong>${combined.cost.toFixed(2)}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Wartość bieżąca</span><strong>${combined.value.toFixed(2)}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Zysk / strata</span><strong class="${plCls}">${pl >= 0 ? "+" : ""}${pl.toFixed(2)}</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Zysk / strata %</span><strong class="${combined.pl_pct >= 0 ? "positive" : "negative"}">${combined.pl_pct != null ? (combined.pl_pct >= 0 ? "+" : "") + combined.pl_pct + "%" : "—"}</strong></div>
+        ${riskLine}
+      </div>
       ${skippedNote}
     </div>
   `;
@@ -1584,6 +1615,50 @@ el("chatForm").addEventListener("submit", async (e) => {
     thinking.remove();
     appendChatMessage("assistant", "Błąd połączenia z asystentem — sprawdź, czy serwer działa.");
   }
+});
+
+// ---------------- Import raportu XTB ----------------
+el("xtbImportBtn").addEventListener("click", async () => {
+  const fileInput = el("xtbImportFile");
+  const file = fileInput.files[0];
+  if (!file) {
+    alert("Wybierz plik .xlsx z eksportu XTB.");
+    return;
+  }
+
+  const btn = el("xtbImportBtn");
+  btn.disabled = true;
+  btn.textContent = "Importuję…";
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch("/api/portfolio/import-xtb", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.detail || "Nie udało się zaimportować pliku.");
+      return;
+    }
+    let msg = `Zaimportowano: ${data.imported_open} otwartych, ${data.imported_closed} zamkniętych pozycji.`;
+    if (data.skipped_duplicates) msg += ` Pominięto ${data.skipped_duplicates} już zaimportowanych wcześniej.`;
+    appendLog({ level: "success", message: `📥 ${msg}` });
+    (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📥 ${w}` }));
+    alert(msg + (data.warnings?.length ? `\n\nUwagi (patrz też log na żywo):\n${data.warnings.slice(0, 5).join("\n")}` : ""));
+    fileInput.value = "";
+    await loadPortfolio();
+    await loadClosedPortfolio();
+  } catch (err) {
+    alert("Błąd połączenia podczas importu.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📥 Importuj pozycje";
+  }
+});
+
+el("xtbImportFile").addEventListener("change", () => {
+  const file = el("xtbImportFile").files[0];
+  el("xtbFileNameLabel").textContent = file ? `✅ ${file.name}` : "📂 Wybierz plik .xlsx z eksportu XTB";
 });
 
 // ---------------- Start ----------------

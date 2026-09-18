@@ -778,20 +778,24 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   background: linear-gradient(135deg, var(--bg-elevated-2), var(--bg-elevated));
   border: 1px solid var(--accent-gold);
   border-radius: var(--radius);
-  padding: 0.9rem 1.1rem;
+  padding: 1rem 1.1rem;
   margin-bottom: 0.75rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 .combined-summary__label {
-  grid-column: 1 / -1;
   font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-gold-bright);
-  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.1rem;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
+.combined-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.7rem;
+}
+.combined-summary__grid .portfolio-summary-bar__item { margin: 0; }
 .combined-summary__note {
-  grid-column: 1 / -1;
-  font-size: 0.68rem; color: var(--text-faint); font-style: italic; margin-top: 0.2rem;
+  font-size: 0.68rem; color: var(--text-faint); font-style: italic;
 }
 
 .currency-switch-btn {
@@ -863,3 +867,15 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   color: var(--text); padding: 0.5rem 0.7rem; font-size: 0.82rem;
 }
 .chat-widget__input-row input:focus { outline: none; border-color: var(--accent-gold); }
+
+.file-input-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.file-input-label {
+  display: block; width: 100%; box-sizing: border-box;
+  background: var(--bg); border: 1px dashed var(--border-bright); border-radius: var(--radius);
+  color: var(--text-dim); font-size: 0.78rem; text-align: center;
+  padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; cursor: pointer; transition: border-color 0.15s;
+}
+.file-input-label:hover { border-color: var(--accent-gold); color: var(--text); }
+
+.sparkline { display: inline-block; vertical-align: middle; margin-left: 0.5rem; }
+.sparkline svg { display: block; }

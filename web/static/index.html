@@ -156,8 +156,17 @@
           <button type="submit" class="btn btn--secondary" id="posSubmitBtn">+ Dodaj pozycję</button>
           <button type="button" class="btn" id="posCancelEditBtn" style="display:none">Anuluj edycję</button>
         </div>
-      </form>
         <p class="detail-disclaimer">Wpisz cenę zakupu w walucie notowania spółki (np. USD dla spółek amerykańskich, PLN dla polskich jak XTB.WA). To nie jest porada inwestycyjna ani podatkowa. Dane portfela są przechowywane lokalnie w bazie tego dashboardu.</p>
+      </form>
+
+      <hr style="border-color: var(--border); margin: 1rem 0;">
+      <h3 class="panel__title" style="margin-bottom:0.5rem;">Import z raportu XTB</h3>
+      <label class="file-input-label" for="xtbImportFile">
+        <span id="xtbFileNameLabel">📂 Wybierz plik .xlsx z eksportu XTB</span>
+      </label>
+      <input type="file" id="xtbImportFile" accept=".xlsx,.xls" class="file-input-hidden">
+      <button class="btn btn--secondary" id="xtbImportBtn">📥 Importuj pozycje</button>
+      <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte.</p>
     </section>
   </aside>
   <section class="main">

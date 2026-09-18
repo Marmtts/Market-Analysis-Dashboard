@@ -700,3 +700,43 @@ def save_fx_rate_to_cache(cache_key: str, rate: float) -> None:
             (cache_key, rate),
         )
         conn.commit()
+
+
+# =====================================================================
+# Import raportu XTB - idempotentny (bezpieczny do wielokrotnego uruchamiania)
+# =====================================================================
+
+def get_imported_xtb_ids() -> set[str]:
+    """Zwraca zbiór ID pozycji XTB już wcześniej zaimportowanych (odczytane
+    ze znacznika [XTB:<id>] w notatkach) - używane do pominięcia duplikatów
+    przy ponownym imporcie tego samego lub nowszego pliku."""
+    with _connect() as conn:
+        rows = conn.execute("SELECT notes FROM portfolio WHERE notes LIKE '%[XTB:%'").fetchall()
+    ids = set()
+    for r in rows:
+        notes = r["notes"] or ""
+        start = notes.find("[XTB:")
+        if start == -1:
+            continue
+        end = notes.find("]", start)
+        if end != -1:
+            ids.add(notes[start + 5:end])
+    return ids
+
+
+def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: str,
+                       notes: str = "", status: str = "open",
+                       sell_price: float | None = None, sell_date: str | None = None,
+                       currency: str = "USD") -> int:
+    """Jak add_position(), ale pozwala od razu ustawić status/sprzedaż/walutę -
+    używane przez import XTB, żeby zamknięte transakcje trafiały od razu
+    jako zamknięte, a nie jako otwarte wymagające ręcznej sprzedaży."""
+    ticker = ticker.strip().upper()
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, status, "
+            "sell_price, sell_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, currency),
+        )
+        conn.commit()
+        return cur.lastrowid

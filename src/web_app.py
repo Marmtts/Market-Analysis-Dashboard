@@ -40,7 +40,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 import yaml
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -60,6 +60,7 @@ from src.report import (
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
+from src.xtb_import import parse_xtb_report
 from src.fx_rates import get_fx_rate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -535,6 +536,56 @@ async def api_get_results():
 async def api_get_portfolio():
     return sanitize_for_json(_get_enriched_open_positions())
 
+@app.post("/api/portfolio/import-xtb")
+async def api_import_xtb(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Oczekiwano pliku .xlsx z eksportu XTB.")
+
+    content = await file.read()
+    try:
+        parsed = await asyncio.to_thread(parse_xtb_report, content)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Nie udało się odczytać pliku: {exc}")
+
+    already_imported = db.get_imported_xtb_ids()
+    imported_open = imported_closed = skipped_duplicates = 0
+    needs_review: list[str] = []
+
+    for row in parsed["open"]:
+        if row["xtb_id"] in already_imported:
+            skipped_duplicates += 1
+            continue
+        db.add_company(row["ticker"], name=row["ticker"], source="xtb_import")
+        db.add_position_full(
+            ticker=row["ticker"], shares=row["shares"], buy_price=row["buy_price"],
+            buy_date=row["buy_date"], notes=f"Import XTB [XTB:{row['xtb_id']}]",
+            status="open", currency=row["currency"],
+        )
+        imported_open += 1
+        if row["ticker"] == row["original_ticker"] and "." in row["original_ticker"]:
+            pass  # mapowanie pewne, nic do zgłoszenia
+
+    for row in parsed["closed"]:
+        if row["xtb_id"] in already_imported:
+            skipped_duplicates += 1
+            continue
+        db.add_company(row["ticker"], name=row["ticker"], source="xtb_import")
+        db.add_position_full(
+            ticker=row["ticker"], shares=row["shares"], buy_price=row["buy_price"],
+            buy_date=row["buy_date"], notes=f"Import XTB [XTB:{row['xtb_id']}]",
+            status="closed", sell_price=row["sell_price"], sell_date=row["sell_date"],
+            currency=row["currency"],
+        )
+        imported_closed += 1
+
+    await manager.broadcast({"type": "watchlist_changed"})
+
+    return {
+        "imported_open": imported_open,
+        "imported_closed": imported_closed,
+        "skipped_duplicates": skipped_duplicates,
+        "warnings": parsed["warnings"],
+    }
 
 @app.get("/api/portfolio/risk")
 async def api_get_portfolio_risk():
@@ -573,6 +624,16 @@ async def api_get_portfolio_risk():
             "skipped_currencies": sorted(skipped),
         },
     })
+
+
+@app.get("/api/portfolio/sparkline/{ticker}")
+async def api_get_sparkline(ticker: str):
+    try:
+        history = await asyncio.to_thread(fetch_history, ticker, "1mo", "1d")
+        closes = [round(float(c), 4) for c in history["Close"].dropna().tolist()]
+    except Exception:  # noqa: BLE001
+        closes = []
+    return {"closes": closes}
 
 
 @app.get("/api/portfolio/equity-currencies")
