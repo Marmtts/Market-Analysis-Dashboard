@@ -346,6 +346,21 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   --grid-cols-6: 60px minmax(150px, 1.5fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(130px, 1.4fr);
 }
 
+:root {
+  /* Kolumna wykresu jako minmax z jednostką fr (nie sztywne 82px) - rośnie
+     razem z resztą siatki na szerokich ekranach, zamiast zostać maleńkim,
+     stałym paskiem. */
+  --grid-cols-7: 60px minmax(150px, 1.5fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(110px, 1fr) minmax(130px, 1.4fr);
+}
+
+/* Wyższa specyficzność (dwie klasy zamiast jednej) - gwarantuje, że ta
+   reguła ZAWSZE wygra z bazową .result-card, niezależnie od kolejności
+   w pliku (przy równej specyficzności o wygranej decyduje kolejność
+   źródłowa, co wcześniej powodowało rozjazd kolumn dla kart ze sparkline'em). */
+.result-card.result-card--with-sparkline {
+  grid-template-columns: var(--grid-cols-7);
+}
+
 .result-card {
   display: grid;
   grid-template-columns: var(--grid-cols-6);
@@ -367,12 +382,30 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 980px) {
-  :root { --grid-cols-6: 52px minmax(130px, 1.5fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(110px, 1.3fr); }
-  .result-card, .results-header { gap: 0.6rem; }
+  :root {
+    --grid-cols-6: 52px minmax(130px, 1.5fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(110px, 1.3fr);
+    --grid-cols-7: 52px minmax(130px, 1.5fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(85px, 1fr) minmax(110px, 1.3fr);
+  }
+
+  .result-card,
+  .results-header {
+    gap: 0.6rem;
+  }
 }
 @media (max-width: 720px) {
-  .result-card { grid-template-columns: auto 1fr; grid-template-rows: auto auto auto auto auto; }
-  .results-header { display: none; }
+  .result-card {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto auto auto auto auto;
+  }
+
+  .results-header {
+    display: none;
+  }
+
+  .result-card__sparkline {
+    justify-content: flex-start;
+    padding-left: 0.25rem;
+  }
 }
 
 /* --- pieczęć (sygnaturalny element) --- */
@@ -423,6 +456,45 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .result-card__metric { text-align: center; }
 .result-card__metric-value { font-family: var(--font-mono); font-weight: 600; font-size: 0.95rem; }
 .result-card__metric-label { font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.result-card__sparkline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.sparkline-cell .sparkline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  opacity: 0.95;
+}
+
+.sparkline-cell .sparkline svg {
+  display: block;
+  width: 100%;
+  height: 32px;
+}
+
+@media (max-width: 720px) {
+  /* Na mobile karta przechodzi w układ jednokolumnowy (wiersze zamiast
+     kolumn) - bez ograniczenia szerokości sparkline rozciągnąłby się na
+     całą szerokość karty, co wygląda nienaturalnie w wąskim wierszu. */
+  .sparkline-cell .sparkline { max-width: 220px; }
+}
+
+.results-header__sparkline {
+  text-align: center !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.results-header.results-header--with-sparkline {
+  grid-template-columns: var(--grid-cols-7);
+}
 
 .result-card__category {
   font-family: var(--font-body);

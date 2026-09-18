@@ -44,10 +44,14 @@ function renderResultCard(r) {
     ? `<span class="data-age ${age.isStale ? "data-age--stale" : ""}" title="Ostatnia analiza tej spółki">🕐 ${age.label}</span>`
     : "";
 
+  const sparkId = `analysis-spark-${r.ticker.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
   const card = document.createElement("div");
-  card.className = "result-card";
+  card.className = "result-card result-card--with-sparkline";
+
   card.innerHTML = `
     <div class="stamp stamp--${stamp.cls}" title="${escapeHtml(r.combined.category)}">${stamp.label.replace("\n", "<br>")}</div>
+
     <div class="result-card__info">
       <div>
         <span class="result-card__ticker">${r.ticker}</span>
@@ -57,21 +61,36 @@ function renderResultCard(r) {
       <div class="result-card__xtb">XTB: ${r.xtb_symbol}</div>
       ${r.discovery_reason ? `<div class="result-card__reason">💡 ${escapeHtml(r.discovery_reason)}</div>` : ""}
     </div>
+
     <div class="result-card__metric">
       <div class="result-card__metric-value">${targetLabel}</div>
       <div class="result-card__metric-label">Cena docelowa</div>
     </div>
+
     <div class="result-card__metric">
       <div class="result-card__metric-value">${r.technical.signal}</div>
       <div class="result-card__metric-label">Sygnał tech.</div>
     </div>
+
     <div class="result-card__metric">
       <div class="result-card__metric-value">${r.combined.final_score}</div>
       <div class="result-card__metric-label">Wynik / ${trend}</div>
     </div>
-    <div class="result-card__category category--${stamp.cls}">${r.combined.category}</div>
+
+    <div class="result-card__sparkline sparkline-cell">
+      <span class="sparkline" id="${sparkId}"></span>
+    </div>
+
+    <div class="result-card__category category--${stamp.cls}">
+      ${r.combined.category}
+    </div>
   `;
+
   card.addEventListener("click", () => openChart(r.ticker, r.name));
+
+  // Ten sam sparkline co w Portfelu.
+  loadSparklineInto(r.ticker, sparkId);
+
   return card;
 }
 
@@ -126,6 +145,33 @@ function renderResultsGrid(containerId, results, emptyMessage, sortState) {
 
 // ---------------- Sortowanie klikalnych nagłówków ----------------
 const state_sort = { main: { key: null, dir: "asc" }, discovered: { key: null, dir: "asc" }, portfolio: { key: null, dir: "asc" }, closed: { key: null, dir: "asc" } };
+
+function setupSparklineHeaders() {
+  document
+    .querySelectorAll(
+      '.results-header[data-sort-group="main"], ' +
+      '.results-header[data-sort-group="discovered"], ' +
+      '.results-header[data-sort-group="portfolio"]'
+    )
+    .forEach((header) => {
+      // Klucz do naprawy rozjazdu: kontener nagłówka MUSI dostać tę samą
+      // 7-kolumnową siatkę co karty ze sparkline'em, inaczej dołożona niżej
+      // 7. komórka tekstowa i tak wyląduje w siatce 6-kolumnowej.
+      header.classList.add("results-header--with-sparkline");
+
+      if (header.querySelector(".results-header__sparkline")) return;
+
+      const children = Array.from(header.children);
+      if (!children.length) return;
+
+      const categoryHeader = children[children.length - 1];
+      const chartHeader = document.createElement("span");
+      chartHeader.className = "results-header__sparkline";
+      chartHeader.textContent = "Wykres";
+
+      header.insertBefore(chartHeader, categoryHeader);
+    });
+}
 
 function setupSortableHeaders() {
   document.querySelectorAll(".results-header[data-sort-group]").forEach((header) => {
@@ -732,14 +778,13 @@ function renderPortfolioGroupCard(g) {
   groupWrap.className = "portfolio-group";
 
   const header = document.createElement("div");
-  header.className = "result-card portfolio-card portfolio-group__header";
+  header.className = "result-card portfolio-card portfolio-group__header result-card--with-sparkline";
   header.innerHTML = `
     <div class="stamp stamp--${cls}" title="${escapeHtml(g.action)}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
     <div class="result-card__info">
       <div>
         <span class="result-card__ticker">${g.ticker}</span>
         <span class="result-card__name">${g.lots.length} ${g.lots.length === 1 ? "pozycja" : "pozycje/i"} • śr. ${fmtMoney(g.avgBuyPrice.toFixed(2), g.currency)}</span>
-        <span class="sparkline" id="spark-${g.ticker.replace(/\./g, "_")}"></span>
       </div>
       <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}<span class="portfolio-group__toggle">▾ rozwiń</span></div>
     </div>
@@ -755,6 +800,11 @@ function renderPortfolioGroupCard(g) {
       <div class="result-card__metric-value">${fmtMoney(g.totalPl.toFixed(2), g.currency)}</div>
       <div class="result-card__metric-label">Wartość P/L</div>
     </div>
+
+    <div class="result-card__sparkline sparkline-cell">
+      <span class="sparkline" id="spark-${g.ticker.replace(/[^a-zA-Z0-9_-]/g, "_")}"></span>
+    </div>
+
     <div class="result-card__category category--${cls}">
       <button class="portfolio-group__ai-btn" title="Zobacz pełną analizę techniczną, sentyment i fundamenty">🔍 Analiza AI</button>
       ${escapeHtml(g.action)}
@@ -781,7 +831,12 @@ function renderPortfolioGroupCard(g) {
 }
 
 function buildSparklineSvg(closes) {
-  const w = 68, h = 22, pad = 2;
+  // Wewnętrzna rozdzielczość SVG (viewBox) jest teraz większa i NIEZALEŻNA
+  // od rzeczywistego rozmiaru na ekranie - width="100%"/height="100%" +
+  // preserveAspectRatio="none" rozciąga wykres dokładnie na tyle, ile daje
+  // mu kolumna CSS (patrz .sparkline-cell .sparkline svg), więc jest w pełni
+  // skalowalny i responsywny, zamiast sztywnych 68x22 pikseli.
+  const w = 120, h = 34, pad = 3;
   const min = Math.min(...closes), max = Math.max(...closes);
   const range = max - min || 1;
   const stepX = (w - pad * 2) / (closes.length - 1);
@@ -791,20 +846,37 @@ function buildSparklineSvg(closes) {
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
   const color = closes[closes.length - 1] >= closes[0] ? "#6DBE85" : "#DA6A52";
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  return `<svg width="100%" height="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+async function loadSparklineInto(ticker, targetId) {
+  try {
+    const res = await fetch(
+      `/api/portfolio/sparkline/${encodeURIComponent(ticker)}`
+    );
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+
+    if (!data.closes || data.closes.length < 2) return;
+
+    const target = document.getElementById(targetId);
+
+    if (target) {
+      target.innerHTML = buildSparklineSvg(data.closes);
+    }
+  } catch (err) {
+    // Sparkline jest tylko dodatkiem wizualnym.
+    // Błąd wykresu nie powinien blokować reszty interfejsu.
+  }
 }
 
 async function loadSparkline(ticker) {
-  try {
-    const res = await fetch(`/api/portfolio/sparkline/${encodeURIComponent(ticker)}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.closes || data.closes.length < 2) return;
-    const target = document.getElementById(`spark-${ticker.replace(/\./g, "_")}`);
-    if (target) target.innerHTML = buildSparklineSvg(data.closes);
-  } catch (err) {
-    // cicho pomijamy - sparkline to tylko wizualny dodatek, nie może psuć reszty karty
-  }
+  await loadSparklineInto(
+    ticker,
+    `spark-${ticker.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+  );
 }
 
 function renderLotCard(p) {
@@ -1670,6 +1742,7 @@ el("xtbImportFile").addEventListener("change", () => {
   document.body.appendChild(el("logDrawer"));
   document.body.appendChild(el("chatWidget"));
 
+  setupSparklineHeaders();
   setupSortableHeaders();
   await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness()]);
   connectWebSocket();
