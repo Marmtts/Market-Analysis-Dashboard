@@ -54,13 +54,17 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Panel „Korelacja i zmienność”: roczna zmienność, Sharpe, maks. obsunięcie,
   macierz korelacji i współczynnik dywersyfikacji dla obecnych wag pozycji —
   pokazuje, czy kilka spółek to w praktyce jeden zakład (np. sektor AI/tech).
+- Import pozycji z raportu XTB (.xlsx: „Open Positions” i „Closed
+  Positions”) — idempotentny, mapuje symbole XTB na tickery Yahoo Finance.
 - Kopia zapasowa watchlisty i portfela (eksport/import JSON, idempotentny).
 - Alerty cenowe niezależne od pełnego cyklu (sprawdzanie samej ceny co
-  kilka minut, bez angażowania LLM/newsów).
+  kilka minut, bez angażowania LLM/newsów): poniżej stop-lossu (własnego
+  albo z ATR), osiągnięcie ceny docelowej analityków i własnego celu.
 
 **Dashboard i asystent:**
-- Pełny dashboard webowy (FastAPI + WebSocket) z watchlistą, portfelem,
-  panelem skuteczności narzędzia i logiem na żywo.
+- Pełny dashboard webowy (FastAPI + WebSocket) z trzema zakładkami
+  (Analiza, Portfel, Zamknięte transakcje), watchlistą, miniwykresami,
+  panelem skuteczności narzędzia i zwijanym logiem na żywo.
 - Codzienny brief AI — krótkie podsumowanie sytuacji generowane przez
   lokalny LLM na koniec każdego cyklu.
 - Interaktywny czat z lokalnym LLM, który odpowiada na pytania na
@@ -110,7 +114,8 @@ w przeglądarce. Serwer musi działać cały czas, żeby automatyczne cykle
 analizy, alerty cenowe i dashboard na żywo działały w tle.
 
 Częstotliwość automatycznego cyklu i inne ustawienia webowe konfigurujesz
-w sekcji `web:` pliku `config.yaml`.
+w sekcji `web:` pliku `config.yaml`. Host i port możesz też nadpisać z linii
+poleceń: `--host` i `--port`.
 
 ### CLI (jednorazowa analiza + raport)
 
@@ -175,6 +180,10 @@ raz**, przy każdym kolejnym cyklu czytane lokalnie. Podobnie kursy walut
 (bieżące i historyczne) oraz ceny (krótkoterminowo) — dzięki temu drugi
 i kolejne cykle analizy są znacząco szybsze niż pierwszy.
 
+W `config.example.yaml` `use_historical_news` jest domyślnie **wyłączone** —
+włącz je (`true`) dopiero po wpisaniu prawdziwego klucza; z kluczem-zaślepką
+każdy cykl marnuje czas na nieudane zapytania.
+
 Jeśli nie chcesz newsów historycznych, ustaw `news.use_historical_news: false`
 — narzędzie będzie działać w pełni offline (poza pobieraniem cen), korzystając
 z prostego analizatora słownikowego.
@@ -207,7 +216,16 @@ Typowe sufiksy giełd dla tickerów spoza USA: `.WA` (Warszawa), `.DE`
   z doradcą podatkowym.
 - Sentyment newsów zależy od jakości dostępnych źródeł (RSS, yfinance,
   Finnhub) i jakości lokalnego modelu LLM — traktuj go jako dodatkowy
-  kontekst, nie precyzyjny pomiar.
+  kontekst, nie precyzyjny pomiar. W teście na ok. 24 tys. historycznych
+  nagłówków (dwie spółki) sentyment pojedynczego nagłówka nie wykazał
+  związku z późniejszą zmianą ceny, więc nie jest sygnałem predykcyjnym.
+- Daty wyników kwartalnych pochodzą z Yahoo Finance i bywają szacunkowe.
+- Statystyki portfela (korelacje, zmienność, Sharpe) dotyczą hipotetycznego
+  portfela o obecnych wagach na rocznej historii, w walutach notowania
+  (bez wpływu kursów walut) — to obraz ryzyka, nie prognoza.
+- Optymalizacja parametrów w backteście dotyczy wąskiej, silnie
+  skorelowanej watchlisty w konkretnym reżimie rynkowym — nie generalizuj
+  wyników na inne okresy bez własnej weryfikacji.
 - `yfinance` korzysta z nieoficjalnego, publicznego API Yahoo Finance —
   bywa czasem niestabilne; narzędzie ma wbudowane ponawianie prób.
 - Kontekst makro nie obejmuje inflacji (CPI) — brak w pełni darmowego,
@@ -223,6 +241,8 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.0)
+├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
 ├── reports/                    # raporty z CLI - w .gitignore
@@ -235,7 +255,7 @@ xtb_trend_watch/
 └── src/
     ├── market_data.py          # ceny (yfinance) + cache w pamięci + benchmark
     ├── technical_analysis.py   # RSI/SMA/Bollinger/ATR/sharp_decline/siła względna
-    ├── fundamentals.py         # P/E, wzrost, marże, cena docelowa, typ instrumentu (ETF/akcja)
+    ├── fundamentals.py         # P/E, wzrost, marże, cena docelowa, typ instrumentu (ETF/akcja), termin wyników
     ├── macro_context.py        # VIX, rentowność obligacji - filtr ryzyka
     ├── fx_rates.py             # kursy walut: bieżące, historyczne, oficjalne NBP
     ├── news_sources.py         # newsy bieżące (yfinance) + RSS makro
@@ -249,24 +269,34 @@ xtb_trend_watch/
     ├── calibration_report.py          # (badawcze) kalibracja sentymentu LLM
     ├── daily_aggregate_calibration.py # (badawcze) jw., sentyment zagregowany dziennie
     ├── backfill_history.py     # symulacja przeszłych cykli technicznych na historii cen
-    ├── report.py                # scoring, kategorie, ryzyko portfela, podatki, koncentracja sektorowa
-    ├── db.py                    # SQLite: watchlist, portfolio, cache, historia, skuteczność
+    ├── report.py                # scoring, kategorie, ryzyko i statystyki portfela (korelacje, Sharpe), podatki, koncentracja sektorowa
+    ├── xtb_import.py            # import pozycji z raportu XTB (.xlsx)
+    ├── json_utils.py            # sanityzacja NaN/Infinity przed serializacją JSON
+    ├── db.py                    # SQLite: watchlist, portfolio, cache, historia, skuteczność, kopia zapasowa
     ├── analysis_engine.py       # wspólny silnik analizy (CLI + dashboard)
-    ├── web_app.py                # serwer FastAPI: REST API + WebSocket + harmonogramy w tle
+    ├── web_app.py                # serwer FastAPI: REST API (w tym kopia zapasowa, statystyki portfela) + WebSocket + harmonogramy w tle
     └── main.py                  # punkt wejścia CLI
 
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`.
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.0). Instrukcję
+generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
+dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
+działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ---
 
 ## 9. Możliwe dalsze rozszerzenia
 
-- Eksport/import watchlisty i portfela (CSV/JSON).
+- Krzywa kapitału portfela na tle benchmarku rynkowego (SPY / WIG20)
+  w tym samym okresie — pokazałaby, czy portfel bije rynek, czy tylko płynie
+  z hossą.
+- Sprawdzenie w backteście, czy okno tuż przed wynikami kwartalnymi
+  pogarsza sygnały GOOD_ENTRY; jeśli tak, ostrzeżenie o wynikach mogłoby
+  obniżać kategorię zamiast tylko informować.
 - Alternatywne źródła newsów dla spółek spoza głównych giełd US (Finnhub
   zwraca 403 dla większości spółek z GPW) — obecnie świadomie pominięte
   jako zbyt kruche (scrapowanie) względem korzyści.
-- Rozszerzenie panelu ryzyka o zmienność portfela i wskaźnik Sharpe’a.
-- Krzywa kapitału portfela na tle benchmarku rynkowego w tym samym okresie.
+- Eksport historii zamkniętych transakcji do CSV (np. do arkusza z rozliczeniem
+  podatkowym).
