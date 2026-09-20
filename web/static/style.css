@@ -951,3 +951,43 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 
 .sparkline { display: inline-block; vertical-align: middle; margin-left: 0.5rem; }
 .sparkline svg { display: block; }
+
+/* ---------------- Terminy wyników kwartalnych ---------------- */
+.earnings-badge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--accent-amber);
+  background: rgba(217, 164, 65, 0.12);
+  border: 1px solid rgba(217, 164, 65, 0.4);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+.earnings-banner {
+  background: rgba(217, 164, 65, 0.08);
+  border-color: rgba(217, 164, 65, 0.4);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.earnings-row--soon .eff-row__stat { color: var(--accent-amber); font-weight: 600; }
+
+
+/* ---------------- Statystyki portfela: korelacje, zmienność ---------------- */
+.warning-banner {
+  background: rgba(193, 83, 61, 0.08);
+  border-color: rgba(193, 83, 61, 0.45);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin-bottom: 0.6rem;
+}
+.stats-grid { margin-bottom: 0.9rem; }
+.stats-grid strong.positive { color: var(--accent-green-bright); }
+.stats-grid strong.negative { color: var(--accent-red-bright); }
+.corr-wrap { overflow-x: auto; }
+.corr-table { border-collapse: separate; border-spacing: 2px; font-family: var(--font-mono); font-size: 0.7rem; }
+.corr-table th { color: var(--text-dim); font-weight: 600; padding: 0.25rem 0.45rem; text-align: center; white-space: nowrap; }
+.corr-table tbody th { text-align: right; }
+.corr-table td { text-align: center; padding: 0.3rem 0.5rem; border-radius: 3px; min-width: 44px; color: var(--text); }
+.backup-download-link { display: block; text-align: center; text-decoration: none; margin-bottom: 0.6rem; }

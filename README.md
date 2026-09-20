@@ -24,6 +24,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Podstawowa analiza fundamentalna: P/E, wzrost przychodów, marże,
   zadłużenie, cena docelowa i rekomendacja analityków Wall Street.
 - Szeroki kontekst makro (VIX, rentowność obligacji) jako filtr ryzyka.
+- Ostrzeżenia o zbliżających się wynikach kwartalnych (badge na kartach,
+  baner w panelu spółki, panel „Nadchodzące wyniki”, uwaga przy pozycjach
+  w portfelu, wzmianka w briefie dnia i w czacie). Czysto informacyjne —
+  nie zmieniają wyniku ani kategorii.
 - Automatyczna blokada sugestii kupna blisko szczytu trendu lub tuż po
   gwałtownym spadku ceny — z osobną, łagodniejszą logiką dla ETF-ów.
 - LLM może samodzielnie proponować nowe spółki do obserwacji na bazie
@@ -45,6 +49,12 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   (podatek od zysków kapitałowych, PIT-38) liczone **oficjalnym kursem NBP**
   zgodnie z art. 11a ustawy o PIT.
 - Kalkulator wielkości pozycji (na bazie ATR) przy każdej analizowanej spółce.
+- Własny stop-loss i własny cel cenowy per pozycja (opcjonalne): nadpisują
+  sugestię z ATR w rekomendacji, w panelu ryzyka i w alertach cenowych.
+- Panel „Korelacja i zmienność”: roczna zmienność, Sharpe, maks. obsunięcie,
+  macierz korelacji i współczynnik dywersyfikacji dla obecnych wag pozycji —
+  pokazuje, czy kilka spółek to w praktyce jeden zakład (np. sektor AI/tech).
+- Kopia zapasowa watchlisty i portfela (eksport/import JSON, idempotentny).
 - Alerty cenowe niezależne od pełnego cyklu (sprawdzanie samej ceny co
   kilka minut, bez angażowania LLM/newsów).
 

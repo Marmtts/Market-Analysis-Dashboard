@@ -247,6 +247,9 @@ def run_full_analysis(cfg: dict, watchlist: list[dict],
         "results": all_results,
         "discovered_results": discovered_results,
         "sector_concentration": compute_sector_concentration(all_results + discovered_results),
+        # Próg (w dniach) dla ostrzeżeń o wynikach kwartalnych - frontend
+        # używa go do wyróżniania kart i banerów.
+        "earnings_warning_days": cfg.get("fundamentals", {}).get("earnings_warning_days", 7),
     }
     # Siatka bezpieczeństwa: niezależnie od tego, skąd wzięłaby się wartość
     # NaN/Infinity (np. nietypowe dane z yfinance), nigdy nie chcemy wysłać

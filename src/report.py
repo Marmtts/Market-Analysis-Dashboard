@@ -14,9 +14,13 @@ kupowaniem "na górce".
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 from .technical_analysis import TechnicalResult
 from .llm_sentiment import SentimentResult, SentimentTrendResult
@@ -26,6 +30,26 @@ from .fundamentals import FundamentalResult
 # bo kilka jednoczesnych sygnałów kupna w tym samym sektorze to jeden
 # skoncentrowany zakład, a nie kilka niezależnych okazji.
 _CONCENTRATION_TARGET_CATEGORIES = {"WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia"}
+
+
+def earnings_days_from_result(result: dict | None, max_days: int | None = None) -> tuple[str, int] | None:
+    """Zwraca (data_wyników "YYYY-MM-DD", liczba_dni_do_wyników) dla wyniku
+    analizy spółki albo None (brak danych, ETF, termin już minął, albo dalej
+    niż max_days). Liczba dni jest liczona OD DZIŚ, a nie od momentu analizy -
+    dzięki temu nie starzeje się w cache'u między cyklami."""
+    fund = (result or {}).get("fundamentals")
+    if not fund or not fund.get("available"):
+        return None
+    date_str = (fund.get("metrics") or {}).get("next_earnings_date")
+    if not date_str:
+        return None
+    try:
+        days = (datetime.strptime(date_str, "%Y-%m-%d").date() - datetime.now().date()).days
+    except (ValueError, TypeError):
+        return None
+    if days < 0 or (max_days is not None and days > max_days):
+        return None
+    return date_str, days
 
 
 def compute_sector_concentration(all_results: list[dict], min_count: int = 2) -> list[dict]:
@@ -290,7 +314,8 @@ def save_reports(all_results: list[dict], macro_summary: str, cfg: dict,
 
     return json_path, md_path
 
-def evaluate_portfolio_position(position: dict, result: dict | None) -> dict:
+def evaluate_portfolio_position(position: dict, result: dict | None,
+                                 earnings_warning_days: int = 7) -> dict:
     """Ocenia POSIADANĄ pozycję w świetle najnowszego wyniku analizy tej
     spółki. To NIE jest porada inwestycyjna ani podatkowa - to zestaw
     prostych, przejrzystych reguł łączących: cenę zakupu vs bieżącą,
@@ -300,7 +325,7 @@ def evaluate_portfolio_position(position: dict, result: dict | None) -> dict:
         "market_value": None, "cost_basis": None, "holding_days": None,
         "horizon": "brak danych", "category": None, "signal": None,
         "action": "BRAK DANYCH", "reasons": ["Spółka nie jest jeszcze przeanalizowana - poczekaj na cykl."],
-        "currency": None,
+        "currency": None, "next_earnings_date": None,
     }
     if result is None:
         return base
@@ -332,14 +357,25 @@ def evaluate_portfolio_position(position: dict, result: dict | None) -> dict:
 
     category = result["combined"]["category"]
     signal = result["technical"]["signal"]
-    stop_loss = result["technical"]["metrics"].get("suggested_stop_loss")
+    # Własny stop-loss użytkownika (jeśli ustawiony) ma pierwszeństwo przed
+    # sugestią z ATR - to on trafia też do panelu ryzyka portfela.
+    custom_stop = position.get("custom_stop")
+    custom_target = position.get("custom_target")
+    atr_stop = result["technical"]["metrics"].get("suggested_stop_loss")
+    stop_loss = custom_stop if custom_stop else atr_stop
+    stop_source = "own" if custom_stop else "atr"
+    stop_label = "własnego" if custom_stop else "sugerowanego"
 
     action = "TRZYMAJ"
     reasons: list[str] = []
 
     if stop_loss is not None and current_price < stop_loss:
         action = "ROZWAŻ SPRZEDAŻ"
-        reasons.append(f"Cena ({current_price:.2f}) spadła poniżej sugerowanego stop-loss ({stop_loss:.2f}).")
+        reasons.append(f"Cena ({current_price:.2f}) spadła poniżej {stop_label} stop-loss ({stop_loss:.2f}).")
+
+    if custom_target and current_price >= custom_target and action == "TRZYMAJ":
+        action = "ROZWAŻ REALIZACJĘ ZYSKU"
+        reasons.append(f"Cena ({current_price:.2f}) osiągnęła Twój własny cel ({custom_target:.2f}).")
 
     if signal == "AT_TOP":
         if unrealized_pct is not None and unrealized_pct > 0:
@@ -356,6 +392,16 @@ def evaluate_portfolio_position(position: dict, result: dict | None) -> dict:
     if not reasons:
         reasons.append(f"Brak jednoznacznego sygnału zmiany - bieżąca kategoria: {category}.")
 
+    # Zbliżające się wyniki kwartalne - tylko dodatkowa uwaga, nie zmienia
+    # rekomendacji (patrz komentarz w fundamentals.py).
+    earnings = earnings_days_from_result(result)
+    if earnings and earnings[1] <= earnings_warning_days:
+        when = "DZISIAJ" if earnings[1] == 0 else ("jutro" if earnings[1] == 1 else f"za {earnings[1]} dni")
+        reasons.append(
+            f"Wyniki kwartalne {when} ({earnings[0]}) - możliwy gwałtowny ruch ceny w obie strony; "
+            f"sprawdź, czy wielkość pozycji i stop-loss są dla Ciebie odpowiednie przed publikacją."
+        )
+
     return {
         "current_price": round(current_price, 2),
         "unrealized_pct": round(unrealized_pct, 2) if unrealized_pct is not None else None,
@@ -371,6 +417,8 @@ def evaluate_portfolio_position(position: dict, result: dict | None) -> dict:
         "currency": currency,
         "analyzed_at": result.get("analyzed_at"),
         "suggested_stop_loss": round(stop_loss, 2) if stop_loss is not None else None,
+        "stop_source": stop_source if stop_loss is not None else None,
+        "next_earnings_date": earnings[0] if earnings else None,
     }
 
 
@@ -574,3 +622,111 @@ def summarize_portfolio_by_currency(open_positions_evaluated: list[dict]) -> dic
         result[currency] = {"value": totals["value"], "cost": totals["cost"],
                              "pl_pct": pl_pct, "risk_pct": risk_bucket.get("risk_pct")}
     return {"by_currency": result}
+
+
+def _series_to_daily_naive(series: "pd.Series") -> "pd.Series":
+    """Sprowadza serię cen do indeksu 'sama data, bez strefy czasowej'.
+    Konieczne przy łączeniu giełd z różnych stref (np. NYSE i GPW) - bez tego
+    znaczniki czasu z różnych stref nie pokrywają się i wspólna część
+    historii wychodzi pusta."""
+    s = series.dropna()
+    idx = pd.DatetimeIndex(s.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    s = pd.Series(s.values, index=idx.normalize())
+    return s[~s.index.duplicated(keep="last")].sort_index()
+
+
+def compute_portfolio_statistics(closes_by_ticker: dict, weights: dict,
+                                  risk_free_rate_pct: float = 0.0,
+                                  min_observations: int = 60) -> dict:
+    """Statystyki ryzyka portfela liczone z HISTORII cen (zwykle 1 rok) przy
+    OBECNYCH wagach pozycji: zmienność, Sharpe, maks. obsunięcie, korelacje
+    między pozycjami i współczynnik dywersyfikacji.
+
+    Ograniczenia (celowo jawne): to hipotetyczny portfel o stałych wagach z
+    dzisiejszego stanu posiadania, a nie Twoja faktyczna historia; zwroty
+    liczone w walutach notowania, więc bez efektu zmian kursów walut.
+    Współczynnik dywersyfikacji = (średnia ważona zmienności pozycji) /
+    (zmienność portfela): 1.0 = brak korzyści z dywersyfikacji (pozycje
+    poruszają się jak jedna), im wyżej, tym lepiej."""
+    series = {}
+    for ticker, s in closes_by_ticker.items():
+        if s is None or len(s) == 0:
+            continue
+        series[ticker] = _series_to_daily_naive(pd.Series(s))
+    if not series:
+        return {"available": False, "reason": "Brak danych cenowych dla pozycji w portfelu."}
+
+    prices = pd.concat(series, axis=1, join="inner").dropna()
+    returns = prices.pct_change().dropna()
+    if len(returns) < min_observations:
+        return {"available": False,
+                "reason": f"Za mało wspólnej historii notowań ({len(returns)} sesji, potrzeba co najmniej "
+                          f"{min_observations}) - np. bardzo świeża spółka w portfelu."}
+
+    tickers = list(returns.columns)
+    n = len(tickers)
+    w = np.array([max(float(weights.get(t, 0.0)), 0.0) for t in tickers])
+    if w.sum() <= 0:
+        return {"available": False, "reason": "Brak dodatniej wartości pozycji do policzenia wag."}
+    w = w / w.sum()
+
+    trading_days = 252
+    cov = returns.cov().values * trading_days
+    vol_each = np.sqrt(np.clip(np.diag(cov), 0, None))
+    port_vol = math.sqrt(max(float(w @ cov @ w), 0.0))
+
+    port_returns = returns.values @ w
+    ann_return = float(np.mean(port_returns) * trading_days)
+    rf = risk_free_rate_pct / 100.0
+    sharpe = (ann_return - rf) / port_vol if port_vol > 0 else None
+
+    equity = np.cumprod(1 + port_returns)
+    peak = np.maximum.accumulate(equity)
+    max_drawdown = float(((peak - equity) / peak).max())
+
+    diversification_ratio = float(np.dot(w, vol_each) / port_vol) if port_vol > 0 else None
+
+    corr = returns.corr()
+    pairs = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            c = corr.iloc[i, j]
+            if not (isinstance(c, float) and math.isnan(c)):
+                pairs.append({"a": tickers[i], "b": tickers[j], "correlation": round(float(c), 2)})
+    pairs.sort(key=lambda p: -p["correlation"])
+    avg_corr = round(sum(p["correlation"] for p in pairs) / len(pairs), 2) if pairs else None
+
+    warnings: list[str] = []
+    if avg_corr is not None and avg_corr >= 0.7:
+        warnings.append(
+            f"Średnia korelacja między pozycjami wynosi {avg_corr} - portfel zachowuje się w dużej mierze "
+            f"jak jeden zakład, mimo wielu spółek."
+        )
+    strong = [p for p in pairs if p["correlation"] >= 0.85]
+    if strong:
+        warnings.append("Bardzo silnie skorelowane pary (>= 0.85): " +
+                        ", ".join(f"{p['a']}/{p['b']} ({p['correlation']})" for p in strong[:4]) + ".")
+    if port_vol >= 0.40:
+        warnings.append(f"Roczna zmienność portfela to {port_vol * 100:.0f}% - to bardzo wysoki poziom, "
+                        f"spadki o kilkadziesiąt procent są przy takiej zmienności realnym scenariuszem.")
+
+    return {
+        "available": True,
+        "observations": int(len(returns)),
+        "period_start": returns.index[0].strftime("%Y-%m-%d"),
+        "period_end": returns.index[-1].strftime("%Y-%m-%d"),
+        "tickers": tickers,
+        "weights_pct": {t: round(float(x) * 100, 1) for t, x in zip(tickers, w)},
+        "annual_volatility_pct": round(port_vol * 100, 1),
+        "annual_return_pct": round(ann_return * 100, 1),
+        "sharpe": round(float(sharpe), 2) if sharpe is not None else None,
+        "max_drawdown_pct": round(max_drawdown * 100, 1),
+        "diversification_ratio": round(diversification_ratio, 2) if diversification_ratio is not None else None,
+        "avg_correlation": avg_corr,
+        "top_pairs": pairs[:5],
+        "matrix": {"tickers": tickers, "values": [[round(float(v), 2) for v in row] for row in corr.values]},
+        "risk_free_rate_pct": risk_free_rate_pct,
+        "warnings": warnings,
+    }

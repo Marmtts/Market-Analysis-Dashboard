@@ -15,6 +15,7 @@ nie jest źródłem prawdy dla watchlisty, jest nim baza).
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -151,6 +152,10 @@ def init_db(seed_watchlist: list[dict] | None = None) -> None:
             "ALTER TABLE portfolio ADD COLUMN sell_price REAL",
             "ALTER TABLE portfolio ADD COLUMN sell_date TEXT",
             "ALTER TABLE portfolio ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'",
+            # Własne poziomy użytkownika (opcjonalne) - nadpisują stop-loss z ATR
+            # i dodają własną cenę docelową do alertów cenowych.
+            "ALTER TABLE portfolio ADD COLUMN custom_stop REAL",
+            "ALTER TABLE portfolio ADD COLUMN custom_target REAL",
         ]:
             try:
                 conn.execute(stmt)
@@ -414,12 +419,14 @@ def get_score_history(ticker: str, limit: int = 400) -> list[dict]:
 # Portfel użytkownika (posiadane pozycje)
 # =====================================================================
 
-def add_position(ticker: str, shares: float, buy_price: float, buy_date: str, notes: str = "") -> int:
+def add_position(ticker: str, shares: float, buy_price: float, buy_date: str, notes: str = "",
+                 custom_stop: float | None = None, custom_target: float | None = None) -> int:
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes) VALUES (?, ?, ?, ?, ?)",
-            (ticker, shares, buy_price, buy_date, notes),
+            "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target),
         )
         conn.commit()
         return cur.lastrowid
@@ -448,13 +455,14 @@ def remove_position(position_id: int) -> bool:
 
 
 def update_position(position_id: int, ticker: str, shares: float, buy_price: float,
-                     buy_date: str, notes: str = "") -> bool:
+                     buy_date: str, notes: str = "",
+                     custom_stop: float | None = None, custom_target: float | None = None) -> bool:
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
-            "UPDATE portfolio SET ticker = ?, shares = ?, buy_price = ?, buy_date = ?, notes = ? "
-            "WHERE id = ?",
-            (ticker, shares, buy_price, buy_date, notes, position_id),
+            "UPDATE portfolio SET ticker = ?, shares = ?, buy_price = ?, buy_date = ?, notes = ?, "
+            "custom_stop = ?, custom_target = ? WHERE id = ?",
+            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, position_id),
         )
         conn.commit()
         return cur.rowcount > 0
@@ -740,3 +748,140 @@ def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: st
         )
         conn.commit()
         return cur.lastrowid
+
+
+# =====================================================================
+# Kopia zapasowa (eksport/import JSON) - watchlista + pełny portfel
+# (otwarte i zamknięte pozycje). Cache'y, historia werdyktów i krzywe
+# kapitału celowo NIE są częścią kopii - odbudowują się z kolejnych cykli.
+# =====================================================================
+
+BACKUP_APP_ID = "xtb_trend_watch"
+BACKUP_VERSION = 1
+MAX_BACKUP_ROWS = 5000
+
+
+def export_backup() -> dict:
+    with _connect() as conn:
+        watchlist = [dict(r) for r in conn.execute(
+            "SELECT ticker, xtb_symbol, name, source FROM watchlist ORDER BY added_at ASC"
+        ).fetchall()]
+        portfolio = [dict(r) for r in conn.execute(
+            "SELECT ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, "
+            "currency, custom_stop, custom_target FROM portfolio ORDER BY id ASC"
+        ).fetchall()]
+    return {
+        "app": BACKUP_APP_ID,
+        "version": BACKUP_VERSION,
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "watchlist": watchlist,
+        "portfolio": portfolio,
+    }
+
+
+def _valid_date_str(value) -> bool:
+    try:
+        datetime.strptime(str(value), "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _positive_number(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number > 0 else None
+
+
+def import_backup(data) -> dict:
+    """Wczytuje kopię zapasową ATOMOWO (albo wszystko, albo nic - przy
+    nieoczekiwanym błędzie transakcja jest wycofywana) i IDEMPOTENTNIE:
+    spółki już obecne na watchliście oraz pozycje identyczne z istniejącymi
+    są pomijane, więc wielokrotny import tego samego pliku nie tworzy
+    duplikatów. Niepoprawne wiersze są pomijane z ostrzeżeniem."""
+    if not isinstance(data, dict) or data.get("app") != BACKUP_APP_ID:
+        raise ValueError("To nie jest plik kopii zapasowej XTB Trend Watch.")
+    if data.get("version") != BACKUP_VERSION:
+        raise ValueError(f"Nieobsługiwana wersja kopii zapasowej: {data.get('version')!r}.")
+
+    watchlist = data.get("watchlist") or []
+    portfolio = data.get("portfolio") or []
+    if not isinstance(watchlist, list) or not isinstance(portfolio, list):
+        raise ValueError("Uszkodzona struktura pliku kopii zapasowej.")
+    if len(watchlist) + len(portfolio) > MAX_BACKUP_ROWS:
+        raise ValueError(f"Zbyt duży plik kopii (limit {MAX_BACKUP_ROWS} wierszy).")
+
+    result = {"watchlist_added": 0, "watchlist_skipped": 0,
+              "positions_added": 0, "positions_skipped": 0, "warnings": []}
+
+    def warn(msg: str) -> None:
+        if len(result["warnings"]) < 20:
+            result["warnings"].append(msg)
+
+    with _connect() as conn:
+        for i, c in enumerate(watchlist, 1):
+            ticker = str(c.get("ticker", "")).strip().upper() if isinstance(c, dict) else ""
+            if not ticker:
+                warn(f"Watchlista, wiersz {i}: brak tickera - pominięto.")
+                continue
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO watchlist (ticker, xtb_symbol, name, source) VALUES (?, ?, ?, ?)",
+                (ticker, str(c.get("xtb_symbol") or f"{ticker} (sprawdź w XTB)"),
+                 str(c.get("name") or ticker), str(c.get("source") or "backup")),
+            )
+            result["watchlist_added" if cur.rowcount > 0 else "watchlist_skipped"] += 1
+
+        for i, p in enumerate(portfolio, 1):
+            if not isinstance(p, dict):
+                warn(f"Portfel, wiersz {i}: nieprawidłowy format - pominięto.")
+                continue
+            ticker = str(p.get("ticker", "")).strip().upper()
+            shares = _positive_number(p.get("shares"))
+            buy_price = _positive_number(p.get("buy_price"))
+            buy_date = p.get("buy_date")
+            status = p.get("status") or "open"
+            if not ticker or shares is None or buy_price is None or not _valid_date_str(buy_date) \
+                    or status not in ("open", "closed"):
+                warn(f"Portfel, wiersz {i} ({ticker or '?'}): niepoprawne dane pozycji - pominięto.")
+                continue
+
+            sell_price = sell_date = None
+            if status == "closed":
+                sell_price = _positive_number(p.get("sell_price"))
+                sell_date = p.get("sell_date")
+                if sell_price is None or not _valid_date_str(sell_date):
+                    warn(f"Portfel, wiersz {i} ({ticker}): zamknięta pozycja bez poprawnej sprzedaży - pominięto.")
+                    continue
+
+            currency = str(p.get("currency") or "USD").strip().upper()[:10]
+            custom_stop = _positive_number(p.get("custom_stop"))
+            custom_target = _positive_number(p.get("custom_target"))
+            notes = _sanitize_text(p.get("notes", ""))
+
+            duplicate = conn.execute(
+                "SELECT 1 FROM portfolio WHERE ticker = ? AND shares = ? AND buy_price = ? AND buy_date = ? "
+                "AND status = ? AND IFNULL(sell_price, -1) = IFNULL(?, -1) AND IFNULL(sell_date, '') = IFNULL(?, '') "
+                "LIMIT 1",
+                (ticker, shares, buy_price, buy_date, status, sell_price, sell_date),
+            ).fetchone()
+            if duplicate:
+                result["positions_skipped"] += 1
+                continue
+
+            # Spółka z portfela musi być na watchliście, żeby była analizowana.
+            conn.execute(
+                "INSERT OR IGNORE INTO watchlist (ticker, xtb_symbol, name, source) VALUES (?, ?, ?, 'portfolio')",
+                (ticker, f"{ticker} (sprawdź w XTB)", ticker),
+            )
+            conn.execute(
+                "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, status, sell_price, "
+                "sell_date, currency, custom_stop, custom_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date,
+                 currency, custom_stop, custom_target),
+            )
+            result["positions_added"] += 1
+
+        conn.commit()
+    return result

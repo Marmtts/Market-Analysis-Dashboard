@@ -74,17 +74,19 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2 class="panel__title">Skuteczność narzędzia</h2>
+    <section class="panel" id="earningsPanel">
+      <h2 class="panel__title">Nadchodzące wyniki</h2>
+      <div id="earningsBody">
+        <p class="empty-state">Brak danych o terminach wyników.</p>
+      </div>
+    </section>
+
     <section class="panel" id="effectivenessPanel">
       <h2 class="panel__title">Skuteczność narzędzia</h2>
       <div id="effectivenessBody">
         <p class="empty-state">Zbieram dane historyczne — wróć za kilka dni.</p>
       </div>
     </section>
-
-    <section class="panel">
-      <h2 class="panel__title">Watchlista</h2>
 
     <section class="panel">
       <h2 class="panel__title">Watchlista</h2>
@@ -151,6 +153,8 @@
         <input type="number" id="posShares" placeholder="Liczba akcji" step="0.0001" min="0" required>
         <input type="number" id="posBuyPrice" placeholder="Cena zakupu" step="0.01" min="0" required>
         <input type="date" id="posBuyDate" required>
+        <input type="number" id="posCustomStop" placeholder="Własny stop-loss (opcjonalnie)" step="0.01" min="0">
+        <input type="number" id="posCustomTarget" placeholder="Własny cel cenowy (opcjonalnie)" step="0.01" min="0">
         <input type="text" id="posNotes" placeholder="Notatka (opcjonalnie)" autocomplete="off">
         <div class="form-btn-row">
           <button type="submit" class="btn btn--secondary" id="posSubmitBtn">+ Dodaj pozycję</button>
@@ -167,6 +171,16 @@
       <input type="file" id="xtbImportFile" accept=".xlsx,.xls" class="file-input-hidden">
       <button class="btn btn--secondary" id="xtbImportBtn">📥 Importuj pozycje</button>
       <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte.</p>
+
+      <hr style="border-color: var(--border); margin: 1rem 0;">
+      <h3 class="panel__title" style="margin-bottom:0.5rem;">Kopia zapasowa</h3>
+      <a class="btn btn--secondary backup-download-link" href="/api/backup/export" download>⬇ Pobierz kopię (JSON)</a>
+      <label class="file-input-label" for="backupImportFile">
+        <span id="backupFileNameLabel">📂 Wybierz plik kopii (.json)</span>
+      </label>
+      <input type="file" id="backupImportFile" accept=".json,application/json" class="file-input-hidden">
+      <button class="btn btn--secondary" id="backupImportBtn">📤 Wczytaj kopię</button>
+      <p class="detail-disclaimer">Kopia zawiera watchlistę oraz cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel). Wczytanie jest bezpieczne do powtarzania — identyczne pozycje i spółki są pomijane. Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
     </section>
   </aside>
   <section class="main">
@@ -180,6 +194,12 @@
       <h2>Ryzyko i ekspozycja</h2>
     </div>
     <div id="portfolioRiskPanel"></div>
+
+    <div class="section-header">
+      <h2>Korelacja i zmienność</h2>
+      <span class="section-header__meta" id="portfolioStatsMeta"></span>
+    </div>
+    <div id="portfolioStatsPanel"></div>
 
     <div class="section-header">
       <h2>Krzywa kapitału</h2>
@@ -203,6 +223,8 @@
       <p class="empty-state">Brak pozycji — dodaj pierwszą po lewej stronie.</p>
     </div>
   </section>
+</main>
+
 <main class="layout" id="tab-closed" style="display:none">
   <section class="main" style="grid-column: 1 / -1;">
     <div class="section-header">

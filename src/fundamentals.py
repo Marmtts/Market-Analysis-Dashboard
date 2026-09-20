@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass, field
+from datetime import date, datetime
 
 import yfinance as yf
 
@@ -50,10 +52,72 @@ def _safe_get(info: dict, *keys, default=None):
     return default
 
 
+# Cache terminów wyników w pamięci procesu - termin publikacji zmienia się
+# rzadko (raz na kwartał), a ręczne odświeżanie pojedynczej spółki nie powinno
+# za każdym razem dokładać kolejnego zapytania do Yahoo Finance.
+_EARNINGS_CACHE: dict[str, tuple[str | None, float]] = {}
+_EARNINGS_CACHE_TTL_SECONDS = 12 * 3600
+
+
+def pick_next_earnings_date(candidates, today: date | None = None) -> date | None:
+    """Z listy kandydatów (date/datetime/pd.Timestamp - Yahoo zwraca różne
+    typy, a często kilka dat: przedział szacunkowy) wybiera NAJBLIŻSZĄ datę
+    nie wcześniejszą niż dziś. Daty z przeszłości (ostatnie, już opublikowane
+    wyniki) są ignorowane."""
+    today = today or date.today()
+    normalized: list[date] = []
+    for c in candidates:
+        if isinstance(c, datetime):  # datetime jest podklasą date - sprawdzamy pierwszy
+            normalized.append(c.date())
+        elif isinstance(c, date):
+            normalized.append(c)
+    future = sorted(d for d in normalized if d >= today)
+    return future[0] if future else None
+
+
+def fetch_next_earnings_date(ticker_obj, ticker: str, info: dict) -> str | None:
+    """Zwraca datę najbliższej publikacji wyników kwartalnych ("YYYY-MM-DD")
+    albo None. Źródła: `Ticker.calendar` (dokładniejsze), a w razie braku
+    pola `earningsTimestamp*` z `info` (już pobranego - zero dodatkowych
+    zapytań). Uwaga: Yahoo bywa niedokładne - to często data SZACUNKOWA."""
+    cached = _EARNINGS_CACHE.get(ticker)
+    if cached and (time.time() - cached[1]) < _EARNINGS_CACHE_TTL_SECONDS:
+        return cached[0]
+
+    candidates: list = []
+    calendar_ok = False
+    try:
+        calendar = ticker_obj.calendar
+        calendar_ok = True
+        if isinstance(calendar, dict):
+            raw = calendar.get("Earnings Date")
+            if raw is not None:
+                candidates.extend(raw if isinstance(raw, (list, tuple)) else [raw])
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Brak kalendarza wyników dla %s: %s", ticker, exc)
+
+    for key in ("earningsTimestamp", "earningsTimestampStart"):
+        ts = info.get(key)
+        if isinstance(ts, (int, float)) and not isinstance(ts, bool) and ts > 0 and not math.isnan(ts):
+            try:
+                candidates.append(datetime.fromtimestamp(ts))
+            except (OverflowError, OSError, ValueError):
+                pass
+
+    picked = pick_next_earnings_date(candidates)
+    result = picked.isoformat() if picked else None
+    # Nie cache'ujemy "brak daty", jeśli zapytanie o kalendarz się nie udało
+    # (błąd przejściowy) - przy następnym odświeżeniu spróbujemy ponownie.
+    if result is not None or calendar_ok:
+        _EARNINGS_CACHE[ticker] = (result, time.time())
+    return result
+
+
 def fetch_fundamentals(ticker: str, cfg: dict, current_price: float | None = None) -> FundamentalResult:
     """Pobiera i ocenia podstawowe wskaźniki fundamentalne dla spółki."""
     try:
-        info = yf.Ticker(ticker).get_info()
+        ticker_obj = yf.Ticker(ticker)
+        info = ticker_obj.get_info()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Nie udało się pobrać danych fundamentalnych dla %s: %s", ticker, exc)
         return FundamentalResult(ticker=ticker, available=False)
@@ -73,6 +137,12 @@ def fetch_fundamentals(ticker: str, cfg: dict, current_price: float | None = Non
     market_cap = _safe_get(info, "marketCap")
     sector = info.get("sector")  # string, nie liczba - brak potrzeby _safe_get/NaN-check
     quote_type = info.get("quoteType")  # "EQUITY" | "ETF" | "MUTUALFUND" | "INDEX" itd.
+
+    # Termin najbliższych wyników kwartalnych - tylko dla akcji (ETF-y i fundusze
+    # nie publikują wyników w tym sensie).
+    next_earnings_date = None
+    if quote_type in (None, "EQUITY"):
+        next_earnings_date = fetch_next_earnings_date(ticker_obj, ticker, info)
 
     # --- Konsensus analityków Wall Street (cena docelowa, rekomendacja) ---
     # To NIE jest nasza własna analiza - to zagregowana opinia analityków
@@ -108,6 +178,7 @@ def fetch_fundamentals(ticker: str, cfg: dict, current_price: float | None = Non
         "analyst_upside_pct": analyst_upside_pct,
         "sector": sector,
         "quote_type": quote_type,
+        "next_earnings_date": next_earnings_date,
     }
 
     flags: list[str] = []
@@ -183,6 +254,21 @@ def fetch_fundamentals(ticker: str, cfg: dict, current_price: float | None = Non
                 f"rekomendacja: {recommendation_key or 'brak'})."
             )
             
+    # --- Zbliżające się wyniki kwartalne - celowo TYLKO informacyjnie (nie
+    # zmienia score): to nie jest sygnał "kupuj/sprzedaj", tylko ostrzeżenie o
+    # podwyższonej zmienności (luka cenowa po publikacji, często niezależna od
+    # tego, czy liczby są dobre). Decyzję zostawiamy użytkownikowi.
+    earnings_warning_days = cfg.get("earnings_warning_days", 7)
+    if next_earnings_date:
+        days_left = (date.fromisoformat(next_earnings_date) - date.today()).days
+        if 0 <= days_left <= earnings_warning_days:
+            when = "DZISIAJ" if days_left == 0 else ("jutro" if days_left == 1 else f"za {days_left} dni")
+            flags.append(
+                f"Wyniki kwartalne {when} ({next_earnings_date}) - podwyższona zmienność: cena może "
+                f"gwałtownie się zmienić w obie strony, także przy dobrych liczbach. Zastanów się nad "
+                f"wielkością pozycji i stop-lossem przed tą datą (data z Yahoo Finance bywa szacunkowa)."
+            )
+
     score = max(0.0, min(1.0, score))
 
     if not flags:

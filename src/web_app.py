@@ -57,6 +57,7 @@ from src.report import (
     evaluate_portfolio_position, compute_max_drawdown,
     compute_portfolio_risk_summary, compute_portfolio_sector_exposure,
     compute_tax_summary, summarize_portfolio_by_currency,
+    compute_portfolio_statistics,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -206,7 +207,10 @@ def _get_enriched_open_positions(cached: dict | None = None) -> list[dict]:
     enriched = []
     for p in positions:
         result = by_ticker.get(p["ticker"])
-        evaluation = evaluate_portfolio_position(p, result)
+        evaluation = evaluate_portfolio_position(
+            p, result,
+            earnings_warning_days=_cfg.get("fundamentals", {}).get("earnings_warning_days", 7),
+        )
         enriched.append({**p, **evaluation})
     return enriched
 
@@ -421,6 +425,11 @@ def _check_price_alerts_blocking() -> list[dict]:
             )
             stop_loss = (cached_result["technical"]["metrics"].get("suggested_stop_loss")
                          if cached_result else None)
+            # Własny stop-loss użytkownika (jeśli ustawiony) ma pierwszeństwo nad ATR.
+            custom_stop = p.get("custom_stop")
+            if custom_stop:
+                stop_loss = custom_stop
+            stop_label = "własnego" if custom_stop else "sugerowanego"
 
             if stop_loss is not None and current_price < stop_loss:
                 key = (p["id"], "stop_loss")
@@ -431,8 +440,22 @@ def _check_price_alerts_blocking() -> list[dict]:
                         "currency": currency, "current_price": round(current_price, 2),
                         "stop_loss": round(stop_loss, 2),
                         "title": f"{ticker}: cena poniżej stop-loss",
-                        "body": f"Cena {current_price:.2f} {currency} spadła poniżej sugerowanego "
+                        "body": f"Cena {current_price:.2f} {currency} spadła poniżej {stop_label} "
                                 f"stop-loss ({stop_loss:.2f} {currency}). Pozycja: {p['shares']} szt. @ {p['buy_price']}.",
+                    })
+
+            custom_target = p.get("custom_target")
+            if custom_target and current_price >= custom_target:
+                key = (p["id"], "custom_target")
+                active_alert_keys.add(key)
+                if key not in _sent_price_alerts:
+                    new_alerts.append({
+                        "type": "custom_target", "position_id": p["id"], "ticker": ticker,
+                        "currency": currency, "current_price": round(current_price, 2),
+                        "target": round(custom_target, 2),
+                        "title": f"{ticker}: osiągnięto Twój cel cenowy",
+                        "body": f"Cena {current_price:.2f} {currency} osiągnęła ustawiony przez Ciebie cel "
+                                f"({custom_target:.2f} {currency}). Pozycja: {p['shares']} szt. @ {p['buy_price']}.",
                     })
 
             if target_mean is not None and current_price >= target_mean:
@@ -471,7 +494,11 @@ async def _price_alert_scheduler() -> None:
         try:
             alerts = await asyncio.to_thread(_check_price_alerts_blocking)
             for alert in alerts:
-                await manager.broadcast({"type": "price_alert", **alert})
+                # UWAGA: alert ma własne pole "type" (stop_loss/target_reached/...).
+                # Wcześniej {"type": "price_alert", **alert} nadpisywało typ wiadomości
+                # WebSocket, więc frontend nigdy nie rozpoznawał alertu. Teraz typ
+                # alertu jedzie w "alert_type", a "type" zostaje "price_alert".
+                await manager.broadcast({**alert, "type": "price_alert", "alert_type": alert["type"]})
         except Exception:  # noqa: BLE001
             logger.exception("Błąd podczas sprawdzania alertów cenowych")
 
@@ -488,6 +515,8 @@ class AddPositionRequest(BaseModel):
     buy_price: float
     buy_date: str   # "YYYY-MM-DD"
     notes: str = ""
+    custom_stop: float | None = None      # własny stop-loss (opcjonalnie)
+    custom_target: float | None = None    # własna cena docelowa (opcjonalnie)
 
 
 class ClosePositionRequest(BaseModel):
@@ -626,6 +655,67 @@ async def api_get_portfolio_risk():
     })
 
 
+def _compute_portfolio_statistics_blocking(weights: dict[str, float], risk_free_rate_pct: float) -> dict:
+    closes = {}
+    without_data = []
+    for ticker in weights:
+        try:
+            closes[ticker] = fetch_history(ticker, period="1y", interval="1d")["Close"]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Statystyki portfela: brak danych dla %s: %s", ticker, exc)
+            without_data.append(ticker)
+    stats = compute_portfolio_statistics(closes, {t: weights[t] for t in closes}, risk_free_rate_pct)
+    stats["tickers_without_data"] = without_data
+    return stats
+
+
+@app.get("/api/portfolio/statistics")
+async def api_get_portfolio_statistics():
+    """Korelacje, zmienność, Sharpe i maks. obsunięcie portfela (1 rok historii,
+    obecne wagi wg wartości rynkowej przeliczonej na walutę bazową)."""
+    enriched = _get_enriched_open_positions()
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    combined_positions, _ = _build_combined_portfolio_view(enriched, base_currency)
+
+    weights: dict[str, float] = {}
+    for p in combined_positions:
+        weights[p["ticker"]] = weights.get(p["ticker"], 0.0) + (p.get("market_value") or 0.0)
+    weights = {t: v for t, v in weights.items() if v > 0}
+    if not weights:
+        return {"available": False, "reason": "Brak otwartych pozycji z policzoną wartością rynkową."}
+
+    rf = float(_cfg.get("portfolio", {}).get("risk_free_rate_pct", 0.0))
+    stats = await asyncio.to_thread(_compute_portfolio_statistics_blocking, weights, rf)
+    return sanitize_for_json(stats)
+
+
+@app.get("/api/backup/export")
+async def api_export_backup():
+    """Pobiera kopię zapasową (watchlista + portfel) jako plik JSON."""
+    filename = f"xtb_trend_watch_backup_{datetime.now().strftime('%Y-%m-%d')}.json"
+    return JSONResponse(
+        content=db.export_backup(),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/api/backup/import")
+async def api_import_backup(file: UploadFile = File(...)):
+    """Wczytuje kopię zapasową - idempotentnie (duplikaty są pomijane)."""
+    if not file.filename.lower().endswith(".json"):
+        raise HTTPException(status_code=400, detail="Oczekiwano pliku .json z kopią zapasową.")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Plik jest za duży (limit 5 MB).")
+    try:
+        data = json.loads(content.decode("utf-8"))
+        result = db.import_backup(data)
+    except (ValueError, UnicodeDecodeError) as exc:  # JSONDecodeError dziedziczy po ValueError
+        raise HTTPException(status_code=400, detail=f"Nie udało się wczytać kopii: {exc}")
+    await manager.broadcast({"type": "watchlist_changed"})
+    return result
+
+
 @app.get("/api/portfolio/sparkline/{ticker}")
 async def api_get_sparkline(ticker: str):
     try:
@@ -702,11 +792,15 @@ async def api_add_position(req: AddPositionRequest):
     ticker = req.ticker.strip().upper()
     if not ticker or req.shares <= 0 or req.buy_price <= 0:
         raise HTTPException(status_code=400, detail="Nieprawidłowe dane pozycji.")
+    for level in (req.custom_stop, req.custom_target):
+        if level is not None and level <= 0:
+            raise HTTPException(status_code=400, detail="Własny stop-loss i cel muszą być dodatnie.")
     # Jeśli spółki nie ma jeszcze na watchliście, dodajemy ją automatycznie,
     # żeby zaczęła być analizowana w kolejnych cyklach (inaczej nigdy nie
     # dostaniemy aktualnej ceny/sygnału do oceny tej pozycji).
     db.add_company(ticker, name=ticker, source="portfolio")
-    position_id = db.add_position(ticker, req.shares, req.buy_price, req.buy_date, req.notes)
+    position_id = db.add_position(ticker, req.shares, req.buy_price, req.buy_date, req.notes,
+                                   custom_stop=req.custom_stop, custom_target=req.custom_target)
 
     # Ustalamy walutę od razu, jeśli mamy ją w cache'u z ostatniej analizy -
     # inaczej pozycja domyślnie pokazuje USD do najbliższego cyklu.
@@ -734,8 +828,12 @@ async def api_update_position(position_id: int, req: AddPositionRequest):
     ticker = req.ticker.strip().upper()
     if not ticker or req.shares <= 0 or req.buy_price <= 0:
         raise HTTPException(status_code=400, detail="Nieprawidłowe dane pozycji.")
+    for level in (req.custom_stop, req.custom_target):
+        if level is not None and level <= 0:
+            raise HTTPException(status_code=400, detail="Własny stop-loss i cel muszą być dodatnie.")
     db.add_company(ticker, name=ticker, source="portfolio")
-    ok = db.update_position(position_id, ticker, req.shares, req.buy_price, req.buy_date, req.notes)
+    ok = db.update_position(position_id, ticker, req.shares, req.buy_price, req.buy_date, req.notes,
+                             custom_stop=req.custom_stop, custom_target=req.custom_target)
     if not ok:
         raise HTTPException(status_code=404, detail="Nie znaleziono pozycji.")
     return {"status": "ok"}

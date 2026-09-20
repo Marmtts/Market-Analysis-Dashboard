@@ -27,6 +27,88 @@ function stampInfo(category) {
   return { cls: "wait", label: "CZEKAJ" };
 }
 
+// ---------------- Terminy wyników kwartalnych ----------------
+function getEarningsWarningDays() {
+  return (state.lastPayload && state.lastPayload.earnings_warning_days) ?? 7;
+}
+
+// Liczba dni od DZIŚ do daty "YYYY-MM-DD" (liczona po stronie przeglądarki,
+// żeby nie starzała się w cache'u). Zwraca null dla braku daty lub terminu w przeszłości.
+function daysUntilDate(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((target - today) / 86400000);
+  return days >= 0 ? days : null;
+}
+
+function earningsOf(r) {
+  const f = r && r.fundamentals;
+  if (!f || !f.available) return null;
+  const date = f.metrics && f.metrics.next_earnings_date;
+  const days = daysUntilDate(date);
+  return days == null ? null : { date, days };
+}
+
+function earningsWhenLabel(days) {
+  if (days === 0) return "dzisiaj";
+  if (days === 1) return "jutro";
+  return `za ${days} dni`;
+}
+
+function earningsBadgeHtml(date, days) {
+  if (!date || days == null || days > getEarningsWarningDays()) return "";
+  return `<span class="earnings-badge" title="Wyniki kwartalne ${escapeHtml(date)} - możliwa duża zmiana ceny w obie strony">📅 wyniki ${earningsWhenLabel(days)}</span>`;
+}
+
+function earningsBannerHtml(r) {
+  const e = earningsOf(r);
+  if (!e || e.days > getEarningsWarningDays()) return "";
+  return `<div class="detail-section earnings-banner">📅 <strong>Wyniki kwartalne ${earningsWhenLabel(e.days)} (${escapeHtml(e.date)}).</strong> Publikacja często powoduje gwałtowny ruch ceny w obie strony, także przy dobrych liczbach. Zastanów się nad wielkością pozycji i stop-lossem przed tą datą. Data pochodzi z Yahoo Finance i bywa szacunkowa.</div>`;
+}
+
+function renderUpcomingEarnings() {
+  const body = el("earningsBody");
+  if (!body) return;
+  const warn = getEarningsWarningDays();
+  const horizon = Math.max(30, warn);
+
+  const rows = [];
+  state.resultsByTicker.forEach((r) => {
+    const e = earningsOf(r);
+    if (e && e.days <= horizon) rows.push({ ticker: r.ticker, date: e.date, days: e.days });
+  });
+
+  if (rows.length === 0) {
+    body.innerHTML = `<p class="empty-state">Brak wyników kwartalnych w ciągu najbliższych ${horizon} dni.</p>`;
+    return;
+  }
+
+  rows.sort((a, b) => a.days - b.days);
+  body.innerHTML = rows.map((row) => {
+    const held = state.portfolioTickers.has(row.ticker);
+    return `
+      <div class="eff-row earnings-row${row.days <= warn ? " earnings-row--soon" : ""}">
+        <span class="eff-row__cat">${escapeHtml(row.ticker)}${held ? " 💼" : ""}</span>
+        <span class="eff-row__stat">${escapeHtml(row.date)} · ${earningsWhenLabel(row.days)}</span>
+      </div>`;
+  }).join("") + `<p class="eff-note">💼 = masz tę spółkę w portfelu. Daty z Yahoo Finance bywają szacunkowe - potwierdź w kalendarzu spółki.</p>`;
+}
+
+async function refreshHeldTickers() {
+  try {
+    const res = await fetch("/api/portfolio");
+    if (!res.ok) return;
+    const positions = await res.json();
+    state.portfolioTickers = new Set(positions.map((p) => p.ticker));
+    renderUpcomingEarnings();
+  } catch (err) {
+    // panel wyników działa też bez oznaczeń portfela
+  }
+}
+
 // ---------------- Renderowanie kart wyników ----------------
 function renderResultCard(r) {
   const stamp = stampInfo(r.combined.category);
@@ -44,6 +126,9 @@ function renderResultCard(r) {
     ? `<span class="data-age ${age.isStale ? "data-age--stale" : ""}" title="Ostatnia analiza tej spółki">🕐 ${age.label}</span>`
     : "";
 
+  const earn = earningsOf(r);
+  const earningsHtml = earn ? earningsBadgeHtml(earn.date, earn.days) : "";
+
   const sparkId = `analysis-spark-${r.ticker.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
   const card = document.createElement("div");
@@ -56,7 +141,7 @@ function renderResultCard(r) {
       <div>
         <span class="result-card__ticker">${r.ticker}</span>
         <span class="result-card__name">${r.name}</span>
-        ${ageHtml}
+        ${ageHtml}${earningsHtml}
       </div>
       <div class="result-card__xtb">XTB: ${r.xtb_symbol}</div>
       ${r.discovery_reason ? `<div class="result-card__reason">💡 ${escapeHtml(r.discovery_reason)}</div>` : ""}
@@ -301,6 +386,7 @@ function applyResultsPayload(payload) {
   renderDailyBrief(payload.daily_brief);
   renderMacro(payload.macro_context);
   renderSectorConcentration(payload.sector_concentration);
+  renderUpcomingEarnings();
   renderResultsGrid("resultsGrid", payload.results, "Czekam na pierwszy cykl analizy…", state_sort.main);
   renderResultsGrid("discoveredGrid", payload.discovered_results, "Brak propozycji w tym cyklu.", state_sort.discovered);
   el("mainGeneratedAt").textContent = payload.generated_at
@@ -453,7 +539,7 @@ function handleWsMessage(msg) {
       break;
     case "price_alert":
       appendLog({
-        level: msg.type === "stop_loss" ? "error" : "success",
+        level: msg.alert_type === "stop_loss" ? "error" : "success",
         message: `🔔 ${msg.title}: ${msg.body}`,
       });
       break;
@@ -651,8 +737,10 @@ async function loadPortfolio() {
     const res = await fetch("/api/portfolio");
     const positions = await res.json();
     state.portfolioTickers = new Set(positions.map((p) => p.ticker));
+    renderUpcomingEarnings();
     renderPortfolio(positions, state_sort.portfolio);
     loadPortfolioRisk();
+    loadPortfolioStatistics();
   } catch (err) {
     console.warn("Nie udało się pobrać portfela:", err);
   }
@@ -728,10 +816,15 @@ function renderPortfolio(positions, sortState) {
       ? ` <span class="data-age ${groupAge.isStale ? "data-age--stale" : ""}">🕐 ${groupAge.label}</span>`
       : "";
 
+    const lotWithEarnings = lots.find((l) => daysUntilDate(l.next_earnings_date) != null);
+    const earningsHtml = lotWithEarnings
+      ? earningsBadgeHtml(lotWithEarnings.next_earnings_date, daysUntilDate(lotWithEarnings.next_earnings_date))
+      : "";
+
     groups.push({
       ticker, lots, currency, totalShares, totalCost, totalValue, avgBuyPrice, currentPrice,
       totalPl, totalPlPct, action: bestLot.action, actionPriority: actionPriority[bestLot.action] ?? 9,
-      ageHtml,
+      ageHtml: ageHtml + earningsHtml,
     });
   });
 
@@ -892,6 +985,7 @@ function renderLotCard(p) {
         <span class="result-card__name">@ ${fmtMoney(p.buy_price, p.currency)}</span>
       </div>
       <div class="result-card__xtb">Kupione: ${p.buy_date} (${p.horizon || "—"})</div>
+      ${(p.custom_stop || p.custom_target) ? `<div class="result-card__reason">${p.custom_stop ? `🛑 stop ${fmtMoney(p.custom_stop, p.currency)}` : ""}${p.custom_stop && p.custom_target ? " · " : ""}${p.custom_target ? `🎯 cel ${fmtMoney(p.custom_target, p.currency)}` : ""}</div>` : ""}
       ${p.notes ? `<div class="result-card__reason">📝 ${escapeHtml(p.notes)}</div>` : ""}
     </div>
     <div class="result-card__metric">
@@ -933,6 +1027,11 @@ function renderLotCard(p) {
       alert(b.detail || "Nie udało się zamknąć pozycji.");
     }
   });
+  // Przycisk ✎ wcześniej nie miał żadnego handlera - startEditPosition() istniało, ale nic go nie wywoływało.
+  card.querySelector(".lot-edit").addEventListener("click", (e) => {
+    e.stopPropagation();
+    startEditPosition(p);
+  });
   card.querySelector(".lot-duplicate").addEventListener("click", (e) => {
     e.stopPropagation();
     duplicatePosition(p);
@@ -954,6 +1053,8 @@ function startEditPosition(p) {
   el("posBuyPrice").value = p.buy_price;
   el("posBuyDate").value = p.buy_date;
   el("posNotes").value = p.notes || "";
+  el("posCustomStop").value = p.custom_stop ?? "";
+  el("posCustomTarget").value = p.custom_target ?? "";
   el("posSubmitBtn").textContent = "Zapisz zmiany";
   el("posCancelEditBtn").style.display = "";
   el("posTicker").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -966,9 +1067,16 @@ function duplicatePosition(p) {
   el("posBuyPrice").value = p.buy_price;
   el("posBuyDate").value = new Date().toISOString().slice(0, 10);
   el("posNotes").value = p.notes || "";
+  el("posCustomStop").value = p.custom_stop ?? "";
+  el("posCustomTarget").value = p.custom_target ?? "";
   el("posSubmitBtn").textContent = "+ Dodaj pozycję";
   el("posCancelEditBtn").style.display = "none";
   el("posTicker").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function parseOptionalNumber(raw) {
+  const n = parseFloat(raw);
+  return isNaN(n) ? null : n;
 }
 
 function resetPortfolioForm() {
@@ -988,6 +1096,8 @@ el("portfolioForm").addEventListener("submit", async (e) => {
     buy_price: parseFloat(el("posBuyPrice").value),
     buy_date: el("posBuyDate").value,
     notes: el("posNotes").value.trim(),
+    custom_stop: parseOptionalNumber(el("posCustomStop").value),
+    custom_target: parseOptionalNumber(el("posCustomTarget").value),
   };
   if (!body.ticker || !body.shares || !body.buy_price || !body.buy_date) return;
 
@@ -1078,7 +1188,8 @@ function renderDetailsHtml(r) {
       <span class="detail-summary__badge category--${catClass}">${escapeHtml(c.category)}</span>
       <span class="detail-summary__score">Wynik łączny: <strong>${c.final_score}</strong> (próg: ${c.effective_threshold})</span>
       ${c.hard_blocked ? `<span class="detail-summary__blocked">🚫 Zablokowane twardo (blisko szczytu)</span>` : ""}
-    </div>`;
+    </div>
+    ${earningsBannerHtml(r)}`;
 
   html += `
     <div class="detail-section">
@@ -1131,6 +1242,7 @@ function renderDetailsHtml(r) {
           <div><span>Dług/kapitał</span><strong>${fund.metrics.debt_to_equity ?? "—"}</strong></div>
           <div><span>Cena docelowa (śr.)</span><strong>${fmtMoney(fund.metrics.analyst_target_mean, t.metrics.currency)}</strong></div>
           <div><span>Potencjał wg analityków</span><strong>${fmtPct(fund.metrics.analyst_upside_pct)}</strong></div>
+          <div><span>Następne wyniki</span><strong>${fund.metrics.next_earnings_date ? escapeHtml(fund.metrics.next_earnings_date) : "—"}</strong></div>
         </div>
         <ul class="detail-list">${fund.flags.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
       </div>`;
@@ -1286,6 +1398,7 @@ async function refreshTickerLive(ticker) {
 
 function applyTickerUpdate(result) {
   state.resultsByTicker.set(result.ticker, result);
+  renderUpcomingEarnings();
 
   if (state.lastPayload) {
     for (const key of ["results", "discovered_results"]) {
@@ -1733,6 +1846,131 @@ el("xtbImportFile").addEventListener("change", () => {
   el("xtbFileNameLabel").textContent = file ? `✅ ${file.name}` : "📂 Wybierz plik .xlsx z eksportu XTB";
 });
 
+// ---------------- Korelacja i zmienność portfela ----------------
+async function loadPortfolioStatistics() {
+  const panel = el("portfolioStatsPanel");
+  if (!panel) return;
+  panel.innerHTML = `<p class="empty-state">Liczę korelacje i zmienność (pobieram rok notowań)…</p>`;
+  try {
+    const res = await fetch("/api/portfolio/statistics");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderPortfolioStatistics(await res.json());
+  } catch (err) {
+    panel.innerHTML = `<p class="empty-state">Nie udało się policzyć statystyk portfela.</p>`;
+    console.warn("Statystyki portfela:", err);
+  }
+}
+
+// Kolor komórki macierzy: dodatnia korelacja -> bursztyn (im wyższa, tym mocniej), ujemna -> zieleń.
+function corrCellStyle(v) {
+  if (v == null) return "";
+  const alpha = Math.min(0.65, Math.abs(v) * 0.65).toFixed(2);
+  return v >= 0 ? `background: rgba(217,164,65,${alpha})` : `background: rgba(79,157,105,${alpha})`;
+}
+
+function renderPortfolioStatistics(data) {
+  const panel = el("portfolioStatsPanel");
+  const meta = el("portfolioStatsMeta");
+
+  if (!data || !data.available) {
+    meta.textContent = "";
+    panel.innerHTML = `<p class="empty-state">${escapeHtml((data && data.reason) || "Brak danych do policzenia statystyk.")}</p>`;
+    return;
+  }
+
+  meta.textContent = `${data.period_start} → ${data.period_end} · ${data.observations} sesji`;
+
+  const sharpeCls = data.sharpe == null ? "" : (data.sharpe >= 1 ? "positive" : (data.sharpe < 0 ? "negative" : ""));
+  let html = "";
+
+  (data.warnings || []).forEach((w) => {
+    html += `<div class="detail-section warning-banner">⚠️ ${escapeHtml(w)}</div>`;
+  });
+
+  html += `
+    <div class="metric-grid stats-grid">
+      <div title="Odchylenie standardowe dziennych zwrotów przeliczone na rok"><span>Zmienność roczna</span><strong>${data.annual_volatility_pct}%</strong></div>
+      <div title="(zwrot roczny - stopa wolna od ryzyka) / zmienność"><span>Sharpe</span><strong class="${sharpeCls}">${data.sharpe ?? "—"}</strong></div>
+      <div title="Największy spadek od szczytu w badanym okresie, przy obecnych wagach"><span>Maks. obsunięcie</span><strong class="negative">-${data.max_drawdown_pct}%</strong></div>
+      <div title="Średnia korelacja dziennych zwrotów między parami pozycji"><span>Śr. korelacja</span><strong>${data.avg_correlation ?? "—"}</strong></div>
+      <div title="Średnia ważona zmienności pozycji / zmienność portfela. 1.0 = brak korzyści z dywersyfikacji"><span>Wsp. dywersyfikacji</span><strong>${data.diversification_ratio ?? "—"}</strong></div>
+      <div title="Historyczny zwrot hipotetycznego portfela o obecnych wagach - NIE Twój faktyczny wynik"><span>Zwrot hist. (roczny)</span><strong>${data.annual_return_pct >= 0 ? "+" : ""}${data.annual_return_pct}%</strong></div>
+    </div>`;
+
+  if (data.top_pairs && data.top_pairs.length) {
+    html += `<div class="detail-section"><h4 class="detail-section__title">Najsilniej skorelowane pary</h4>`;
+    html += data.top_pairs.map((p) => `
+      <div class="eff-row">
+        <span class="eff-row__cat">${escapeHtml(p.a)} / ${escapeHtml(p.b)}</span>
+        <span class="eff-row__stat">${p.correlation}</span>
+      </div>`).join("");
+    html += `</div>`;
+  }
+
+  const m = data.matrix;
+  if (m && m.tickers.length >= 2 && m.tickers.length <= 12) {
+    html += `<div class="detail-section"><h4 class="detail-section__title">Macierz korelacji</h4><div class="corr-wrap"><table class="corr-table"><thead><tr><th></th>`;
+    html += m.tickers.map((t) => `<th>${escapeHtml(t)}</th>`).join("");
+    html += `</tr></thead><tbody>`;
+    m.tickers.forEach((rowT, i) => {
+      html += `<tr><th>${escapeHtml(rowT)}</th>`;
+      m.values[i].forEach((v, j) => {
+        html += `<td style="${i === j ? "" : corrCellStyle(v)}">${i === j ? "—" : (v ?? "—")}</td>`;
+      });
+      html += `</tr>`;
+    });
+    html += `</tbody></table></div></div>`;
+  }
+
+  const missing = (data.tickers_without_data || []);
+  html += `<p class="detail-disclaimer">Liczone na ostatnim roku notowań dla OBECNYCH wag pozycji (hipotetyczny portfel o stałych wagach, nie Twoja faktyczna historia), w walutach notowania - bez wpływu kursów walut. Sharpe przy stopie wolnej od ryzyka ${data.risk_free_rate_pct}% (zmiana: portfolio.risk_free_rate_pct w config.yaml). Uwzględnia ${data.tickers.length} pozycji${missing.length ? `; pominięto (brak danych): ${escapeHtml(missing.join(", "))}` : ""}. Przeszłość nie gwarantuje przyszłości.</p>`;
+
+  panel.innerHTML = html;
+}
+
+// ---------------- Kopia zapasowa (import) ----------------
+el("backupImportFile").addEventListener("change", () => {
+  const file = el("backupImportFile").files[0];
+  el("backupFileNameLabel").textContent = file ? `✅ ${file.name}` : "📂 Wybierz plik kopii (.json)";
+});
+
+el("backupImportBtn").addEventListener("click", async () => {
+  const fileInput = el("backupImportFile");
+  const file = fileInput.files[0];
+  if (!file) {
+    alert("Wybierz plik kopii zapasowej (.json).");
+    return;
+  }
+  const btn = el("backupImportBtn");
+  btn.disabled = true;
+  btn.textContent = "Wczytuję…";
+
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await fetch("/api/backup/import", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.detail || "Nie udało się wczytać kopii.");
+      return;
+    }
+    const msg = `Wczytano: ${data.positions_added} pozycji i ${data.watchlist_added} spółek. ` +
+      `Pominięto duplikaty: ${data.positions_skipped} pozycji, ${data.watchlist_skipped} spółek.`;
+    appendLog({ level: "success", message: `📤 ${msg}` });
+    (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📤 ${w}` }));
+    alert(msg + (data.warnings && data.warnings.length ? `\n\nUwagi:\n${data.warnings.slice(0, 5).join("\n")}` : ""));
+    fileInput.value = "";
+    el("backupFileNameLabel").textContent = "📂 Wybierz plik kopii (.json)";
+    await loadPortfolio();
+    await loadClosedPortfolio();
+  } catch (err) {
+    alert("Błąd połączenia podczas wczytywania kopii.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📤 Wczytaj kopię";
+  }
+});
+
 // ---------------- Start ----------------
 (async function init() {
   // Zabezpieczenie: modal, szufladka logu i widget czatu MUSZĄ być
@@ -1745,6 +1983,7 @@ el("xtbImportFile").addEventListener("change", () => {
   setupSparklineHeaders();
   setupSortableHeaders();
   await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness()]);
+  await refreshHeldTickers();
   connectWebSocket();
   updateNextRunLabel();
 })();

@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from .llm_sentiment import _call_ollama
+from .report import earnings_days_from_result
 
 logger = logging.getLogger("xtb_trend_watch.daily_brief")
 
@@ -49,6 +50,21 @@ def _build_prompt(payload: dict, portfolio_summary: dict | None) -> str:
         for r in avoid[:6]
     ) or "brak"
 
+    upcoming_earnings = []
+    for r in all_results:
+        e = earnings_days_from_result(r, max_days=10)
+        if e:
+            upcoming_earnings.append((e[1], e[0], r))
+    upcoming_earnings.sort(key=lambda x: x[0])
+
+    def _when(days: int) -> str:
+        return "dzisiaj" if days == 0 else ("jutro" if days == 1 else f"za {days} dni")
+
+    earnings_lines = "\n".join(
+        f"- {r['name']} ({r['ticker']}): wyniki kwartalne {date_str} ({_when(days)})"
+        for days, date_str, r in upcoming_earnings[:6]
+    ) or "brak w ciągu najbliższych 10 dni"
+
     sector_lines = "\n".join(
         f"- {s['sector']}: {s['count']} spółek ({', '.join(s['tickers'])})"
         for s in sectors[:4]
@@ -75,6 +91,9 @@ SPÓŁKI "WARTO OBSERWOWAĆ" dzisiaj:
 SPÓŁKI DO UNIKANIA dzisiaj:
 {avoid_lines}
 
+NADCHODZĄCE WYNIKI KWARTALNE (do 10 dni):
+{earnings_lines}
+
 KONCENTRACJA SEKTOROWA (watchlista):
 {sector_lines}
 
@@ -82,7 +101,8 @@ PORTFEL UŻYTKOWNIKA:
 {portfolio_block}
 
 Napisz zwięzły (120-180 słów), rzeczowy brief po polsku, jednym spójnym tekstem (nie listą punktów),
-podsumowujący najważniejsze rzeczy z powyższych danych. Zachowaj profesjonalny, neutralny ton -
+podsumowujący najważniejsze rzeczy z powyższych danych. Jeśli w najbliższych dniach są wyniki kwartalne
+spółek, wspomnij o tym jako o czynniku podwyższonej zmienności. Zachowaj profesjonalny, neutralny ton -
 bez nadmiernego entuzjazmu ani straszenia. Zakończ jednym zdaniem przypominającym, że to analiza
 narzędziowa, nie porada inwestycyjna. Zwróć WYŁĄCZNIE poprawny obiekt JSON (bez markdown):
 

@@ -14,6 +14,8 @@ import logging
 
 import requests
 
+from .report import earnings_days_from_result
+
 logger = logging.getLogger("xtb_trend_watch.chatbot")
 
 
@@ -55,10 +57,12 @@ def _build_context_block(payload: dict, portfolio_summary: dict | None, extra_co
         reasons = "; ".join(r["technical"]["reasons"][:3])
         sentiment = (r["sentiment"]["summary"] or "")[:180]
         discovery = f" [PROPOZYCJA AI: {r.get('discovery_reason', '')[:120]}]" if r.get("discovery_reason") else ""
+        earn = earnings_days_from_result(r)
+        earn_txt = f", wyniki kwartalne={earn[0]} (za {earn[1]} dni)" if earn else ""
 
         lines.append(
             f"- {r['name']} ({r['ticker']}): {r['combined']['category']}, wynik={r['combined']['final_score']}, "
-            f"sygnał={r['technical']['signal']}{f', cena docelowa={target}' if target else ''}{discovery}\n"
+            f"sygnał={r['technical']['signal']}{f', cena docelowa={target}' if target else ''}{earn_txt}{discovery}\n"
             f"  Powody techniczne: {reasons}\n"
             f"  Sentyment: {sentiment}\n"
             f"  Fundamenty: {flags}"

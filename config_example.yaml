@@ -140,6 +140,7 @@ fundamentals:
   pe_low_threshold: 12              # P/E <= tyle -> flaga "niska wycena" (do zweryfikowania, czemu tak tanio)
   revenue_growth_good_pct: 10       # wzrost przychodów r/r >= tyle% -> flaga pozytywna
   debt_to_equity_high: 150          # D/E (w %) >= tyle -> flaga "wysokie zadłużenie"
+  earnings_warning_days: 7          # wyniki kwartalne w ciągu tylu dni -> ostrzeżenie (badge, baner, brief, czat)
 
 # -------------------------------------------------------------
 # Szeroki kontekst makro (VIX, rentowność obligacji) - filtr ryzyka
@@ -198,6 +199,7 @@ web:
 # -------------------------------------------------------------
 portfolio:
   base_currency: "PLN"   # w tej walucie liczony jest łączny wykres/podsumowanie portfela
+  risk_free_rate_pct: 0.0   # stopa wolna od ryzyka (% rocznie) używana we współczynniku Sharpe'a w panelu "Korelacja i zmienność"
 
 # -------------------------------------------------------------
 # Panel skuteczności narzędzia (na podstawie historii werdyktów)
