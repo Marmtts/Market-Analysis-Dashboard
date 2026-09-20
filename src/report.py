@@ -730,3 +730,131 @@ def compute_portfolio_statistics(closes_by_ticker: dict, weights: dict,
         "risk_free_rate_pct": risk_free_rate_pct,
         "warnings": warnings,
     }
+
+
+def compute_benchmark_comparison(closes_by_ticker: dict, weights: dict, benchmark_ticker: str,
+                                  benchmark_closes, risk_free_rate_pct: float = 0.0,
+                                  min_observations: int = 60) -> dict:
+    """Porównuje HIPOTETYCZNY portfel (obecne wagi pozycji, stałe w czasie) z
+    benchmarkiem na wspólnej historii cen (zwykle 1 rok).
+
+    Dlaczego hipotetyczny, a nie krzywa kapitału z bazy: snapshoty kapitału
+    zawierają wpłaty i sprzedaże (kupno kolejnej akcji podnosi wartość portfela
+    bez żadnego zysku), a nie mamy zapisanych przepływów gotówki, więc nie da
+    się z nich uczciwie policzyć stopy zwrotu do porównania z indeksem.
+
+    Zwraca m.in.: zwrot portfela i benchmarku, betę (jak mocno portfel reaguje
+    na ruchy rynku), alfę Jensena w skali roku (część wyniku NIEWYJAŚNIONA samą
+    ekspozycją na rynek), korelację oraz wychwyt wzrostów/spadków (jaką część
+    ruchu rynku portfel łapał w dni wzrostowe i spadkowe rynku), a także serie
+    do wykresu (wzrost 100 jednostek) i krótkie, opisowe wnioski."""
+    if benchmark_closes is None or len(benchmark_closes) == 0:
+        return {"available": False, "reason": f"Brak notowań benchmarku {benchmark_ticker}."}
+
+    bench_key = "__benchmark__"
+    series = {t: _series_to_daily_naive(pd.Series(s))
+              for t, s in closes_by_ticker.items() if s is not None and len(s) > 0}
+    if not series:
+        return {"available": False, "reason": "Brak danych cenowych dla pozycji w portfelu."}
+    series[bench_key] = _series_to_daily_naive(pd.Series(benchmark_closes))
+
+    prices = pd.concat(series, axis=1, join="inner").dropna()
+    returns = prices.pct_change().dropna()
+    if len(returns) < min_observations:
+        return {"available": False,
+                "reason": f"Za mało wspólnej historii z benchmarkiem {benchmark_ticker} "
+                          f"({len(returns)} sesji, potrzeba co najmniej {min_observations})."}
+
+    tickers = [c for c in returns.columns if c != bench_key]
+    w = np.array([max(float(weights.get(t, 0.0)), 0.0) for t in tickers])
+    if w.sum() <= 0:
+        return {"available": False, "reason": "Brak dodatniej wartości pozycji do policzenia wag."}
+    w = w / w.sum()
+
+    p = returns[tickers].values @ w
+    b = returns[bench_key].values
+    var_b = float(np.var(b, ddof=1))
+    if var_b <= 0:
+        return {"available": False, "reason": f"Benchmark {benchmark_ticker} nie zmieniał ceny w badanym okresie."}
+
+    trading_days = 252
+    beta = float(np.cov(p, b, ddof=1)[0, 1] / var_b)
+    corr = float(np.corrcoef(p, b)[0, 1])
+    rf_daily = risk_free_rate_pct / 100.0 / trading_days
+    alpha_annual = float(((p.mean() - rf_daily) - beta * (b.mean() - rf_daily)) * trading_days)
+
+    p_curve = np.cumprod(1 + p)
+    b_curve = np.cumprod(1 + b)
+    port_total = float(p_curve[-1] - 1)
+    bench_total = float(b_curve[-1] - 1)
+    excess = port_total - bench_total
+
+    def capture(mask):
+        if int(mask.sum()) < 5:
+            return None
+        denom = float(b[mask].mean())
+        return float(p[mask].mean() / denom) if denom != 0 else None
+
+    up_capture = capture(b > 0)
+    down_capture = capture(b < 0)
+
+    # --- Opisowe wnioski (bez rekomendacji - tylko co wynika z liczb) ---
+    insights: list[str] = []
+    if excess >= 0:
+        insights.append(f"W badanym okresie portfel (przy obecnych wagach) wyprzedził {benchmark_ticker} "
+                        f"o {excess * 100:.1f} pkt proc.")
+    else:
+        insights.append(f"W badanym okresie portfel (przy obecnych wagach) przegrał z {benchmark_ticker} "
+                        f"o {abs(excess) * 100:.1f} pkt proc.")
+
+    if beta >= 1.15:
+        insights.append(f"Beta {beta:.2f}: portfel reaguje na ruchy rynku mocniej niż benchmark, więc część "
+                        f"wyniku (w górę i w dół) wynika po prostu z wyższej ekspozycji na rynek.")
+    elif beta <= 0.85:
+        insights.append(f"Beta {beta:.2f}: portfel jest mniej wrażliwy na ruchy rynku niż benchmark.")
+    else:
+        insights.append(f"Beta {beta:.2f}: wrażliwość na rynek zbliżona do benchmarku.")
+
+    if alpha_annual >= 0.02:
+        insights.append(f"Alfa {alpha_annual * 100:+.1f}% rocznie: po uwzględnieniu bety wynik wykracza poza samą "
+                        f"ekspozycję na rynek (na tej próbie — niekoniecznie trwale).")
+    elif alpha_annual <= -0.02:
+        insights.append(f"Alfa {alpha_annual * 100:+.1f}% rocznie: po uwzględnieniu bety portfel wypadał gorzej, "
+                        f"niż wynikałoby z samej ekspozycji na rynek.")
+    else:
+        insights.append("Alfa bliska zera: wynik w zasadzie tłumaczy sama ekspozycja na rynek (beta).")
+
+    if excess > 0 and beta >= 1.15 and alpha_annual < 0.02:
+        insights.append("Przewaga nad benchmarkiem wynika głównie z wyższej bety, a nie z trafnej selekcji "
+                        "spółek — w słabszym rynku ta sama beta działałaby w drugą stronę.")
+
+    if up_capture is not None and down_capture is not None:
+        insights.append(f"W dni wzrostowe rynku portfel łapał średnio {up_capture * 100:.0f}% jego ruchu, "
+                        f"w dni spadkowe — {down_capture * 100:.0f}%.")
+
+    if len(returns) < 120:
+        insights.append(f"Próba jest krótka ({len(returns)} sesji) — alfa i beta mają duży błąd statystyczny.")
+
+    dates = returns.index.strftime("%Y-%m-%d").tolist()
+    return {
+        "available": True,
+        "benchmark": benchmark_ticker,
+        "observations": int(len(returns)),
+        "period_start": dates[0],
+        "period_end": dates[-1],
+        "tickers": tickers,
+        "portfolio_return_pct": round(port_total * 100, 1),
+        "benchmark_return_pct": round(bench_total * 100, 1),
+        "excess_return_pct": round(excess * 100, 1),
+        "beta": round(beta, 2),
+        "correlation": round(corr, 2),
+        "alpha_annual_pct": round(alpha_annual * 100, 1),
+        "up_capture": round(up_capture, 2) if up_capture is not None else None,
+        "down_capture": round(down_capture, 2) if down_capture is not None else None,
+        "curve": {
+            "dates": dates,
+            "portfolio": [round(float(100 * x), 2) for x in p_curve],
+            "benchmark": [round(float(100 * x), 2) for x in b_curve],
+        },
+        "insights": insights,
+    }

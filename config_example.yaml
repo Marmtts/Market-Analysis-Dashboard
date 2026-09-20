@@ -113,7 +113,7 @@ news:
   # -----------------------------------------------------------
   # Darmowy klucz: zarejestruj się na https://finnhub.io/register,
   # skopiuj "API key" z panelu i wklej poniżej.
-  use_historical_news: true
+  use_historical_news: false      # ustaw true DOPIERO po wpisaniu prawdziwego klucza poniżej
   finnhub_api_key: "TWOJ_KLUCZ"
   historical_lookback_days: 365   # ile dni wstecz przeglądać
   max_headlines_per_month: 4      # limit nagłówków pobieranych na miesiąc na spółkę
@@ -199,6 +199,8 @@ web:
 # -------------------------------------------------------------
 portfolio:
   base_currency: "PLN"   # w tej walucie liczony jest łączny wykres/podsumowanie portfela
+  benchmark: null           # opcjonalnie: ticker benchmarku do porównania z portfelem (np. "SPY", "QQQ", "^WIG20");
+                            # domyślnie wybierany wg dominującej waluty portfela z technical.benchmark_by_currency
   risk_free_rate_pct: 0.0   # stopa wolna od ryzyka (% rocznie) używana we współczynniku Sharpe'a w panelu "Korelacja i zmienność"
 
 # -------------------------------------------------------------

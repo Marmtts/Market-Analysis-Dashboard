@@ -57,7 +57,7 @@ from src.report import (
     evaluate_portfolio_position, compute_max_drawdown,
     compute_portfolio_risk_summary, compute_portfolio_sector_exposure,
     compute_tax_summary, summarize_portfolio_by_currency,
-    compute_portfolio_statistics,
+    compute_portfolio_statistics, compute_benchmark_comparison,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -231,6 +231,7 @@ def _build_combined_portfolio_view(enriched_positions: list[dict], base_currency
         for key in ("market_value", "cost_basis", "unrealized_value", "current_price", "suggested_stop_loss"):
             if p2.get(key) is not None:
                 p2[key] = p2[key] * rate
+        p2["original_currency"] = currency  # potrzebne np. do wyboru benchmarku wg dominującej waluty
         p2["currency"] = base_currency  # dla compute_portfolio_risk_summary - jeden wspólny "koszyk"
         converted.append(p2)
     return converted, skipped
@@ -655,7 +656,23 @@ async def api_get_portfolio_risk():
     })
 
 
-def _compute_portfolio_statistics_blocking(weights: dict[str, float], risk_free_rate_pct: float) -> dict:
+def _pick_portfolio_benchmark(combined_positions: list[dict]) -> str:
+    """Benchmark do porównania z portfelem: jawny `portfolio.benchmark` z configu,
+    a w razie jego braku benchmark właściwy dla DOMINUJĄCEJ waluty portfela
+    (wg wartości rynkowej), z mapowania `technical.benchmark_by_currency`."""
+    explicit = (_cfg.get("portfolio", {}) or {}).get("benchmark")
+    if explicit:
+        return str(explicit).strip()
+    value_by_currency: dict[str, float] = {}
+    for p in combined_positions:
+        cur = p.get("original_currency") or "USD"
+        value_by_currency[cur] = value_by_currency.get(cur, 0.0) + (p.get("market_value") or 0.0)
+    dominant = max(value_by_currency, key=value_by_currency.get) if value_by_currency else "USD"
+    return _cfg.get("technical", {}).get("benchmark_by_currency", {}).get(dominant, "SPY")
+
+
+def _compute_portfolio_statistics_blocking(weights: dict[str, float], risk_free_rate_pct: float,
+                                            benchmark_ticker: str | None = None) -> dict:
     closes = {}
     without_data = []
     for ticker in weights:
@@ -666,6 +683,20 @@ def _compute_portfolio_statistics_blocking(weights: dict[str, float], risk_free_
             without_data.append(ticker)
     stats = compute_portfolio_statistics(closes, {t: weights[t] for t in closes}, risk_free_rate_pct)
     stats["tickers_without_data"] = without_data
+
+    # Porównanie z benchmarkiem - osobny blok; jego błąd nie może zepsuć reszty statystyk.
+    if benchmark_ticker:
+        try:
+            bench_hist = fetch_history(benchmark_ticker, period="1y", interval="1d")
+            stats["benchmark_comparison"] = compute_benchmark_comparison(
+                closes, {t: weights[t] for t in closes}, benchmark_ticker,
+                bench_hist["Close"], risk_free_rate_pct,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Porównanie z benchmarkiem %s nie powiodło się: %s", benchmark_ticker, exc)
+            stats["benchmark_comparison"] = {
+                "available": False, "reason": f"Nie udało się pobrać notowań benchmarku {benchmark_ticker}.",
+            }
     return stats
 
 
@@ -685,7 +716,8 @@ async def api_get_portfolio_statistics():
         return {"available": False, "reason": "Brak otwartych pozycji z policzoną wartością rynkową."}
 
     rf = float(_cfg.get("portfolio", {}).get("risk_free_rate_pct", 0.0))
-    stats = await asyncio.to_thread(_compute_portfolio_statistics_blocking, weights, rf)
+    benchmark_ticker = _pick_portfolio_benchmark(combined_positions)
+    stats = await asyncio.to_thread(_compute_portfolio_statistics_blocking, weights, rf, benchmark_ticker)
     return sanitize_for_json(stats)
 
 

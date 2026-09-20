@@ -991,3 +991,7 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .corr-table tbody th { text-align: right; }
 .corr-table td { text-align: center; padding: 0.3rem 0.5rem; border-radius: 3px; min-width: 44px; color: var(--text); }
 .backup-download-link { display: block; text-align: center; text-decoration: none; margin-bottom: 0.6rem; }
+
+/* ---------------- Portfel vs benchmark ---------------- */
+.bench-chart-container { width: 100%; height: 220px; margin: 0.4rem 0 0.2rem; }
+.legend-swatch--bench { background: var(--text-dim); }

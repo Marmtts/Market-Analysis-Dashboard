@@ -712,6 +712,10 @@ window.addEventListener("resize", () => {
   if (equityChart && equityContainer) {
     equityChart.applyOptions({ width: equityContainer.clientWidth });
   }
+  const benchContainer = el("benchChartContainer");
+  if (benchChart && benchContainer) {
+    benchChart.applyOptions({ width: benchContainer.clientWidth });
+  }
 });
 
 // ---------------- Zakładki ----------------
@@ -1868,9 +1872,62 @@ function corrCellStyle(v) {
   return v >= 0 ? `background: rgba(217,164,65,${alpha})` : `background: rgba(79,157,105,${alpha})`;
 }
 
+let benchChart = null;
+
+// Sekcja "Portfel vs benchmark" - HTML (wykres rysowany osobno po wstawieniu do DOM).
+function benchmarkSectionHtml(bc) {
+  if (!bc) return "";
+  if (!bc.available) {
+    return `<div class="detail-section"><h4 class="detail-section__title">Portfel a benchmark</h4>
+      <p class="detail-text detail-text--muted">${escapeHtml(bc.reason || "Porównanie z benchmarkiem niedostępne.")}</p></div>`;
+  }
+  const sign = (v) => (v >= 0 ? "+" : "");
+  const excessCls = bc.excess_return_pct >= 0 ? "positive" : "negative";
+  const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+  return `
+    <div class="detail-section">
+      <h4 class="detail-section__title">Portfel a benchmark (${escapeHtml(bc.benchmark)})</h4>
+      <div class="metric-grid stats-grid">
+        <div title="Zwrot hipotetycznego portfela o obecnych wagach w badanym okresie"><span>Portfel (hipotet.)</span><strong>${sign(bc.portfolio_return_pct)}${bc.portfolio_return_pct}%</strong></div>
+        <div><span>${escapeHtml(bc.benchmark)}</span><strong>${sign(bc.benchmark_return_pct)}${bc.benchmark_return_pct}%</strong></div>
+        <div title="Różnica zwrotów w punktach procentowych"><span>Przewaga / strata</span><strong class="${excessCls}">${sign(bc.excess_return_pct)}${bc.excess_return_pct} pkt</strong></div>
+        <div title="Jak mocno portfel reaguje na ruchy rynku. 1.0 = tak samo jak benchmark"><span>Beta</span><strong>${bc.beta}</strong></div>
+        <div title="Część wyniku niewyjaśniona samą ekspozycją na rynek (w skali roku)"><span>Alfa (rocznie)</span><strong class="${bc.alpha_annual_pct >= 0 ? "positive" : "negative"}">${sign(bc.alpha_annual_pct)}${bc.alpha_annual_pct}%</strong></div>
+        <div title="Korelacja dziennych zmian portfela i benchmarku"><span>Korelacja</span><strong>${bc.correlation}</strong></div>
+        <div title="Jaką część ruchu rynku portfel łapał w dni wzrostowe"><span>Wychwyt wzrostów</span><strong>${pct(bc.up_capture)}</strong></div>
+        <div title="Jaką część ruchu rynku portfel łapał w dni spadkowe (mniej = lepiej)"><span>Wychwyt spadków</span><strong>${pct(bc.down_capture)}</strong></div>
+      </div>
+      <div id="benchChartContainer" class="bench-chart-container"></div>
+      <div class="modal__legend"><span><i class="legend-swatch legend-swatch--ma50"></i> Portfel (start = 100)</span><span><i class="legend-swatch legend-swatch--bench"></i> ${escapeHtml(bc.benchmark)} (start = 100)</span></div>
+      <ul class="detail-list">${(bc.insights || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+    </div>`;
+}
+
+function drawBenchmarkChart(bc) {
+  if (benchChart) { benchChart.remove(); benchChart = null; }
+  const container = el("benchChartContainer");
+  if (!container || !bc || !bc.available || !bc.curve || typeof LightweightCharts === "undefined") return;
+
+  benchChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 220,
+    layout: { background: { color: "transparent" }, textColor: "#8A93A8", fontFamily: "IBM Plex Mono, monospace" },
+    grid: { vertLines: { color: "#2A3346" }, horzLines: { color: "#2A3346" } },
+    timeScale: { borderColor: "#2A3346" },
+    rightPriceScale: { borderColor: "#2A3346" },
+  });
+  const portfolioSeries = benchChart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
+  const benchSeries = benchChart.addLineSeries({ color: "#8A93A8", lineWidth: 2, lineStyle: 2 });
+  const { dates, portfolio, benchmark } = bc.curve;
+  portfolioSeries.setData(dates.map((t, i) => ({ time: t, value: portfolio[i] })));
+  benchSeries.setData(dates.map((t, i) => ({ time: t, value: benchmark[i] })));
+  benchChart.timeScale().fitContent();
+}
+
 function renderPortfolioStatistics(data) {
   const panel = el("portfolioStatsPanel");
   const meta = el("portfolioStatsMeta");
+  if (benchChart) { benchChart.remove(); benchChart = null; }  // panel jest renderowany od nowa
 
   if (!data || !data.available) {
     meta.textContent = "";
@@ -1896,6 +1953,8 @@ function renderPortfolioStatistics(data) {
       <div title="Średnia ważona zmienności pozycji / zmienność portfela. 1.0 = brak korzyści z dywersyfikacji"><span>Wsp. dywersyfikacji</span><strong>${data.diversification_ratio ?? "—"}</strong></div>
       <div title="Historyczny zwrot hipotetycznego portfela o obecnych wagach - NIE Twój faktyczny wynik"><span>Zwrot hist. (roczny)</span><strong>${data.annual_return_pct >= 0 ? "+" : ""}${data.annual_return_pct}%</strong></div>
     </div>`;
+
+  html += benchmarkSectionHtml(data.benchmark_comparison);
 
   if (data.top_pairs && data.top_pairs.length) {
     html += `<div class="detail-section"><h4 class="detail-section__title">Najsilniej skorelowane pary</h4>`;
@@ -1923,9 +1982,10 @@ function renderPortfolioStatistics(data) {
   }
 
   const missing = (data.tickers_without_data || []);
-  html += `<p class="detail-disclaimer">Liczone na ostatnim roku notowań dla OBECNYCH wag pozycji (hipotetyczny portfel o stałych wagach, nie Twoja faktyczna historia), w walutach notowania - bez wpływu kursów walut. Sharpe przy stopie wolnej od ryzyka ${data.risk_free_rate_pct}% (zmiana: portfolio.risk_free_rate_pct w config.yaml). Uwzględnia ${data.tickers.length} pozycji${missing.length ? `; pominięto (brak danych): ${escapeHtml(missing.join(", "))}` : ""}. Przeszłość nie gwarantuje przyszłości.</p>`;
+  html += `<p class="detail-disclaimer">Liczone na ostatnim roku notowań dla OBECNYCH wag pozycji (hipotetyczny portfel o stałych wagach, nie Twoja faktyczna historia), w walutach notowania - bez wpływu kursów walut. Sharpe przy stopie wolnej od ryzyka ${data.risk_free_rate_pct}% (zmiana: portfolio.risk_free_rate_pct w config.yaml). Uwzględnia ${data.tickers.length} pozycji${missing.length ? `; pominięto (brak danych): ${escapeHtml(missing.join(", "))}` : ""}. Porównanie z benchmarkiem dotyczy tego samego hipotetycznego portfela (nie krzywej kapitału z bazy, która zawiera Twoje wpłaty i sprzedaże). Przeszłość nie gwarantuje przyszłości.</p>`;
 
   panel.innerHTML = html;
+  drawBenchmarkChart(data.benchmark_comparison);
 }
 
 // ---------------- Kopia zapasowa (import) ----------------

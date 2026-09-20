@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.0"
+VERSION = "3.1"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -779,7 +779,7 @@ def part2(s: Story) -> None:
               "chwilowo nie da się pobrać, karta łączna pokazuje adnotację, że ta waluta została pominięta.")
 
     # ------------------------------------------------------------ 14
-    s.h1("14. Ryzyko, korelacje i krzywa kapitału")
+    s.h1("14. Ryzyko, korelacje, benchmark i krzywa kapitału")
     s.h2("14.1 Panel „Ryzyko i ekspozycja”")
     s.p("Widoczny w zakładce Portfel, pod podsumowaniami, pokazuje:")
     s.bullets([
@@ -819,7 +819,38 @@ def part2(s: Story) -> None:
               "wpływu zmian kursów walut. Bardzo świeże spółki (mniej niż ok. 60 wspólnych sesji z resztą "
               "portfela) uniemożliwiają policzenie statystyk — panel poinformuje wtedy o powodzie. "
               "Przeszłość nie gwarantuje przyszłości.")
-    s.h2("14.3 Krzywa kapitału")
+    s.h2("14.3 Portfel a benchmark")
+    s.p("Pod miarami ryzyka w panelu „Korelacja i zmienność” znajduje się sekcja „Portfel a benchmark”. "
+        "Odpowiada na pytanie, które trudno ocenić na oko: <b>czy portfel bije rynek dzięki trafnemu wyborowi "
+        "spółek, czy po prostu płynie z hossą</b> — bo portfel o wysokiej becie rośnie szybciej od rynku "
+        "w dobrych czasach i tak samo mocniej spada w złych.")
+    s.table(["Miara", "Jak ją czytać"], [
+        ["Portfel (hipotet.) / benchmark", "Zwrot w badanym okresie (zwykle ostatni rok) hipotetycznego portfela "
+                                           "o obecnych wagach oraz benchmarku, z różnicą w punktach procentowych."],
+        ["Beta", "Jak mocno portfel reaguje na ruchy benchmarku. 1,0 = tak samo; 1,5 = średnio o połowę mocniej "
+                 "(w obie strony); poniżej 1 = łagodniej."],
+        ["Alfa (rocznie)", "Część wyniku, której NIE tłumaczy sama ekspozycja na rynek (beta). Dodatnia sugeruje, "
+                           "że wybór spółek dodał wartość ponad rynek; bliska zera — że wynik to głównie "
+                           "ekspozycja na rynek."],
+        ["Korelacja", "Jak zgodnie dzienne zmiany portfela podążają za benchmarkiem (od −1 do +1)."],
+        ["Wychwyt wzrostów / spadków", "Jaką część ruchu rynku portfel łapał średnio w dni wzrostowe i w dni "
+                                       "spadkowe rynku. Najkorzystniej: dużo we wzrostach, mało w spadkach."],
+    ], [26, 74])
+    s.p("Pod miarami widać wykres wzrostu 100 jednostek dla portfela (złota linia) i benchmarku (szara, "
+        "przerywana) oraz krótkie, opisowe wnioski wynikające z liczb — np. że przewaga nad rynkiem wynika "
+        "głównie z wyższej bety, a nie z selekcji spółek. Wnioski nie są rekomendacją.")
+    s.p(f"<b>Wybór benchmarku:</b> domyślnie taki, jaki odpowiada dominującej walucie portfela (wg wartości "
+        f"rynkowej): dla USD — SPY, dla PLN — WIG20, dla EUR — STOXX 50 (mapowanie "
+        f"{c('technical.benchmark_by_currency')}). Możesz wskazać własny, np. QQQ, parametrem "
+        f"{c('portfolio.benchmark')}.")
+    s.callout("note",
+              "Porównanie dotyczy HIPOTETYCZNEGO portfela o obecnych, stałych wagach na wspólnej historii "
+              "notowań — nie Twojej faktycznej krzywej kapitału. Krzywa z zakładki Portfel zawiera Twoje wpłaty "
+              "i sprzedaże (kupno kolejnej akcji podnosi jej wartość bez żadnego zysku), a dashboard nie zapisuje "
+              "przepływów gotówki, więc nie da się z niej uczciwie policzyć stopy zwrotu do porównania z "
+              "indeksem. Alfa i beta z jednego roku mają duży błąd statystyczny i niekoniecznie utrzymają się "
+              "w przyszłości.")
+    s.h2("14.4 Krzywa kapitału")
     s.p("Wykres liniowy pokazujący, jak zmieniała się wartość Twojego portfela w czasie (linia złota) na "
         "tle zainwestowanego kosztu (linia przerywana szara). Punkt zapisywany jest przy każdym pełnym "
         "cyklu analizy, a na wykresie widać jeden punkt na dzień. Przełącznik nad wykresem pozwala wybrać "
@@ -1016,7 +1047,7 @@ def part3(s: Story) -> None:
         "szybki zestaw wskaźników, nie pełna wycena spółki (DCF).",
         "<b>Backtest i optymalizacja parametrów</b> dotyczą wyłącznie logiki technicznej, nie uwzględniają "
         "kosztów i mogą odzwierciedlać wyjątkowy reżim rynkowy (rozdział 9).",
-        "<b>Statystyki portfela (korelacje, zmienność, Sharpe)</b> liczone są dla hipotetycznego portfela o "
+        "<b>Statystyki portfela (korelacje, zmienność, Sharpe, porównanie z benchmarkiem)</b> liczone są dla hipotetycznego portfela o "
         "obecnych wagach na rocznej historii, w walutach notowania — to obraz ryzyka, nie prognoza.",
         "<b>Daty wyników kwartalnych z Yahoo bywają szacunkowe</b> i mogą się przesunąć.",
         "<b>Panel skuteczności potrzebuje czasu.</b> Świeżo dodana spółka lub świeżo uruchomiony dashboard "
@@ -1063,7 +1094,9 @@ def part3(s: Story) -> None:
                                                     "(0 = alerty wyłączone)."],
         ["portfolio.base_currency", "PLN", "Waluta bazowa podsumowania łącznego, krzywej kapitału i "
                                            "statystyk portfela."],
-        ["portfolio.risk_free_rate_pct", "0.0", "Stopa wolna od ryzyka (% rocznie) we współczynniku Sharpe’a."],
+        ["portfolio.risk_free_rate_pct", "0.0", "Stopa wolna od ryzyka (% rocznie) we współczynniku Sharpe’a i w alfie."],
+        ["portfolio.benchmark", "brak (auto)", "Własny benchmark do porównania z portfelem (np. QQQ). Bez wartości "
+                                              "wybierany wg dominującej waluty portfela."],
         ["effectiveness.min_signal_age_days", "14", "Ile dni musi minąć od werdyktu, by wliczyć go do "
                                                     "panelu skuteczności."],
     ], [46, 17, 37], mono_first_col=True)
@@ -1077,7 +1110,7 @@ def part3(s: Story) -> None:
         ["Spółka nie pojawia się w wynikach", "Sprawdź log na żywo — najczęściej to nieprawidłowy ticker "
                                               "(format Yahoo Finance, np. ALE.WA). Nowa spółka pojawia się "
                                               "dopiero po najbliższym cyklu."],
-        ["Krzywa kapitału pusta", "Potrzebne są punkty z co najmniej dwóch różnych dni (rozdział 14.3). "
+        ["Krzywa kapitału pusta", "Potrzebne są punkty z co najmniej dwóch różnych dni (rozdział 14.4). "
                                   "Widok „Łącznie” wymaga ponadto kursów walut — szukaj ostrzeżenia w logu."],
         ["Brak briefu dnia albo czat nie odpowiada", "Sprawdź, czy Ollama działa (ollama serve), czy model "
                                                      "jest pobrany i czy llm.enabled: true. Brief pojawia "
@@ -1127,6 +1160,10 @@ def part3(s: Story) -> None:
                                  "pojedynczej spółki (zamiast automatycznego). Poprawiono opisy: alerty "
                                  "cenowe trafiają do logu, przycisk edycji pozycji działa, krzywa kapitału "
                                  "wymaga dwóch różnych dni, RSI wyprzedania 30."],
+        ["3.1", "Wrzesień 2026", "Nowy podrozdział 14.3 „Portfel a benchmark”: porównanie hipotetycznego portfela o "
+                                 "obecnych wagach z benchmarkiem (zwrot, beta, alfa, korelacja, wychwyt wzrostów "
+                                 "i spadków, wykres, wnioski) oraz parametr portfolio.benchmark. Krzywa kapitału "
+                                 "przeniesiona do 14.4."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

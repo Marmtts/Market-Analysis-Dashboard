@@ -54,6 +54,9 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Panel „Korelacja i zmienność”: roczna zmienność, Sharpe, maks. obsunięcie,
   macierz korelacji i współczynnik dywersyfikacji dla obecnych wag pozycji —
   pokazuje, czy kilka spółek to w praktyce jeden zakład (np. sektor AI/tech).
+- Porównanie portfela z benchmarkiem (SPY / WIG20 / własny): zwrot, beta,
+  alfa, wychwyt wzrostów i spadków oraz wykres — odpowiada na pytanie, czy
+  wynik to selekcja spółek, czy po prostu ekspozycja na rynek.
 - Import pozycji z raportu XTB (.xlsx: „Open Positions” i „Closed
   Positions”) — idempotentny, mapuje symbole XTB na tickery Yahoo Finance.
 - Kopia zapasowa watchlisty i portfela (eksport/import JSON, idempotentny).
@@ -289,9 +292,10 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 9. Możliwe dalsze rozszerzenia
 
-- Krzywa kapitału portfela na tle benchmarku rynkowego (SPY / WIG20)
-  w tym samym okresie — pokazałaby, czy portfel bije rynek, czy tylko płynie
-  z hossą.
+- Prawdziwa (ważona czasem, TWR) krzywa kapitału na tle benchmarku —
+  wymaga zapisywania przepływów gotówki (wpłat i wypłat), których snapshoty
+  krzywej kapitału dziś nie zawierają. Obecne porównanie z benchmarkiem
+  dotyczy hipotetycznego portfela o obecnych wagach.
 - Sprawdzenie w backteście, czy okno tuż przed wynikami kwartalnymi
   pogarsza sygnały GOOD_ENTRY; jeśli tak, ostrzeżenie o wynikach mogłoby
   obniżać kategorię zamiast tylko informować.
