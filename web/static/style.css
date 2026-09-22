@@ -337,20 +337,36 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 
 /* ---------------- Result card ---------------- */
 :root {
+  /* Kolumny rozłożone na ATOMOWE zmienne (jedna na "slot") - dzięki temu
+     personalizacja widocznych kolumn (JS, patrz --grid-cols-user niżej) może
+     złożyć własną listę torów przez var(--col-x), a szerokości nadal reagują
+     na breakpoint @980px zdefiniowany niżej, bez duplikowania liczb w JS. */
+  --col-stamp: 60px;
+  --col-name: minmax(150px, 1.5fr);
+  --col-target: minmax(85px, 1fr);
+  --col-signal: minmax(85px, 1fr);
+  --col-score: minmax(85px, 1fr);
+  --col-chart: minmax(110px, 1fr);
+  --col-category: minmax(130px, 1.4fr);
+
   /* Wspólny szablon kolumn dla nagłówków i kart - UŻYWANY IDENTYCZNIE
      w .results-header i .result-card, żeby zawsze się pokrywały. "auto"
      było zależne od TREŚCI (inna szerokość dla krótkiego nagłówka niż dla
      długiej liczby w karcie) - minmax/fr nie zależy od treści, więc obie
      siatki zawsze wyliczą te same szerokości przy tej samej dostępnej
      przestrzeni. */
-  --grid-cols-6: 60px minmax(150px, 1.5fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(130px, 1.4fr);
-}
-
-:root {
+  --grid-cols-6: var(--col-stamp) var(--col-name) var(--col-target) var(--col-signal) var(--col-score) var(--col-category);
   /* Kolumna wykresu jako minmax z jednostką fr (nie sztywne 82px) - rośnie
      razem z resztą siatki na szerokich ekranach, zamiast zostać maleńkim,
      stałym paskiem. */
-  --grid-cols-7: 60px minmax(150px, 1.5fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(85px, 1fr) minmax(110px, 1fr) minmax(130px, 1.4fr);
+  --grid-cols-7: var(--col-stamp) var(--col-name) var(--col-target) var(--col-signal) var(--col-score) var(--col-chart) var(--col-category);
+
+  /* Personalizacja kolumn (watchlista + propozycje AI, patrz app.js
+     applyColumnVisibility) - domyślnie wszystkie kolumny, JS podmienia tę
+     wartość na podstawie zapisanych preferencji użytkownika. Zdefiniowane
+     tu jako fallback, żeby przy pierwszym renderze (zanim JS zdąży odczytać
+     localStorage) siatka wyglądała identycznie jak dotychczas, bez "mrugnięcia". */
+  --grid-cols-user: var(--grid-cols-7);
 }
 
 /* Wyższa specyficzność (dwie klasy zamiast jednej) - gwarantuje, że ta
@@ -359,6 +375,17 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
    źródłowa, co wcześniej powodowało rozjazd kolumn dla kart ze sparkline'em). */
 .result-card.result-card--with-sparkline {
   grid-template-columns: var(--grid-cols-7);
+}
+
+/* Karty i nagłówki watchlisty/propozycji AI (NIE portfela - ten ma osobną,
+   stałą siatkę) używają --grid-cols-user zamiast sztywnego --grid-cols-7,
+   żeby dało się chować pojedyncze kolumny (patrz sekcja "Personalizacja
+   kolumn" niżej). Potrójna klasa/atrybut w selektorze podnosi specyficzność
+   ponad regułę wyżej, więc wygrywa niezależnie od kolejności w pliku. */
+.result-card.result-card--with-sparkline.result-card--customizable,
+.results-header[data-sort-group="main"].results-header--customizable,
+.results-header[data-sort-group="discovered"].results-header--customizable {
+  grid-template-columns: var(--grid-cols-user);
 }
 
 .result-card {
@@ -383,8 +410,15 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 @media (max-width: 980px) {
   :root {
-    --grid-cols-6: 52px minmax(130px, 1.5fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(110px, 1.3fr);
-    --grid-cols-7: 52px minmax(130px, 1.5fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(85px, 1fr) minmax(110px, 1.3fr);
+    /* Tylko atomowe zmienne - --grid-cols-6/7/user składają się z nich same,
+       więc personalizacja kolumn automatycznie dziedziczy te węższe wartości. */
+    --col-stamp: 52px;
+    --col-name: minmax(130px, 1.5fr);
+    --col-target: minmax(70px, 1fr);
+    --col-signal: minmax(70px, 1fr);
+    --col-score: minmax(70px, 1fr);
+    --col-chart: minmax(85px, 1fr);
+    --col-category: minmax(110px, 1.3fr);
   }
 
   .result-card,
@@ -995,3 +1029,99 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 /* ---------------- Portfel vs benchmark ---------------- */
 .bench-chart-container { width: 100%; height: 220px; margin: 0.4rem 0 0.2rem; }
 .legend-swatch--bench { background: var(--text-dim); }
+
+/* ---------------- Personalizacja panelu bocznego (zwijanie, kolejność) ---------------- */
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+.panel__header .panel__title { margin-bottom: 0; }
+.panel__controls { display: flex; align-items: center; gap: 0.1rem; flex-shrink: 0; }
+.panel__ctrl-btn {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 0.62rem;
+  line-height: 1;
+  padding: 0.3rem 0.35rem;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.panel__ctrl-btn:hover { color: var(--accent-gold-bright); background: var(--bg-elevated-2); }
+.panel__ctrl-btn.is-disabled { opacity: 0.25; pointer-events: none; }
+.panel__collapse-toggle { font-size: 0.7rem; transition: transform 0.2s ease, color 0.15s ease, background 0.15s ease; }
+.panel.is-collapsed .panel__collapse-toggle { transform: rotate(-90deg); }
+.panel.is-collapsed .panel__body { display: none; }
+/* Panel w trakcie przenoszenia (krótki wizualny feedback po kliknięciu ▲/▼) */
+.panel.is-just-moved { border-color: var(--accent-gold); }
+
+/* ---------------- Personalizacja kolumn (watchlista / propozycje AI) ---------------- */
+.section-header { position: relative; }
+.col-settings { margin-left: auto; position: relative; }
+.col-settings-btn {
+  background: none;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.col-settings-btn:hover, .col-settings-btn[aria-expanded="true"] {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-bright);
+}
+.col-settings__popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 20;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  padding: 0.75rem 0.9rem;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.col-settings__popover[hidden] { display: none; }
+.col-settings__title {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-gold-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.1rem;
+}
+.col-settings__popover label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.col-settings__popover input[type="checkbox"] { accent-color: var(--accent-gold); width: 15px; height: 15px; }
+.col-settings__reset {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  margin-top: 0.15rem;
+}
+.col-settings__reset:hover { color: var(--accent-gold-bright); }

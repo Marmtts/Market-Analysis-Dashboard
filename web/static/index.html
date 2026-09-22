@@ -48,55 +48,94 @@
   <!-- ============ LEWA KOLUMNA: makro + watchlist mgmt ============ -->
   <aside class="sidebar">
 
-    <section class="panel" id="macroPanel">
-      <h2 class="panel__title">Kontekst makro</h2>
-      <div class="macro-readout" id="macroReadout">
-        <div class="macro-readout__row">
-          <span class="macro-readout__label">Reżim ryzyka</span>
-          <span class="macro-readout__value" id="riskRegime">—</span>
-        </div>
-        <div class="macro-readout__row">
-          <span class="macro-readout__label">VIX</span>
-          <span class="macro-readout__value" id="vixValue">—</span>
-        </div>
-        <div class="macro-readout__row">
-          <span class="macro-readout__label">Obligacje 10Y (USA)</span>
-          <span class="macro-readout__value" id="tnxValue">—</span>
+    <section class="panel panel--collapsible" id="macroPanel" data-panel-id="macro">
+      <div class="panel__header">
+        <h2 class="panel__title">Kontekst makro</h2>
+        <div class="panel__controls">
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
         </div>
       </div>
-      <p class="macro-notes" id="macroNotes"></p>
+      <div class="panel__body">
+        <div class="macro-readout" id="macroReadout">
+          <div class="macro-readout__row">
+            <span class="macro-readout__label">Reżim ryzyka</span>
+            <span class="macro-readout__value" id="riskRegime">—</span>
+          </div>
+          <div class="macro-readout__row">
+            <span class="macro-readout__label">VIX</span>
+            <span class="macro-readout__value" id="vixValue">—</span>
+          </div>
+          <div class="macro-readout__row">
+            <span class="macro-readout__label">Obligacje 10Y (USA)</span>
+            <span class="macro-readout__value" id="tnxValue">—</span>
+          </div>
+        </div>
+        <p class="macro-notes" id="macroNotes"></p>
+      </div>
     </section>
 
-    <section class="panel" id="sectorPanel">
-      <h2 class="panel__title">Koncentracja sektorowa</h2>
-      <div id="sectorBody">
+    <section class="panel panel--collapsible" id="sectorPanel" data-panel-id="sector">
+      <div class="panel__header">
+        <h2 class="panel__title">Koncentracja sektorowa</h2>
+        <div class="panel__controls">
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body" id="sectorBody">
         <p class="empty-state">Brak ostrzeżeń.</p>
       </div>
     </section>
 
-    <section class="panel" id="earningsPanel">
-      <h2 class="panel__title">Nadchodzące wyniki</h2>
-      <div id="earningsBody">
+    <section class="panel panel--collapsible" id="earningsPanel" data-panel-id="earnings">
+      <div class="panel__header">
+        <h2 class="panel__title">Nadchodzące wyniki</h2>
+        <div class="panel__controls">
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body" id="earningsBody">
         <p class="empty-state">Brak danych o terminach wyników.</p>
       </div>
     </section>
 
-    <section class="panel" id="effectivenessPanel">
-      <h2 class="panel__title">Skuteczność narzędzia</h2>
-      <div id="effectivenessBody">
+    <section class="panel panel--collapsible" id="effectivenessPanel" data-panel-id="effectiveness">
+      <div class="panel__header">
+        <h2 class="panel__title">Skuteczność narzędzia</h2>
+        <div class="panel__controls">
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body" id="effectivenessBody">
         <p class="empty-state">Zbieram dane historyczne — wróć za kilka dni.</p>
       </div>
     </section>
 
-    <section class="panel">
-      <h2 class="panel__title">Watchlista</h2>
-      <form class="add-form" id="addForm">
-        <input type="text" id="addTicker" placeholder="Ticker (np. AAPL)" required autocomplete="off">
-        <input type="text" id="addName" placeholder="Nazwa spółki" autocomplete="off">
-        <input type="text" id="addXtb" placeholder="Symbol w XTB (opcjonalnie)" autocomplete="off">
-        <button type="submit" class="btn btn--secondary">+ Dodaj</button>
-      </form>
-      <ul class="watchlist" id="watchlistUl"></ul>
+    <section class="panel panel--collapsible" id="watchlistPanel" data-panel-id="watchlist">
+      <div class="panel__header">
+        <h2 class="panel__title">Watchlista</h2>
+        <div class="panel__controls">
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body">
+        <form class="add-form" id="addForm">
+          <input type="text" id="addTicker" placeholder="Ticker (np. AAPL)" required autocomplete="off">
+          <input type="text" id="addName" placeholder="Nazwa spółki" autocomplete="off">
+          <input type="text" id="addXtb" placeholder="Symbol w XTB (opcjonalnie)" autocomplete="off">
+          <button type="submit" class="btn btn--secondary">+ Dodaj</button>
+        </form>
+        <ul class="watchlist" id="watchlistUl"></ul>
+      </div>
     </section>
 
   </aside>
@@ -112,13 +151,24 @@
     <div class="section-header">
       <h2>Stała watchlista</h2>
       <span class="section-header__meta" id="mainGeneratedAt">brak danych</span>
+      <div class="col-settings">
+        <button type="button" class="col-settings-btn" id="columnSettingsBtn" aria-expanded="false" aria-haspopup="true" title="Dostosuj widoczne kolumny (watchlista i propozycje AI)">⚙ Kolumny</button>
+        <div class="col-settings__popover" id="columnSettingsPopover" hidden>
+          <div class="col-settings__title">Widoczne kolumny</div>
+          <label><input type="checkbox" id="colToggleTarget" checked> Cena docelowa</label>
+          <label><input type="checkbox" id="colToggleSignal" checked> Sygnał techniczny</label>
+          <label><input type="checkbox" id="colToggleScore" checked> Wynik / trend</label>
+          <label><input type="checkbox" id="colToggleChart" checked> Wykres</label>
+          <button type="button" class="col-settings__reset" id="columnSettingsReset">Przywróć domyślne</button>
+        </div>
+      </div>
     </div>
-    <div class="results-header" data-sort-group="main">
+    <div class="results-header results-header--customizable" data-sort-group="main">
       <span></span>
       <span data-sort-key="name">Spółka</span>
-      <span data-sort-key="target" title="Średnia cena docelowa analityków Wall Street i różnica względem obecnej ceny">Cena docelowa</span>
-      <span data-sort-key="signal" title="Sygnał z analizy technicznej: RSI, SMA, Bollinger, potwierdzenie z interwału tygodniowego">Sygnał tech.</span>
-      <span data-sort-key="score" title="Łączny wynik 0-1 (technika + sentyment + fundamenty) / kierunek trendu sentymentu z 12 mies.">Wynik / trend</span>
+      <span data-sort-key="target" data-col="target" title="Średnia cena docelowa analityków Wall Street i różnica względem obecnej ceny">Cena docelowa</span>
+      <span data-sort-key="signal" data-col="signal" title="Sygnał z analizy technicznej: RSI, SMA, Bollinger, potwierdzenie z interwału tygodniowego">Sygnał tech.</span>
+      <span data-sort-key="score" data-col="score" title="Łączny wynik 0-1 (technika + sentyment + fundamenty) / kierunek trendu sentymentu z 12 mies.">Wynik / trend</span>
       <span data-sort-key="category">Kategoria</span>
     </div>
     <div class="results-grid" id="resultsGrid">
@@ -128,12 +178,12 @@
     <div class="section-header section-header--discovery">
       <h2>Propozycje AI <span class="tag-warn">wymaga weryfikacji</span></h2>
     </div>
-    <div class="results-header" data-sort-group="discovered">
+    <div class="results-header results-header--customizable" data-sort-group="discovered">
       <span></span>
       <span data-sort-key="name">Spółka</span>
-      <span data-sort-key="target" title="Średnia cena docelowa analityków Wall Street i różnica względem obecnej ceny">Cena docelowa</span>
-      <span data-sort-key="signal" title="Sygnał z analizy technicznej: RSI, SMA, Bollinger, potwierdzenie z interwału tygodniowego">Sygnał tech.</span>
-      <span data-sort-key="score" title="Łączny wynik 0-1 (technika + sentyment + fundamenty) / kierunek trendu sentymentu z 12 mies.">Wynik / trend</span>
+      <span data-sort-key="target" data-col="target" title="Średnia cena docelowa analityków Wall Street i różnica względem obecnej ceny">Cena docelowa</span>
+      <span data-sort-key="signal" data-col="signal" title="Sygnał z analizy technicznej: RSI, SMA, Bollinger, potwierdzenie z interwału tygodniowego">Sygnał tech.</span>
+      <span data-sort-key="score" data-col="score" title="Łączny wynik 0-1 (technika + sentyment + fundamenty) / kierunek trendu sentymentu z 12 mies.">Wynik / trend</span>
       <span data-sort-key="category">Kategoria</span>
     </div>
     <div class="results-grid" id="discoveredGrid">

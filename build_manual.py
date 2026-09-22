@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.1"
+VERSION = "3.2"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -527,7 +527,10 @@ def part1(s: Story) -> None:
                                         "pogarszający się — kara."],
         ["Siła względna vs benchmark", "Niewielka korekta ±0,05, gdy spółka bije benchmark (lub przegrywa z "
                                        "nim) o co najmniej 10 pkt proc. w ostatnich 60 sesjach. Benchmark "
-                                       "zależy od waluty: USD — SPY, PLN — WIG20, EUR — STOXX 50."],
+                                       "zależy od waluty: USD — SPY, PLN — WIG20, EUR — STOXX 50. Gdy główny "
+                                       "benchmark jest chwilowo niedostępny w Yahoo Finance (typowe dla WIG20), "
+                                       "narzędzie automatycznie sięga po zastępcze źródło (np. Stooq) — patrz "
+                                       "rozdział 21."],
         ["Reżim makro (VIX)", "Nie zmienia wyniku, tylko PODNOSI PRÓG sugestii kupna (rozdział 4.1)."],
         ["Cena docelowa analityków", "Wyłącznie informacyjnie — celowo NIE wpływa na wynik, żeby nie "
                                      "liczyć dwa razy tego samego sentymentu rynkowego."],
@@ -1056,6 +1059,12 @@ def part3(s: Story) -> None:
         "<b>Yahoo Finance to nieoficjalne, publiczne API</b> — bywa niestabilne lub zwraca niepełne dane; "
         "narzędzie ponawia próby, ale chwilowe braki się zdarzają. Kontekst makro nie obejmuje inflacji "
         "(brak w pełni darmowego, aktualnego źródła).",
+        "<b>Indeks ^WIG20 regularnie bywa niedostępny w Yahoo Finance.</b> Narzędzie wykrywa to automatycznie "
+        "i sięga po zastępcze źródło (domyślnie darmowe notowania ze Stooq, a w razie potrzeby ETF "
+        "ETFBW20TR.WA) — siła względna spółek z GPW nadal się liczy, tylko z adnotacją, z jakiego źródła "
+        "pochodzi (widoczną w powodach analizy technicznej). Gdy WSZYSTKIE źródła danego benchmarku zawiodą, "
+        "informacja trafia do logu na żywo, a narzędzie nie ponawia prób co spółkę — czeka kilka minut, żeby "
+        "nie marnować czasu cyklu.",
     ])
     s.callout("important",
               "Żadna kategoria, wynik ani rekomendacja generowana przez to narzędzie nie stanowi porady "
@@ -1076,6 +1085,9 @@ def part3(s: Story) -> None:
         ["technical.atr_stop_multiplier", "2.0", "Mnożnik ATR w sugerowanym stop-lossie."],
         ["technical.benchmark_by_currency", "USD: SPY, PLN: ^WIG20, EUR: ^STOXX50E",
          "Benchmark do siły względnej, zależny od waluty spółki."],
+        ["technical.benchmark_fallbacks", "^WIG20: [stooq:wig20, ETFBW20TR.WA]",
+         "Zastępcze źródła danego benchmarku, próbowane po kolei, gdy główne źródło (Yahoo Finance) zawiedzie "
+         "(rozdział 21). Pusta lista wyłącza zastępniki dla danego wpisu."],
         ["technical.use_weekly_confirmation", "true", "Potwierdzanie sygnału dziennego trendem tygodniowym."],
         ["macro.vix_elevated_threshold / vix_high_threshold", "20 / 30", "Progi reżimów PODWYŻSZONY i WYSOKI."],
         ["fundamentals.earnings_warning_days", "7", "Ile dni przed wynikami kwartalnymi pokazywać "
@@ -1164,6 +1176,9 @@ def part3(s: Story) -> None:
                                  "obecnych wagach z benchmarkiem (zwrot, beta, alfa, korelacja, wychwyt wzrostów "
                                  "i spadków, wykres, wnioski) oraz parametr portfolio.benchmark. Krzywa kapitału "
                                  "przeniesiona do 14.4."],
+        ["3.2", "Wrzesień 2026", "Automatyczne zastępcze źródło benchmarku (np. Stooq dla ^WIG20), gdy główne "
+                                 "źródło jest niedostępne w Yahoo Finance — opisane w rozdziałach 6.3, 21 i 22 "
+                                 "(nowy parametr technical.benchmark_fallbacks)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

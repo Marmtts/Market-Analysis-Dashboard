@@ -78,6 +78,13 @@ technical:
     PLN: "^WIG20"
     EUR: "^STOXX50E"
   relative_strength_lookback_days: 60
+  # Zastępcze źródła, gdy benchmark nie jest dostępny w Yahoo Finance (typowe dla ^WIG20 -
+  # Yahoo regularnie nie ma dla niego historii). "stooq:<symbol>" pobiera darmowy CSV ze Stooq;
+  # inne wartości to tickery Yahoo. Wbudowany domyślny zestaw dla ^WIG20 (stooq:wig20, potem ETF
+  # ETFBW20TR.WA) wystarcza w większości przypadków - nadpisz go tylko, jeśli chcesz inną kolejność
+  # albo inny benchmark ma ten sam problem. Pusta lista [] wyłącza zastępniki dla danego wpisu.
+  # benchmark_fallbacks:
+  #   "^WIG20": ["stooq:wig20", "ETFBW20TR.WA"]
 
   # -----------------------------------------------------------
   # Potwierdzenie wielointerwałowe (sygnał dzienny + kontekst tygodniowy)

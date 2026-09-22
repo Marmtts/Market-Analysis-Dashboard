@@ -15,6 +15,11 @@ const state = {
   openTicker: null,
   categoryByTicker: new Map(),
   portfolioTickers: new Set(),
+  // Personalizacja kolumn watchlisty/propozycji AI (patrz loadColumnPreferences) -
+  // wartość domyślna tu tylko na wypadek, gdyby coś odczytało state.columnPrefs
+  // zanim init() zdąży wczytać localStorage; loadColumnPreferences() i tak
+  // nadpisuje ten obiekt zaraz na starcie.
+  columnPrefs: { target: true, signal: true, score: true, chart: true },
 };
 
 const el = (id) => document.getElementById(id);
@@ -132,7 +137,7 @@ function renderResultCard(r) {
   const sparkId = `analysis-spark-${r.ticker.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
   const card = document.createElement("div");
-  card.className = "result-card result-card--with-sparkline";
+  card.className = "result-card result-card--with-sparkline result-card--customizable";
 
   card.innerHTML = `
     <div class="stamp stamp--${stamp.cls}" title="${escapeHtml(r.combined.category)}">${stamp.label.replace("\n", "<br>")}</div>
@@ -147,22 +152,22 @@ function renderResultCard(r) {
       ${r.discovery_reason ? `<div class="result-card__reason">💡 ${escapeHtml(r.discovery_reason)}</div>` : ""}
     </div>
 
-    <div class="result-card__metric">
+    <div class="result-card__metric" data-col="target">
       <div class="result-card__metric-value">${targetLabel}</div>
       <div class="result-card__metric-label">Cena docelowa</div>
     </div>
 
-    <div class="result-card__metric">
+    <div class="result-card__metric" data-col="signal">
       <div class="result-card__metric-value">${r.technical.signal}</div>
       <div class="result-card__metric-label">Sygnał tech.</div>
     </div>
 
-    <div class="result-card__metric">
+    <div class="result-card__metric" data-col="score">
       <div class="result-card__metric-value">${r.combined.final_score}</div>
       <div class="result-card__metric-label">Wynik / ${trend}</div>
     </div>
 
-    <div class="result-card__sparkline sparkline-cell">
+    <div class="result-card__sparkline sparkline-cell" data-col="chart">
       <span class="sparkline" id="${sparkId}"></span>
     </div>
 
@@ -173,8 +178,12 @@ function renderResultCard(r) {
 
   card.addEventListener("click", () => openChart(r.ticker, r.name));
 
-  // Ten sam sparkline co w Portfelu.
-  loadSparklineInto(r.ticker, sparkId);
+  // Ten sam sparkline co w Portfelu. Pomijamy pobranie, jeśli kolumna jest
+  // schowana (personalizacja kolumn) - nie ma sensu ściągać danych do
+  // elementu, który i tak zaraz dostanie display:none.
+  if (state.columnPrefs.chart !== false) {
+    loadSparklineInto(r.ticker, sparkId);
+  }
 
   return card;
 }
@@ -204,11 +213,17 @@ function resultSortValue(r, key) {
 function renderResultsGrid(containerId, results, emptyMessage, sortState) {
   const container = el(containerId);
   container.innerHTML = "";
+  // Karty poniżej są tworzone od nowa przy każdym wywołaniu, więc widoczność
+  // kolumn (personalizacja) trzeba nałożyć ponownie za każdym razem - tylko
+  // dla watchlisty i propozycji AI, portfel ma własną, stałą siatkę.
+  const isCustomizable = containerId === "resultsGrid" || containerId === "discoveredGrid";
+
   if (!results || results.length === 0) {
     const p = document.createElement("p");
     p.className = "empty-state";
     p.textContent = emptyMessage;
     container.appendChild(p);
+    if (isCustomizable) applyColumnVisibility(state.columnPrefs);
     return;
   }
 
@@ -226,6 +241,7 @@ function renderResultsGrid(containerId, results, emptyMessage, sortState) {
     );
   }
   sorted.forEach((r) => container.appendChild(renderResultCard(r)));
+  if (isCustomizable) applyColumnVisibility(state.columnPrefs);
 }
 
 // ---------------- Sortowanie klikalnych nagłówków ----------------
@@ -253,6 +269,7 @@ function setupSparklineHeaders() {
       const chartHeader = document.createElement("span");
       chartHeader.className = "results-header__sparkline";
       chartHeader.textContent = "Wykres";
+      chartHeader.dataset.col = "chart";  // używane przez personalizację kolumn (tylko main/discovered)
 
       header.insertBefore(chartHeader, categoryHeader);
     });
@@ -2031,6 +2048,217 @@ el("backupImportBtn").addEventListener("click", async () => {
   }
 });
 
+// ---------------- Personalizacja kolumn (watchlista / propozycje AI) ----------------
+// Kolejność musi zgadzać się z kolejnością elementów w DOM (renderResultCard,
+// nagłówki main/discovered) - "chart" zawsze jest ostatnią opcjonalną kolumną
+// przed kategorią, bo tak dokłada ją setupSparklineHeaders().
+const COLUMN_PREFS_KEY = "columnPrefs";
+const COLUMN_DEFAULTS = { target: true, signal: true, score: true, chart: true };
+const COLUMN_SLOTS = [
+  { key: "target", cssVar: "--col-target" },
+  { key: "signal", cssVar: "--col-signal" },
+  { key: "score", cssVar: "--col-score" },
+  { key: "chart", cssVar: "--col-chart" },
+];
+
+function loadColumnPreferences() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(COLUMN_PREFS_KEY) || "{}");
+  } catch {
+    saved = {};
+  }
+  state.columnPrefs = { ...COLUMN_DEFAULTS, ...saved };
+}
+
+function saveColumnPreferences() {
+  try {
+    localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(state.columnPrefs));
+  } catch {
+    // localStorage niedostępny (np. tryb prywatny) - personalizacja po prostu
+    // nie przetrwa do następnej wizyty, reszta dashboardu działa bez zmian.
+  }
+}
+
+// Składa listę torów siatki (--grid-cols-user) z atomowych zmiennych CSS,
+// pomijając te odznaczone przez użytkownika - stamp/nazwa/kategoria są
+// zawsze pierwsze/ostatnie i nigdy nie znikają.
+function computeGridTemplate(prefs) {
+  const visible = COLUMN_SLOTS.filter((s) => prefs[s.key] !== false).map((s) => `var(${s.cssVar})`);
+  return ["var(--col-stamp)", "var(--col-name)", ...visible, "var(--col-category)"].join(" ");
+}
+
+function applyColumnVisibility(prefs) {
+  document.documentElement.style.setProperty("--grid-cols-user", computeGridTemplate(prefs));
+  // Chowamy TYLKO w obrębie watchlisty/propozycji AI (nagłówek ma klasę
+  // results-header--customizable; portfel jej celowo nie ma) - inne miejsca
+  // używające tego samego atrybutu (gdyby kiedyś powstały) zostają nietknięte.
+  document
+    .querySelectorAll('.results-header--customizable [data-col], #resultsGrid [data-col], #discoveredGrid [data-col]')
+    .forEach((elx) => {
+      elx.style.display = prefs[elx.dataset.col] === false ? "none" : "";
+    });
+}
+
+function setupColumnSettings() {
+  const btn = el("columnSettingsBtn");
+  const popover = el("columnSettingsPopover");
+  if (!btn || !popover) return;
+
+  const checkboxes = {
+    target: el("colToggleTarget"),
+    signal: el("colToggleSignal"),
+    score: el("colToggleScore"),
+    chart: el("colToggleChart"),
+  };
+
+  function syncCheckboxes() {
+    Object.entries(checkboxes).forEach(([key, input]) => { if (input) input.checked = state.columnPrefs[key] !== false; });
+  }
+
+  function closePopover() {
+    popover.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+  }
+  function openPopover() {
+    syncCheckboxes();
+    popover.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+  }
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    popover.hidden ? openPopover() : closePopover();
+  });
+  popover.addEventListener("click", (e) => e.stopPropagation());
+  document.addEventListener("click", closePopover);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopover(); });
+
+  Object.entries(checkboxes).forEach(([key, input]) => {
+    if (!input) return;
+    input.addEventListener("change", () => {
+      // Zabezpieczenie: nie pozwalamy schować WSZYSTKICH opcjonalnych kolumn
+      // naraz - karta bez żadnej z nich (tylko nazwa i kategoria) traci sens,
+      // a użytkownik mógłby się pogubić, skąd nagle "zniknęły dane".
+      const nextPrefs = { ...state.columnPrefs, [key]: input.checked };
+      if (Object.values(nextPrefs).every((v) => v === false)) {
+        input.checked = true;
+        return;
+      }
+      state.columnPrefs = nextPrefs;
+      saveColumnPreferences();
+      applyColumnVisibility(state.columnPrefs);
+    });
+  });
+
+  const resetBtn = el("columnSettingsReset");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      state.columnPrefs = { ...COLUMN_DEFAULTS };
+      saveColumnPreferences();
+      applyColumnVisibility(state.columnPrefs);
+      syncCheckboxes();
+    });
+  }
+}
+
+// ---------------- Personalizacja panelu bocznego (zwijanie, kolejność) ----------------
+const SIDEBAR_ORDER_KEY = "sidebarPanelOrder";
+const PANEL_COLLAPSE_PREFIX = "panelCollapsed:";
+
+function updatePanelMoveButtons(sidebar) {
+  const panels = Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]"));
+  panels.forEach((panel, i) => {
+    const up = panel.querySelector(".panel__move-up");
+    const down = panel.querySelector(".panel__move-down");
+    if (up) up.classList.toggle("is-disabled", i === 0);
+    if (down) down.classList.toggle("is-disabled", i === panels.length - 1);
+  });
+}
+
+function saveSidebarOrder(sidebar) {
+  const order = Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]"))
+    .map((p) => p.dataset.panelId);
+  try {
+    localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(order));
+  } catch {
+    // jw. - brak trwałości nie jest błędem krytycznym
+  }
+}
+
+function initPanelCustomization() {
+  const sidebar = document.querySelector("#tab-analysis .sidebar");
+  if (!sidebar) return;
+
+  // 1) Kolejność - zapisana lista ID paneli, z zabezpieczeniem na wypadek
+  // przyszłych zmian w zestawie paneli (nieznane ID pomijamy, nowe panele,
+  // których nie było w zapisanej kolejności, lądują na końcu w kolejności z HTML).
+  let savedOrder = [];
+  try {
+    savedOrder = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_KEY) || "[]");
+  } catch {
+    savedOrder = [];
+  }
+  const panelsById = new Map(
+    Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]")).map((p) => [p.dataset.panelId, p])
+  );
+  if (savedOrder.length) {
+    savedOrder.forEach((id) => {
+      const panel = panelsById.get(id);
+      if (panel) sidebar.appendChild(panel);
+    });
+    // Panele nieobecne w zapisanej kolejności (np. dodane w nowszej wersji) -
+    // dopisz na końcu, żeby nigdy nie zniknęły z widoku.
+    panelsById.forEach((panel, id) => { if (!savedOrder.includes(id)) sidebar.appendChild(panel); });
+  }
+
+  // 2) Zwinięcie - niezależne od kolejności, jeden klucz per panel.
+  panelsById.forEach((panel, id) => {
+    if (localStorage.getItem(PANEL_COLLAPSE_PREFIX + id) === "1") {
+      panel.classList.add("is-collapsed");
+    }
+  });
+
+  // 3) Obsługa przycisków.
+  panelsById.forEach((panel, id) => {
+    const collapseBtn = panel.querySelector(".panel__collapse-toggle");
+    if (collapseBtn) {
+      collapseBtn.addEventListener("click", () => {
+        const collapsed = panel.classList.toggle("is-collapsed");
+        try {
+          localStorage.setItem(PANEL_COLLAPSE_PREFIX + id, collapsed ? "1" : "0");
+        } catch {
+          // brak trwałości - dashboard nadal działa, tylko nie zapamięta stanu
+        }
+      });
+    }
+    const upBtn = panel.querySelector(".panel__move-up");
+    if (upBtn) {
+      upBtn.addEventListener("click", () => {
+        const prev = panel.previousElementSibling;
+        if (prev) {
+          sidebar.insertBefore(panel, prev);
+          saveSidebarOrder(sidebar);
+          updatePanelMoveButtons(sidebar);
+        }
+      });
+    }
+    const downBtn = panel.querySelector(".panel__move-down");
+    if (downBtn) {
+      downBtn.addEventListener("click", () => {
+        const next = panel.nextElementSibling;
+        if (next) {
+          sidebar.insertBefore(next, panel);
+          saveSidebarOrder(sidebar);
+          updatePanelMoveButtons(sidebar);
+        }
+      });
+    }
+  });
+
+  updatePanelMoveButtons(sidebar);
+}
+
 // ---------------- Start ----------------
 (async function init() {
   // Zabezpieczenie: modal, szufladka logu i widget czatu MUSZĄ być
@@ -2039,6 +2267,11 @@ el("backupImportBtn").addEventListener("click", async () => {
   document.body.appendChild(el("chartModal"));
   document.body.appendChild(el("logDrawer"));
   document.body.appendChild(el("chatWidget"));
+
+  loadColumnPreferences();
+  applyColumnVisibility(state.columnPrefs);
+  setupColumnSettings();
+  initPanelCustomization();
 
   setupSparklineHeaders();
   setupSortableHeaders();

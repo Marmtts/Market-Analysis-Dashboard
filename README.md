@@ -30,6 +30,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   nie zmieniają wyniku ani kategorii.
 - Automatyczna blokada sugestii kupna blisko szczytu trendu lub tuż po
   gwałtownym spadku ceny — z osobną, łagodniejszą logiką dla ETF-ów.
+- Siła względna wobec benchmarku z automatycznym zastępczym źródłem danych
+  (np. Stooq dla ^WIG20), gdy główny benchmark jest niedostępny w Yahoo
+  Finance — bez tego cała watchlista GPW traciłaby ten sygnał, a każda
+  spółka marnowałaby czas na powtarzane, nieudane zapytania.
 - LLM może samodzielnie proponować nowe spółki do obserwacji na bazie
   newsów makro (moduł "discovery"), z cooldownem przeciw powtarzaniu
   tych samych propozycji.
@@ -68,6 +72,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Pełny dashboard webowy (FastAPI + WebSocket) z trzema zakładkami
   (Analiza, Portfel, Zamknięte transakcje), watchlistą, miniwykresami,
   panelem skuteczności narzędzia i zwijanym logiem na żywo.
+- Personalizacja interfejsu (zapamiętywana lokalnie w przeglądarce): panele
+  boczne zakładki Analiza można zwijać i dowolnie przestawiać (▲/▼), a
+  widoczne kolumny watchlisty/propozycji AI (cena docelowa, sygnał, wynik,
+  wykres) włącza się i wyłącza przyciskiem „⚙ Kolumny”.
 - Codzienny brief AI — krótkie podsumowanie sytuacji generowane przez
   lokalny LLM na koniec każdego cyklu.
 - Interaktywny czat z lokalnym LLM, który odpowiada na pytania na

@@ -51,7 +51,7 @@ import yfinance as yf
 
 from src import db
 from src.analysis_engine import run_full_analysis, analyze_company
-from src.market_data import fetch_history
+from src.market_data import fetch_history, fetch_benchmark_history, get_benchmark_fallbacks, BenchmarkUnavailable
 from src.json_utils import sanitize_for_json
 from src.report import (
     evaluate_portfolio_position, compute_max_drawdown,
@@ -685,13 +685,22 @@ def _compute_portfolio_statistics_blocking(weights: dict[str, float], risk_free_
     stats["tickers_without_data"] = without_data
 
     # Porównanie z benchmarkiem - osobny blok; jego błąd nie może zepsuć reszty statystyk.
+    # Ten sam łańcuch źródeł (główny ticker + zastępniki, np. Stooq dla ^WIG20) co przy
+    # sile względnej w analysis_engine.py - jedna, spójna logika awaryjna w market_data.py.
     if benchmark_ticker:
         try:
-            bench_hist = fetch_history(benchmark_ticker, period="1y", interval="1d")
+            fallbacks = get_benchmark_fallbacks(benchmark_ticker, _cfg.get("technical", {}))
+            bench_hist = fetch_benchmark_history(benchmark_ticker, period="1y", fallbacks=fallbacks)
             stats["benchmark_comparison"] = compute_benchmark_comparison(
-                closes, {t: weights[t] for t in closes}, benchmark_ticker,
+                closes, {t: weights[t] for t in closes}, bench_hist.attrs.get("label", benchmark_ticker),
                 bench_hist["Close"], risk_free_rate_pct,
             )
+        except BenchmarkUnavailable as exc:
+            logger.warning("Benchmark %s niedostępny (żadne źródło): %s", benchmark_ticker, exc)
+            stats["benchmark_comparison"] = {
+                "available": False,
+                "reason": f"Benchmark {benchmark_ticker} chwilowo niedostępny (spróbuj ponownie za kilka minut).",
+            }
         except Exception as exc:  # noqa: BLE001
             logger.warning("Porównanie z benchmarkiem %s nie powiodło się: %s", benchmark_ticker, exc)
             stats["benchmark_comparison"] = {

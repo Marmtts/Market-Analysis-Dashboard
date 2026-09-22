@@ -18,7 +18,9 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Callable
 
-from src.market_data import get_ticker_data, fetch_benchmark_history
+from src.market_data import (
+    get_ticker_data, fetch_benchmark_history, get_benchmark_fallbacks, BenchmarkUnavailable,
+)
 from src.technical_analysis import analyze_multi_timeframe, AT_TOP_DISTANCE_PENALTY, compute_relative_strength
 from src.news_sources import get_ticker_news, get_macro_headlines
 from src.news_history import fetch_historical_news_by_month
@@ -41,6 +43,11 @@ def summarize_macro(headlines) -> str:
         return "Brak nagłówków makro do wyświetlenia."
     lines = [f"- [{h.source}] {h.title}" for h in headlines[:10]]
     return "\n".join(lines)
+
+
+# Które zastępcze źródła benchmarku już zgłosiliśmy w tym uruchomieniu procesu -
+# unika powtarzania tej samej informacji w logu na żywo dla każdej spółki.
+_reported_benchmark_fallbacks: set[str] = set()
 
 
 def analyze_company(company: dict, cfg: dict, threshold_adjustment: float = 0.0,
@@ -104,29 +111,47 @@ def analyze_company(company: dict, cfg: dict, threshold_adjustment: float = 0.0,
     # Niewielki, celowo ograniczony wpływ na wynik (+/-0.05, analogicznie do
     # trend_adjustment w report.py) - to dodatkowy kontekst, nie dominujący
     # czynnik, bo już mamy wagę techniczną 0.55 opartą o absolutną cenę.
+    benchmark_ticker = cfg["technical"].get("benchmark_by_currency", {}).get(data.currency, "SPY")
+    rel_strength = None
     try:
-        benchmark_ticker = cfg["technical"].get("benchmark_by_currency", {}).get(data.currency, "SPY")
-        benchmark_hist = fetch_benchmark_history(benchmark_ticker, period=cfg["technical"]["history_period"])
+        fallbacks = get_benchmark_fallbacks(benchmark_ticker, cfg["technical"])
+        benchmark_hist = fetch_benchmark_history(
+            benchmark_ticker, period=cfg["technical"]["history_period"], fallbacks=fallbacks,
+        )
         lookback = cfg["technical"].get("relative_strength_lookback_days", 60)
         rel_strength = compute_relative_strength(data.history, benchmark_hist, lookback)
+        benchmark_label = benchmark_hist.attrs.get("label", benchmark_ticker)
+        used_source = benchmark_hist.attrs.get("source", benchmark_ticker)
+        if used_source != benchmark_ticker and used_source not in _reported_benchmark_fallbacks:
+            # Widoczne w logu na żywo (nie tylko w logu serwera) - ale tylko RAZ na benchmark
+            # dzięki pamięci fetch_benchmark_history, żeby nie zalewać loga tą samą informacją
+            # dla każdej kolejnej spółki tej samej waluty w tym cyklu.
+            progress(f"  Benchmark {benchmark_ticker} niedostępny w Yahoo Finance - używam zastępczego "
+                     f"źródła: {used_source}.", "warning")
+            _reported_benchmark_fallbacks.add(used_source)
+    except BenchmarkUnavailable as exc:
+        # Zapamiętane na kilka minut w market_data.py - nie zalewamy logu tym samym
+        # ostrzeżeniem dla każdej kolejnej spółki tej samej waluty w tym cyklu.
+        progress(f"  Benchmark {benchmark_ticker} niedostępny - pomijam siłę względną dla {ticker} "
+                 f"(kolejna próba za kilka minut). Szczegóły: {exc}", "warning")
     except Exception as exc:  # noqa: BLE001
         progress(f"  Nie udało się policzyć siły względnej dla {ticker}: {exc}", "warning")
-        rel_strength = None
 
     if rel_strength:
         rel_strength["benchmark"] = benchmark_ticker
+        rel_strength["benchmark_label"] = benchmark_label
         technical.metrics["relative_strength"] = rel_strength
         rs = rel_strength["relative_strength_pct"]
         if rs >= 10:
             technical.score = float(min(1.0, technical.score + 0.05))
             technical.reasons.append(
-                f"Spółka bije benchmark ({benchmark_ticker}) o {rs:+.1f} pkt proc. w ostatnich "
+                f"Spółka bije benchmark ({benchmark_label}) o {rs:+.1f} pkt proc. w ostatnich "
                 f"{lookback} sesjach - silna siła względna, nie tylko 'płynie z rynkiem'."
             )
         elif rs <= -10:
             technical.score = float(max(0.0, technical.score - 0.05))
             technical.reasons.append(
-                f"Spółka wyraźnie przegrywa z benchmarkiem ({benchmark_ticker}): {rs:+.1f} pkt proc. "
+                f"Spółka wyraźnie przegrywa z benchmarkiem ({benchmark_label}): {rs:+.1f} pkt proc. "
                 f"w ostatnich {lookback} sesjach - wzrost ceny może być głównie efektem rynku, nie siły spółki."
             )
 
