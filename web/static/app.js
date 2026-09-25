@@ -259,19 +259,33 @@ function setupSparklineHeaders() {
       // 7-kolumnową siatkę co karty ze sparkline'em, inaczej dołożona niżej
       // 7. komórka tekstowa i tak wyląduje w siatce 6-kolumnowej.
       header.classList.add("results-header--with-sparkline");
+      const isPortfolio = header.dataset.sortGroup === "portfolio";
+      if (isPortfolio) header.classList.add("results-header--portfolio");
 
-      if (header.querySelector(".results-header__sparkline")) return;
+      if (!header.querySelector(".results-header__sparkline")) {
+        const children = Array.from(header.children);
+        if (!children.length) return;
 
-      const children = Array.from(header.children);
-      if (!children.length) return;
+        const categoryHeader = children[children.length - 1];
+        const chartHeader = document.createElement("span");
+        chartHeader.className = "results-header__sparkline";
+        chartHeader.textContent = "Wykres";
+        chartHeader.dataset.col = "chart";  // używane przez personalizację kolumn (tylko main/discovered)
 
-      const categoryHeader = children[children.length - 1];
-      const chartHeader = document.createElement("span");
-      chartHeader.className = "results-header__sparkline";
-      chartHeader.textContent = "Wykres";
-      chartHeader.dataset.col = "chart";  // używane przez personalizację kolumn (tylko main/discovered)
+        header.insertBefore(chartHeader, categoryHeader);
+      }
 
-      header.insertBefore(chartHeader, categoryHeader);
+      // Portfel ma dodatkową (8.) kolumnę na przycisk "Analiza AI" - patrz
+      // --grid-cols-portfolio w style.css - żeby tekst rekomendacji nie
+      // siedział w tej samej komórce co przycisk, tylko czysto pod
+      // nagłówkiem "Rekomendacja", tak jak "Kategoria" w watchliście.
+      if (isPortfolio && !header.querySelector(".results-header__ai-btn")) {
+        const children = Array.from(header.children);
+        const categoryHeader = children[children.length - 1];
+        const btnHeader = document.createElement("span");
+        btnHeader.className = "results-header__ai-btn";
+        header.insertBefore(btnHeader, categoryHeader);
+      }
     });
 }
 
@@ -892,7 +906,7 @@ function renderPortfolioGroupCard(g) {
   groupWrap.className = "portfolio-group";
 
   const header = document.createElement("div");
-  header.className = "result-card portfolio-card portfolio-group__header result-card--with-sparkline";
+  header.className = "result-card portfolio-card portfolio-group__header result-card--with-sparkline result-card--portfolio-group";
   header.innerHTML = `
     <div class="stamp stamp--${cls}" title="${escapeHtml(g.action)}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
     <div class="result-card__info">
@@ -919,10 +933,11 @@ function renderPortfolioGroupCard(g) {
       <span class="sparkline" id="spark-${g.ticker.replace(/[^a-zA-Z0-9_-]/g, "_")}"></span>
     </div>
 
-    <div class="result-card__category category--${cls}">
+    <div class="result-card__ai-btn-cell">
       <button class="portfolio-group__ai-btn" title="Zobacz pełną analizę techniczną, sentyment i fundamenty">🔍 Analiza AI</button>
-      ${escapeHtml(g.action)}
     </div>
+
+    <div class="result-card__category category--${cls}">${escapeHtml(g.action)}</div>
   `;
   header.querySelector(".portfolio-group__toggle").addEventListener("click", (e) => {
     e.stopPropagation();

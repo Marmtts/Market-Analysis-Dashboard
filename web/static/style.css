@@ -361,6 +361,15 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
      stałym paskiem. */
   --grid-cols-7: var(--col-stamp) var(--col-name) var(--col-target) var(--col-signal) var(--col-score) var(--col-chart) var(--col-category);
 
+  /* Portfel: przycisk "Analiza AI" ma WŁASNĄ kolumnę, oddzieloną od tekstu
+     rekomendacji - wcześniej oba były upchnięte w jednej komórce razem z
+     kolumną "Kategoria" z 7-kolumnowego szablonu, więc słowo rekomendacji
+     (TRZYMAJ/ROZWAŻ SPRZEDAŻ itd.) nie siedziało czysto pod nagłówkiem
+     "Rekomendacja", tylko obok przycisku. Szerokość stała (nie fr) - treść
+     przycisku się nie zmienia, więc nie musi rosnąć z resztą siatki. */
+  --col-ai-btn: 96px;
+  --grid-cols-portfolio: var(--col-stamp) var(--col-name) var(--col-target) var(--col-signal) var(--col-score) var(--col-chart) var(--col-ai-btn) var(--col-category);
+
   /* Personalizacja kolumn (watchlista + propozycje AI, patrz app.js
      applyColumnVisibility) - domyślnie wszystkie kolumny, JS podmienia tę
      wartość na podstawie zapisanych preferencji użytkownika. Zdefiniowane
@@ -375,6 +384,15 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
    źródłowa, co wcześniej powodowało rozjazd kolumn dla kart ze sparkline'em). */
 .result-card.result-card--with-sparkline {
   grid-template-columns: var(--grid-cols-7);
+}
+
+/* Karty grup pozycji portfela (i ich nagłówek) - osiem kolumn, z osobną
+   kolumną na przycisk "Analiza AI" (patrz --grid-cols-portfolio wyżej).
+   Trzy klasy w selektorze > dwie klasy w regule wyżej, więc wygrywa
+   niezależnie od kolejności w pliku. */
+.result-card.result-card--with-sparkline.result-card--portfolio-group,
+.results-header.results-header--with-sparkline.results-header--portfolio {
+  grid-template-columns: var(--grid-cols-portfolio);
 }
 
 /* Karty i nagłówki watchlisty/propozycji AI (NIE portfela - ten ma osobną,
@@ -419,6 +437,7 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
     --col-score: minmax(70px, 1fr);
     --col-chart: minmax(85px, 1fr);
     --col-category: minmax(110px, 1.3fr);
+    --col-ai-btn: 82px;
   }
 
   .result-card,
@@ -811,6 +830,7 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   cursor: pointer; white-space: nowrap;
 }
 .portfolio-group__ai-btn:hover { border-color: var(--accent-gold); }
+.result-card__ai-btn-cell { display: flex; align-items: center; justify-content: center; }
 .lot-card { padding: 0.65rem 0.9rem; }
 .lot-card .stamp { width: 40px; height: 40px; font-size: 0.6rem; }
 .lot-actions { display: flex; gap: 0.4rem; align-items: center; }
