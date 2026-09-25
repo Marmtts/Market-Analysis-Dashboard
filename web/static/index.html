@@ -38,9 +38,9 @@
 </header>
 
 <nav class="tabs">
-  <button class="tab-btn is-active" data-tab="analysis">Analiza</button>
-  <button class="tab-btn" data-tab="portfolio">Portfel</button>
-  <button class="tab-btn" data-tab="closed">Zamknięte transakcje</button>
+  <button class="tab-btn is-active" data-tab="analysis"><span class="tab-btn__icon">◆</span>Analiza</button>
+  <button class="tab-btn" data-tab="portfolio"><span class="tab-btn__icon">◈</span>Portfel</button>
+  <button class="tab-btn" data-tab="closed"><span class="tab-btn__icon">◇</span>Zamknięte transakcje</button>
 </nav>
 
 <main class="layout" id="tab-analysis">
@@ -200,30 +200,36 @@
       <form class="add-form" id="portfolioForm">
         <input type="hidden" id="posEditId" value="">
         <input type="text" id="posTicker" placeholder="Ticker (np. MSFT)" required autocomplete="off">
-        <input type="number" id="posShares" placeholder="Liczba akcji" step="0.0001" min="0" required>
-        <input type="number" id="posBuyPrice" placeholder="Cena zakupu" step="0.01" min="0" required>
+        <div class="add-form__row">
+          <input type="number" id="posShares" placeholder="Liczba akcji" step="0.0001" min="0" required>
+          <input type="number" id="posBuyPrice" placeholder="Cena zakupu" step="0.01" min="0" required>
+        </div>
         <input type="date" id="posBuyDate" required>
-        <input type="number" id="posCustomStop" placeholder="Własny stop-loss (opcjonalnie)" step="0.01" min="0">
-        <input type="number" id="posCustomTarget" placeholder="Własny cel cenowy (opcjonalnie)" step="0.01" min="0">
+        <div class="add-form__row">
+          <input type="number" id="posCustomStop" placeholder="Stop-loss (opcj.)" step="0.01" min="0">
+          <input type="number" id="posCustomTarget" placeholder="Cel cenowy (opcj.)" step="0.01" min="0">
+        </div>
         <input type="text" id="posNotes" placeholder="Notatka (opcjonalnie)" autocomplete="off">
         <div class="form-btn-row">
-          <button type="submit" class="btn btn--secondary" id="posSubmitBtn">+ Dodaj pozycję</button>
+          <button type="submit" class="btn btn--primary" id="posSubmitBtn">+ Dodaj pozycję</button>
           <button type="button" class="btn" id="posCancelEditBtn" style="display:none">Anuluj edycję</button>
         </div>
         <p class="detail-disclaimer">Wpisz cenę zakupu w walucie notowania spółki (np. USD dla spółek amerykańskich, PLN dla polskich jak XTB.WA). To nie jest porada inwestycyjna ani podatkowa. Dane portfela są przechowywane lokalnie w bazie tego dashboardu.</p>
       </form>
+    </section>
 
-      <hr style="border-color: var(--border); margin: 1rem 0;">
-      <h3 class="panel__title" style="margin-bottom:0.5rem;">Import z raportu XTB</h3>
+    <section class="panel sidebar-subpanel">
+      <h3 class="panel__subtitle"><span class="panel__subtitle-icon">⇩</span>Import z raportu XTB</h3>
       <label class="file-input-label" for="xtbImportFile">
         <span id="xtbFileNameLabel">📂 Wybierz plik .xlsx z eksportu XTB</span>
       </label>
       <input type="file" id="xtbImportFile" accept=".xlsx,.xls" class="file-input-hidden">
       <button class="btn btn--secondary" id="xtbImportBtn">📥 Importuj pozycje</button>
       <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte.</p>
+    </section>
 
-      <hr style="border-color: var(--border); margin: 1rem 0;">
-      <h3 class="panel__title" style="margin-bottom:0.5rem;">Kopia zapasowa</h3>
+    <section class="panel sidebar-subpanel">
+      <h3 class="panel__subtitle"><span class="panel__subtitle-icon">⇅</span>Kopia zapasowa</h3>
       <a class="btn btn--secondary backup-download-link" href="/api/backup/export" download>⬇ Pobierz kopię (JSON)</a>
       <label class="file-input-label" for="backupImportFile">
         <span id="backupFileNameLabel">📂 Wybierz plik kopii (.json)</span>
@@ -235,32 +241,37 @@
   </aside>
   <section class="main">
     <div class="section-header">
-      <h2>Twój portfel</h2>
+      <h2><span class="section-header__icon">◈</span>Twój portfel</h2>
     </div>
     <div id="combinedSummaryBar"></div>
     <div id="portfolioSummaryBar"></div>
 
     <div class="section-header">
-      <h2>Ryzyko i ekspozycja</h2>
+      <h2><span class="section-header__icon">⚠</span>Ryzyko i ekspozycja</h2>
     </div>
-    <div id="portfolioRiskPanel"></div>
+    <div class="section-card" id="portfolioRiskPanel"></div>
 
     <div class="section-header">
-      <h2>Korelacja i zmienność</h2>
+      <h2><span class="section-header__icon">∿</span>Korelacja i zmienność</h2>
       <span class="section-header__meta" id="portfolioStatsMeta"></span>
     </div>
-    <div id="portfolioStatsPanel"></div>
+    <div class="section-card" id="portfolioStatsPanel"></div>
 
     <div class="section-header">
-      <h2>Krzywa kapitału</h2>
+      <h2><span class="section-header__icon">⟶</span>Krzywa kapitału</h2>
       <span class="section-header__meta" id="equityDrawdownLabel"></span>
     </div>
-    <div id="equityCurrencySwitcher"></div>
-    <div class="equity-chart-wrap">
-      <div id="equityChartContainer" class="equity-chart-container"></div>
-      <p class="empty-state" id="equityEmptyState" style="display:none">Za mało danych historycznych — krzywa pojawi się po kilku cyklach analizy.</p>
+    <div class="section-card section-card--equity">
+      <div id="equityCurrencySwitcher"></div>
+      <div class="equity-chart-wrap">
+        <div id="equityChartContainer" class="equity-chart-container"></div>
+        <p class="empty-state" id="equityEmptyState" style="display:none">📉 Za mało danych historycznych — krzywa pojawi się po kilku cyklach analizy.</p>
+      </div>
     </div>
 
+    <div class="section-header">
+      <h2><span class="section-header__icon">☰</span>Pozycje</h2>
+    </div>
     <div class="results-header" data-sort-group="portfolio">
       <span></span>
       <span data-sort-key="name">Spółka</span>
@@ -270,18 +281,23 @@
       <span data-sort-key="action">Rekomendacja</span>
     </div>
     <div class="results-grid" id="portfolioGrid">
-      <p class="empty-state">Brak pozycji — dodaj pierwszą po lewej stronie.</p>
+      <p class="empty-state">📭 Brak pozycji — dodaj pierwszą po lewej stronie.</p>
     </div>
   </section>
 </main>
 
-<main class="layout" id="tab-closed" style="display:none">
-  <section class="main" style="grid-column: 1 / -1;">
+<main class="layout layout--single" id="tab-closed" style="display:none">
+  <section class="main">
     <div class="section-header">
-      <h2>Zamknięte transakcje</h2>
+      <h2><span class="section-header__icon">◇</span>Zamknięte transakcje</h2>
     </div>
-    <div id="taxSummaryPanel"></div>
     <div id="closedSummaryBar"></div>
+
+    <div class="section-card" id="taxSummaryPanel"></div>
+
+    <div class="section-header">
+      <h2><span class="section-header__icon">☰</span>Historia transakcji</h2>
+    </div>
     <div class="results-header" data-sort-group="closed">
       <span></span>
       <span data-sort-key="name">Spółka</span>
@@ -291,7 +307,7 @@
       <span></span>
     </div>
     <div class="results-grid" id="closedGrid">
-      <p class="empty-state">Brak zamkniętych transakcji.</p>
+      <p class="empty-state">🗂 Brak zamkniętych transakcji.</p>
     </div>
   </section>
 </main>

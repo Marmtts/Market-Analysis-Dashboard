@@ -933,6 +933,80 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 /* ---------------- Drobne dopracowanie ogólne UI ---------------- */
 .panel { transition: border-color 0.15s ease; }
 .panel:hover { border-color: var(--border-bright); }
+
+/* ---------------- Karty grupujące treść w kolumnie głównej ---------------- */
+/* Lżejsza od .panel "wnęka" - grupuje powiązaną treść (np. panel ryzyka,
+   statystyki korelacji, podsumowanie podatkowe) bez powielania cienia i tła
+   elementów znajdujących się już w środku (.risk-card, .tax-year-card itd). */
+.section-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  margin-bottom: 2rem;
+}
+.section-card:empty { display: none; }
+.section-card > .empty-state:only-child { border: none; padding: 1.5rem; margin: 0; }
+.section-card > .metric-grid:last-child,
+.section-card > .risk-cards:last-child { margin-bottom: 0; }
+.section-card--equity { padding-bottom: 0.6rem; }
+
+.section-header__icon {
+  display: inline-block;
+  color: var(--accent-gold);
+  margin-right: 0.55rem;
+  font-size: 0.95em;
+}
+
+/* ---------------- Zakładki: ikona przed etykietą ---------------- */
+.tab-btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+.tab-btn__icon { color: var(--text-faint); font-size: 0.85em; transition: color 0.15s; }
+.tab-btn.is-active .tab-btn__icon, .tab-btn:hover .tab-btn__icon { color: var(--accent-gold); }
+
+/* ---------------- Panel boczny: podsekcje (import / kopia zapasowa) ---------------- */
+.sidebar-subpanel { padding-top: 0.95rem; padding-bottom: 1rem; }
+.panel__subtitle {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin: 0 0 0.7rem;
+  color: var(--text);
+}
+.panel__subtitle-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 4px;
+  background: var(--bg-elevated-2); border: 1px solid var(--border-bright);
+  color: var(--accent-gold-bright); font-size: 0.75rem; flex-shrink: 0;
+}
+
+/* ---------------- Formularz: pola powiązane obok siebie ---------------- */
+.add-form__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem; }
+.add-form__row input { width: 100%; min-width: 0; }
+
+/* ---------------- Układ jednokolumnowy (np. zamknięte transakcje) ---------------- */
+.layout--single { grid-template-columns: 1fr; max-width: 1200px; }
+
+/* ---------------- Drobna polerka istniejących komponentów ---------------- */
+.risk-card, .tax-year-card, .currency-switch-btn {
+  transition: border-color 0.15s ease;
+}
+.risk-card:hover, .tax-year-card:hover { border-color: var(--border-bright); }
+.currency-switch-btn:hover { border-color: var(--accent-gold); color: var(--text); }
+
+/* Pasek udziału sektora w portfelu, pod istniejącym wierszem eff-row */
+.sector-bar-track {
+  height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden;
+  margin-top: 0.3rem; width: 100%;
+}
+.sector-bar-fill { height: 100%; background: var(--accent-gold); border-radius: 2px; }
+.eff-row--sector { flex-direction: column; align-items: stretch; }
+.eff-row--sector .eff-row__top { display: flex; justify-content: space-between; gap: 0.5rem; }
+
+.closed-card .stamp { font-size: 0.62rem; }
+
+@media (max-width: 560px) {
+  .add-form__row { grid-template-columns: 1fr; }
+}
 .btn--primary:not(:disabled):hover { box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.15); }
 .modal__panel { max-height: 90vh; }
 ::selection { background: rgba(201, 162, 39, 0.35); color: var(--text); }

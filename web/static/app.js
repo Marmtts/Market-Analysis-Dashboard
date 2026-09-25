@@ -791,7 +791,7 @@ function renderPortfolio(positions, sortState) {
   grid.innerHTML = "";
 
   if (!positions || positions.length === 0) {
-    grid.innerHTML = `<p class="empty-state">Brak pozycji — dodaj pierwszą po lewej stronie.</p>`;
+    grid.innerHTML = `<p class="empty-state">📭 Brak pozycji — dodaj pierwszą po lewej stronie.</p>`;
     el("sumInvested").textContent = "—";
     el("sumValue").textContent = "—";
     el("sumPl").textContent = "—";
@@ -1482,7 +1482,7 @@ function renderClosedPortfolio(positions, summary) {
   grid.innerHTML = "";
 
   if (!positions || positions.length === 0) {
-    grid.innerHTML = `<p class="empty-state">Brak zamkniętych transakcji.</p>`;
+    grid.innerHTML = `<p class="empty-state">🗂 Brak zamkniętych transakcji.</p>`;
     return;
   }
 
@@ -1507,7 +1507,7 @@ function renderClosedPortfolio(positions, summary) {
     const card = document.createElement("div");
     card.className = "result-card portfolio-card closed-card";
     card.innerHTML = `
-      <div class="stamp stamp--${cls}">${p.realized_pl >= 0 ? "ZYSK" : "STRATA"}</div>
+      <div class="stamp stamp--${cls}">${p.realized_pl >= 0 ? "▲<br>ZYSK" : "▼<br>STRATA"}</div>
       <div class="result-card__info">
         <div>
           <span class="result-card__ticker">${p.ticker}</span>
@@ -1590,7 +1590,7 @@ function renderPortfolioRisk(data) {
 
   let html = "";
   if (currencies.length === 0) {
-    html += `<p class="empty-state">Brak otwartych pozycji do oceny ryzyka.</p>`;
+    html += `<p class="empty-state">⚠ Brak otwartych pozycji do oceny ryzyka.</p>`;
   } else {
     html += `<div class="risk-cards">`;
     currencies.forEach((currency) => {
@@ -1612,9 +1612,12 @@ function renderPortfolioRisk(data) {
   if (exposure.length > 0) {
     html += `<div class="detail-section"><h4 class="detail-section__title">Ekspozycja sektorowa portfela</h4>`;
     html += exposure.map((s) => `
-      <div class="eff-row">
-        <span class="eff-row__cat">${escapeHtml(s.sector)}</span>
-        <span class="eff-row__stat">${s.pct_of_portfolio}% (${escapeHtml(s.tickers.join(", "))})</span>
+      <div class="eff-row eff-row--sector">
+        <div class="eff-row__top">
+          <span class="eff-row__cat">${escapeHtml(s.sector)}</span>
+          <span class="eff-row__stat">${s.pct_of_portfolio}% · ${escapeHtml(s.tickers.join(", "))}</span>
+        </div>
+        <div class="sector-bar-track"><div class="sector-bar-fill" style="width:${Math.min(100, s.pct_of_portfolio)}%"></div></div>
       </div>`).join("");
     html += `</div>`;
   }
@@ -1948,7 +1951,7 @@ function renderPortfolioStatistics(data) {
 
   if (!data || !data.available) {
     meta.textContent = "";
-    panel.innerHTML = `<p class="empty-state">${escapeHtml((data && data.reason) || "Brak danych do policzenia statystyk.")}</p>`;
+    panel.innerHTML = `<p class="empty-state">∿ ${escapeHtml((data && data.reason) || "Brak danych do policzenia statystyk.")}</p>`;
     return;
   }
 
