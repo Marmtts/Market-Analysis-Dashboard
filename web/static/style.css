@@ -553,8 +553,11 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   font-family: var(--font-body);
   font-size: 0.72rem;
   font-weight: 600;
-  text-align: right;
-  max-width: 160px;
+  text-align: center;
+  /* Bez max-width: przy ograniczonej szerokości "stretch" (domyślne
+     wyrównanie elementów grida) cofa się do "start", więc box siadałby
+     przy lewej krawędzi kolumny zamiast wypełniać ją całą - text-align
+     centrowałby się wtedy względem węższego boxa, nie względem nagłówka. */
 }
 .category--buy { color: var(--accent-green-bright); }
 .category--watch { color: var(--accent-amber); }
@@ -747,18 +750,12 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 .results-header > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .results-header span:nth-child(n+3) { text-align: center; }
-.results-header span:last-child { text-align: right; padding-right: 0.3rem; }
+.results-header span:last-child { text-align: center; }
 .results-header span[data-sort-key] {
   cursor: pointer;
   user-select: none;
   transition: color 0.15s;
 }
-/* Portfel: "Rekomendacja" wyśrodkowana zamiast do prawej - odkąd przycisk
-   "Analiza AI" ma własną kolumnę (--grid-cols-portfolio), sama kolumna
-   rekomendacji zawiera tylko krótkie słowo, więc wyśrodkowanie czyta się
-   lepiej niż przyklejenie do prawej krawędzi. */
-.results-header--portfolio span:last-child { text-align: center; padding-right: 0; }
-.result-card--portfolio-group .result-card__category { text-align: center; max-width: none; }
 .results-header span[data-sort-key]:hover { color: var(--accent-gold-bright); }
 .results-header span[data-sort-key].is-sorted { color: var(--accent-gold-bright); }
 .results-header span[data-sort-key].is-sorted::after {
