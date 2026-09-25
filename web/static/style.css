@@ -753,6 +753,12 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   user-select: none;
   transition: color 0.15s;
 }
+/* Portfel: "Rekomendacja" wyśrodkowana zamiast do prawej - odkąd przycisk
+   "Analiza AI" ma własną kolumnę (--grid-cols-portfolio), sama kolumna
+   rekomendacji zawiera tylko krótkie słowo, więc wyśrodkowanie czyta się
+   lepiej niż przyklejenie do prawej krawędzi. */
+.results-header--portfolio span:last-child { text-align: center; padding-right: 0; }
+.result-card--portfolio-group .result-card__category { text-align: center; max-width: none; }
 .results-header span[data-sort-key]:hover { color: var(--accent-gold-bright); }
 .results-header span[data-sort-key].is-sorted { color: var(--accent-gold-bright); }
 .results-header span[data-sort-key].is-sorted::after {
