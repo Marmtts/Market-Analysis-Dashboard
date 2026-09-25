@@ -20,6 +20,7 @@ WAŻNE ograniczenia metodologiczne (przeczytaj, zanim uwierzysz w wyniki):
 Użycie:
     python -m src.backtest --ticker MSFT --years 5
     python -m src.backtest --ticker MSFT --years 5 --hold-days 15 --config config.yaml
+    python -m src.backtest --check-earnings-window --years 5
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ import argparse
 import copy
 import sys
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -486,6 +488,154 @@ def print_walk_forward_report(result: dict) -> None:
     )
 
 
+def fetch_historical_earnings_dates(ticker: str, limit: int = 40) -> list[date]:
+    """Pobiera historyczne (i najbliższe przyszłe) daty publikacji wyników
+    kwartalnych z Yahoo Finance (`Ticker.get_earnings_dates`) - w
+    przeciwieństwie do `fundamentals.fetch_next_earnings_date` (tylko
+    najbliższy termin), tu potrzebujemy całej historii do sprawdzenia, czy
+    dawne wejścia GOOD_ENTRY wypadały w oknie przedwynikowym. `limit`
+    ogranicza liczbę zwracanych kwartałów (Yahoo zwraca też kilka przyszłych
+    - te i tak nie mają wpływu na historyczne transakcje, są nieszkodliwe)."""
+    try:
+        import yfinance as yf
+        raw = yf.Ticker(ticker).get_earnings_dates(limit=limit)
+        if raw is None or raw.empty:
+            return []
+        return sorted({idx.date() for idx in raw.index})
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[yellow]Brak historycznych dat wyników dla {ticker}: {exc}[/yellow]")
+        return []
+
+
+def _is_pre_earnings_entry(entry_date: pd.Timestamp, earnings_dates: list[date], warning_days: int) -> bool:
+    """Czy dzień wejścia w pozycję wypada <= warning_days dni PRZED
+    najbliższą kolejną (od dnia wejścia) publikacją wyników."""
+    entry_d = entry_date.date() if hasattr(entry_date, "date") else entry_date
+    upcoming = [d for d in earnings_dates if d >= entry_d]
+    if not upcoming:
+        return False
+    return (min(upcoming) - entry_d).days <= warning_days
+
+
+def run_earnings_window_analysis(tickers: list[str], years: int, hold_days: int, base_cfg: dict,
+                                  warning_days: int) -> dict:
+    """Sprawdza hipotezę z README ("czy okno tuż przed wynikami kwartalnymi
+    pogarsza sygnały GOOD_ENTRY") - dzieli WSZYSTKIE transakcje strategii
+    technicznej (na całej watchliście, ten sam backtest co zwykły grid
+    search) na dwie grupy wg tego, czy dzień wejścia wypadł w oknie
+    przedwynikowym, i porównuje ich średni zwrot i win rate."""
+    histories: dict[str, pd.DataFrame] = {}
+    for t in tickers:
+        try:
+            histories[t] = fetch_history(t, period=f"{years}y", interval="1d")
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[yellow]Pomijam {t}: {exc}[/yellow]")
+
+    pre_returns: list[float] = []
+    other_returns: list[float] = []
+    per_ticker_rows: list[dict] = []
+
+    for ticker, history in histories.items():
+        trades, _ = run_backtest_on_history(history, hold_days, base_cfg)
+        if not trades:
+            continue
+        earnings_dates = fetch_historical_earnings_dates(ticker, limit=years * 4 + 8)
+        if not earnings_dates:
+            continue
+
+        t_pre = [t.return_pct for t in trades if _is_pre_earnings_entry(t.entry_date, earnings_dates, warning_days)]
+        t_other = [t.return_pct for t in trades if not _is_pre_earnings_entry(t.entry_date, earnings_dates, warning_days)]
+        pre_returns.extend(t_pre)
+        other_returns.extend(t_other)
+        if t_pre or t_other:
+            per_ticker_rows.append({
+                "ticker": ticker,
+                "pre_earnings_trades": len(t_pre),
+                "pre_earnings_avg_return_pct": round(sum(t_pre) / len(t_pre), 2) if t_pre else None,
+                "other_trades": len(t_other),
+                "other_avg_return_pct": round(sum(t_other) / len(t_other), 2) if t_other else None,
+            })
+
+    def _summary(returns: list[float]) -> dict | None:
+        if not returns:
+            return None
+        wins = [r for r in returns if r > 0]
+        return {
+            "num_trades": len(returns),
+            "avg_return_pct": round(sum(returns) / len(returns), 2),
+            "win_rate_pct": round(len(wins) / len(returns) * 100, 1),
+        }
+
+    return {
+        "warning_days": warning_days,
+        "pre_earnings": _summary(pre_returns),
+        "other": _summary(other_returns),
+        "per_ticker": per_ticker_rows,
+    }
+
+
+def print_earnings_window_report(result: dict) -> None:
+    pre, other = result["pre_earnings"], result["other"]
+    console.rule(f"[bold cyan]Okno przedwynikowe ({result['warning_days']} dni) a jakość sygnałów GOOD_ENTRY[/bold cyan]")
+
+    if not pre or not other:
+        console.print("[yellow]Za mało transakcji w jednej z grup (przedwynikowej lub pozostałej), "
+                       "by cokolwiek porównać - zwiększ --years albo watchlistę.[/yellow]")
+        return
+
+    table = Table(title="Transakcje wchodzone w oknie przedwynikowym vs pozostałe")
+    table.add_column("Grupa")
+    table.add_column("Liczba transakcji")
+    table.add_column("Śr. zwrot")
+    table.add_column("Win rate")
+    table.add_row(f"W oknie <= {result['warning_days']} dni przed wynikami",
+                   str(pre["num_trades"]), f"{pre['avg_return_pct']}%", f"{pre['win_rate_pct']}%")
+    table.add_row("Poza oknem przedwynikowym",
+                   str(other["num_trades"]), f"{other['avg_return_pct']}%", f"{other['win_rate_pct']}%")
+    console.print(table)
+
+    return_gap = pre["avg_return_pct"] - other["avg_return_pct"]
+    win_rate_gap = pre["win_rate_pct"] - other["win_rate_pct"]
+    if return_gap < -0.5 or win_rate_gap < -5:
+        console.print(
+            f"[yellow]Sygnał: wejścia tuż przed wynikami wypadają gorzej "
+            f"({return_gap:+.2f} pkt proc. śr. zwrotu, {win_rate_gap:+.1f} pkt win rate) - "
+            f"warto rozważyć obniżanie kategorii GOOD_ENTRY w tym oknie, nie tylko informacyjne "
+            f"ostrzeżenie jak obecnie.[/yellow]"
+        )
+    else:
+        console.print(
+            f"[green]Brak wyraźnego pogorszenia w oknie przedwynikowym "
+            f"({return_gap:+.2f} pkt proc. śr. zwrotu, {win_rate_gap:+.1f} pkt win rate) - obecne, "
+            f"czysto informacyjne ostrzeżenie (bez zmiany kategorii) wydaje się uzasadnione.[/green]"
+        )
+
+    if result["per_ticker"]:
+        detail = Table(title="Szczegóły per spółka")
+        detail.add_column("Ticker")
+        detail.add_column("Transakcje przedwynikowe")
+        detail.add_column("Śr. zwrot")
+        detail.add_column("Pozostałe transakcje")
+        detail.add_column("Śr. zwrot")
+        for row in result["per_ticker"]:
+            detail.add_row(
+                row["ticker"],
+                str(row["pre_earnings_trades"]),
+                f"{row['pre_earnings_avg_return_pct']}%" if row["pre_earnings_avg_return_pct"] is not None else "—",
+                str(row["other_trades"]),
+                f"{row['other_avg_return_pct']}%" if row["other_avg_return_pct"] is not None else "—",
+            )
+        console.print(detail)
+
+    console.print(
+        "\n[bold yellow]Zastrzeżenie:[/bold yellow] daty wyników z Yahoo Finance bywają skorygowane "
+        "wstecz względem tego, co było znane 'na żywo' w danym dniu (możliwy niewielki wyciek "
+        "przyszłej informacji), a liczba transakcji w oknie przedwynikowym jest z natury mała "
+        "(kilka dni na kwartał na spółkę) - traktuj to jako wstępny sygnał kierunkowy, nie "
+        "ostateczny dowód."
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Backtest strategii wejścia XTB Trend Watch")
     parser.add_argument("--ticker", help="Ticker Yahoo Finance, np. MSFT, ALE.WA (pojedynczy backtest)")
@@ -508,6 +658,12 @@ def main():
                               "nieużytym do optymalizacji okresie testowym (ochrona przed przeuczeniem)")
     parser.add_argument("--test-years", type=int, default=2,
                          help="Ile ostatnich lat odłożyć jako okres TESTOWY w --walk-forward (domyślnie 2)")
+    parser.add_argument("--check-earnings-window", action="store_true",
+                         help="Sprawdź, czy wejścia GOOD_ENTRY tuż przed wynikami kwartalnymi wypadają "
+                              "gorzej niż pozostałe (na watchliście/--tickers, wg OBECNEGO config.yaml)")
+    parser.add_argument("--earnings-warning-days", type=int, default=None,
+                         help="Szerokość okna przedwynikowego w dniach (domyślnie: fundamentals."
+                              "earnings_warning_days z configu, albo 7)")
     args = parser.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -531,6 +687,25 @@ def main():
             pullback_options=[float(x) for x in args.pullback_grid.split(",")],
         )
         print_walk_forward_report(result)
+        return
+
+    if args.check_earnings_window:
+        tickers = (args.tickers.split(",") if args.tickers
+                   else [c["ticker"] for c in cfg.get("watchlist", [])])
+        tickers = [t.strip() for t in tickers if t.strip()]
+        if not tickers:
+            console.print("[red]Brak tickerów do przetestowania (pusta watchlista i brak --tickers).[/red]")
+            return
+
+        warning_days = args.earnings_warning_days
+        if warning_days is None:
+            warning_days = cfg.get("fundamentals", {}).get("earnings_warning_days", 7)
+
+        result = run_earnings_window_analysis(
+            tickers=tickers, years=args.years, hold_days=args.hold_days,
+            base_cfg=cfg, warning_days=warning_days,
+        )
+        print_earnings_window_report(result)
         return
 
     if args.grid_search:
