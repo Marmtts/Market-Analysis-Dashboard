@@ -559,6 +559,36 @@ el("runNowBtn").addEventListener("click", async () => {
   await fetch("/api/run-now", { method: "POST" });
 });
 
+// Sprawdzenie alertów NA ŻĄDANIE - ta sama logika co cicha pętla w tle
+// (price_alert_interval_seconds), ale bez czekania na jej najbliższy tick.
+// Sam alert (jeśli jakiś przyjdzie) i tak dotrze przez WebSocket jak zwykle
+// (case "price_alert" w handleWsMessage) - tu tylko dajemy znać, że w ogóle
+// sprawdziliśmy, bo przy zerze trafień WS milczałby i przycisk wyglądałby,
+// jakby nic nie zrobił.
+const checkAlertsNowBtn = el("checkAlertsNowBtn");
+if (checkAlertsNowBtn) {
+  checkAlertsNowBtn.addEventListener("click", async () => {
+    checkAlertsNowBtn.disabled = true;
+    const originalLabel = checkAlertsNowBtn.textContent;
+    checkAlertsNowBtn.textContent = "Sprawdzam…";
+    try {
+      const res = await fetch("/api/portfolio/check-alerts-now", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      if (!data.alerts_sent) {
+        appendLog({ level: "info", message: "🔔 Sprawdzono alerty cenowe - żadna pozycja nie przebiła stop-lossu ani celu." });
+      }
+      // data.alerts_sent > 0 -> same alerty przyjdą osobno przez WebSocket
+      // (z tickerem, klikalne) - nie duplikujemy ich tu drugą linią logu.
+    } catch (err) {
+      appendLog({ level: "error", message: `🔔 Nie udało się sprawdzić alertów: ${String(err)}` });
+    } finally {
+      checkAlertsNowBtn.disabled = false;
+      checkAlertsNowBtn.textContent = originalLabel;
+    }
+  });
+}
+
 // ---------------- WebSocket ----------------
 function connectWebSocket() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";

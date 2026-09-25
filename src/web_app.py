@@ -508,6 +508,20 @@ async def _price_alert_scheduler() -> None:
             logger.exception("Błąd podczas sprawdzania alertów cenowych")
 
 
+@app.post("/api/portfolio/check-alerts-now")
+async def api_check_alerts_now():
+    """Sprawdzenie alertów cenowych NA ŻĄDANIE - ta sama logika co
+    _price_alert_scheduler (i te same dedupe/broadcast), tylko bez czekania
+    na najbliższy tick pętli w tle (domyślnie do price_alert_interval_seconds,
+    a PIERWSZE sprawdzenie po starcie serwera czeka pełen interwał - patrz
+    komentarz w _price_alert_scheduler). Przydatne zaraz po zmianie
+    stop-lossu/celu pozycji, i do ręcznego testu."""
+    alerts = await asyncio.to_thread(_check_price_alerts_blocking)
+    for alert in alerts:
+        await manager.broadcast({**alert, "type": "price_alert", "alert_type": alert["type"]})
+    return {"alerts_sent": len(alerts)}
+
+
 class AddCompanyRequest(BaseModel):
     ticker: str
     name: str = ""
