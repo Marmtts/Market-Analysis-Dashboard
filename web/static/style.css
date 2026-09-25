@@ -847,14 +847,22 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   gap: 0.6rem; margin-bottom: 0.7rem;
 }
 .metric-grid > div {
-  display: flex; flex-direction: column; gap: 0.2rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
   background: var(--bg-elevated-2); border: 1px solid transparent; border-radius: var(--radius);
   padding: 0.5rem 0.65rem;
+  text-align: center;
   transition: border-color 0.15s ease, transform 0.15s var(--ease);
 }
 .metric-grid > div:hover { border-color: var(--border-bright); transform: translateY(-1px); }
 .metric-grid span { font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
 .metric-grid strong { font-family: var(--font-mono); font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+/* Kolor zysk/strata - PRZENIESIONE z .stats-grid: ta sama reguła obowiązywała
+   TYLKO tam, więc identyczne strong.positive/.negative w .tax-year-card
+   (podsumowanie podatkowe w zakładce Zamknięte transakcje) renderowały się
+   bez koloru - tam też są liczby zysk/strata, więc reguła należy do
+   wspólnej bazy .metric-grid, nie do wąskiego .stats-grid. */
+.metric-grid strong.positive { color: var(--accent-green-bright); }
+.metric-grid strong.negative { color: var(--accent-red-bright); }
 
 .news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .news-item {
@@ -882,7 +890,8 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .calc-result { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .calc-highlight {
   flex: 1; min-width: 140px; background: var(--bg-elevated-2); border-radius: var(--radius-lg);
-  padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.25rem;
+  padding: 0.6rem 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+  text-align: center;
   border: 1px solid transparent; transition: border-color 0.15s ease, transform 0.15s var(--ease);
 }
 .calc-highlight:hover { border-color: rgba(224, 188, 74, 0.4); transform: translateY(-1px); }
@@ -950,6 +959,8 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   padding: 0.8rem 1rem;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 0.3rem;
   transition: border-color 0.18s ease, transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
@@ -1058,6 +1069,7 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .risk-card {
   background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg);
   padding: 0.9rem 1.1rem;
+  text-align: center;
   transition: border-color 0.18s ease, transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 .risk-card__label { font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.3rem; }
@@ -1349,8 +1361,6 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   margin-bottom: 0.6rem;
 }
 .stats-grid { margin-bottom: 0.9rem; }
-.stats-grid strong.positive { color: var(--accent-green-bright); }
-.stats-grid strong.negative { color: var(--accent-red-bright); }
 .corr-wrap { overflow-x: auto; }
 .corr-table { border-collapse: separate; border-spacing: 3px; font-family: var(--font-mono); font-size: 0.7rem; }
 .corr-table th { color: var(--text-dim); font-weight: 600; padding: 0.25rem 0.45rem; text-align: center; white-space: nowrap; }
