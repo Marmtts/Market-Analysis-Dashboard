@@ -350,6 +350,7 @@
         <span class="legend-marker legend-marker--neutral">● N</span>
         <span class="modal__legend-note">— historyczne werdykty narzędzia na tej spółce</span>
       </div>
+      <div class="modal__legend" id="chartPositionLegend" style="display:none"></div>
       <div class="modal__details" id="modalDetails"></div>
     </div>
   </div>
@@ -374,7 +375,7 @@
 
 <div class="log-drawer" id="logDrawer">
   <button class="log-drawer__toggle" id="logDrawerToggle">
-    <span>📋 Log na żywo</span>
+    <span>📋 Log na żywo <span class="log-drawer__badge" id="logDrawerBadge" hidden></span></span>
     <span class="log-drawer__arrow">▲</span>
   </button>
   <div class="log-drawer__body" id="logDrawerBody">

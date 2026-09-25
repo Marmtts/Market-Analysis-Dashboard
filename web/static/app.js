@@ -20,6 +20,11 @@ const state = {
   // zanim init() zdąży wczytać localStorage; loadColumnPreferences() i tak
   // nadpisuje ten obiekt zaraz na starcie.
   columnPrefs: { target: true, signal: true, score: true, chart: true },
+  // Licznik alertów (🔔 w logu), których użytkownik jeszcze nie widział, bo
+  // szuflada logu była zwinięta - patrz appendLog/updateLogDrawerBadge.
+  // Bez tego alert cenowy/sygnałowy mógł przejść zupełnie niezauważony po
+  // usunięciu (niedziałających w Brave) natywnych powiadomień przeglądarki.
+  unseenAlertCount: 0,
 };
 
 const el = (id) => document.getElementById(id);
@@ -108,6 +113,13 @@ async function refreshHeldTickers() {
     if (!res.ok) return;
     const positions = await res.json();
     state.portfolioTickers = new Set(positions.map((p) => p.ticker));
+    // Też zasila state.lastPortfolio (stop-loss/cel na wykresie, patrz
+    // drawPositionPriceLines) - bez tego kliknięcie alertu w logu PRZED
+    // pierwszym wejściem w zakładkę Portfel otwierałoby wykres bez linii
+    // stopu, czyli akurat w tym jednym, najważniejszym przypadku (świeży
+    // alert) niczego by nie pokazało. renderPortfolio i tak nadpisze to
+    // świeższymi danymi, gdy użytkownik odwiedzi zakładkę Portfel.
+    if (!state.lastPortfolio) state.lastPortfolio = positions;
     renderUpcomingEarnings();
   } catch (err) {
     // panel wyników działa też bez oznaczeń portfela
@@ -462,16 +474,46 @@ function formatDateTime(iso) {
 }
 
 // ---------------- Log na żywo ----------------
-function appendLog({ level, message, ts }) {
+function appendLog({ level, message, ts, ticker }) {
   const panel = el("logPanel");
   const line = document.createElement("div");
-  line.className = `log__line log__line--${level || "info"}`;
+  const isAlert = message.startsWith("🔔");
+  line.className = `log__line log__line--${level || "info"}` + (ticker ? " log__line--clickable" : "");
   const time = ts ? ts.split(" ")[1] || ts : new Date().toLocaleTimeString("pl-PL");
   line.innerHTML = `<span class="log__ts">${time}</span>${escapeHtml(message)}`;
+  if (ticker) {
+    // Alert bez kontekstu (dlaczego, jaki stop-loss) jest bezużyteczny - klik
+    // przenosi wprost na wykres tej spółki, gdzie stop-loss/cel są narysowane
+    // jako linie (patrz openChart) i widać pełne uzasadnienie rekomendacji.
+    line.title = `Kliknij, żeby zobaczyć ${ticker} na wykresie`;
+    line.addEventListener("click", () => openChart(ticker, ticker));
+  }
   panel.appendChild(line);
   panel.scrollTop = panel.scrollHeight;
   // limit widocznych linii, żeby DOM nie rósł bez końca
   while (panel.children.length > 300) panel.removeChild(panel.firstChild);
+
+  // Odznaka na szufladzie logu - jedyny ślad po alertach cenowych/sygnałowych,
+  // odkąd natywne powiadomienia przeglądarki usunięto (nie działały w Brave).
+  // Bez tego zwinięta szuflada = alert przechodzi zupełnie niezauważony.
+  if (isAlert) {
+    const drawer = el("logDrawer");
+    if (drawer && drawer.classList.contains("is-collapsed")) {
+      state.unseenAlertCount += 1;
+      updateLogDrawerBadge();
+    }
+  }
+}
+
+function updateLogDrawerBadge() {
+  const badge = el("logDrawerBadge");
+  if (!badge) return;
+  if (state.unseenAlertCount > 0) {
+    badge.textContent = state.unseenAlertCount > 9 ? "9+" : String(state.unseenAlertCount);
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
 }
 
 async function loadLogs() {
@@ -572,6 +614,7 @@ function handleWsMessage(msg) {
       appendLog({
         level: msg.alert_type === "stop_loss" ? "error" : "success",
         message: `🔔 ${msg.title}: ${msg.body}`,
+        ticker: msg.ticker,
       });
       break;
     default:
@@ -597,6 +640,9 @@ async function openChart(ticker, name) {
 
   const container = el("chartContainer");
   container.innerHTML = "";
+  const positionLegend = el("chartPositionLegend");
+  positionLegend.style.display = "none";
+  positionLegend.innerHTML = "";
 
   const chart = LightweightCharts.createChart(container, {
     width: container.clientWidth,
@@ -630,6 +676,7 @@ async function openChart(ticker, name) {
       (c) => c.open != null && c.high != null && c.low != null && c.close != null
     );
     candleSeries.setData(cleanCandles);
+    drawPositionPriceLines(candleSeries, ticker);
 
     const cleanMa50 = data.ma50.filter((p) => p.value != null);
     const cleanMa200 = data.ma200.filter((p) => p.value != null);
@@ -655,6 +702,61 @@ async function openChart(ticker, name) {
   } catch (err) {
     loading.classList.add("is-hidden");
     container.innerHTML = `<p class="empty-state">Nie udało się pobrać danych wykresu: ${escapeHtml(String(err))}</p>`;
+  }
+}
+
+// Poziomy stop-loss/cel/śr. cena zakupu wprost na wykresie - odpowiada na
+// "dlaczego ten alert" bez przełączania się między kartą portfela a
+// wykresem: jeśli świeca jest pod czerwoną przerywaną linią, to DLATEGO
+// poleciał alert stop-lossu. Działa tylko gdy spółka jest w portfelu -
+// state.lastPortfolio wypełnia się przy pierwszym wejściu w zakładkę Portfel
+// (patrz renderPortfolio), więc otwarcie wykresu z watchlisty PRZED
+// odwiedzeniem Portfela po prostu nie narysuje linii (nic się nie psuje).
+function drawPositionPriceLines(candleSeries, ticker) {
+  const lots = (state.lastPortfolio || []).filter((p) => p.ticker === ticker);
+  if (!lots.length) return;
+
+  const bestLot = [...lots].sort(
+    (a, b) => (ACTION_PRIORITY[a.action] ?? 9) - (ACTION_PRIORITY[b.action] ?? 9)
+  )[0];
+  const legendItems = [];
+
+  const stopLoss = bestLot.custom_stop ?? bestLot.suggested_stop_loss ?? null;
+  if (stopLoss != null) {
+    const stopLabel = bestLot.custom_stop ? "własny" : "ATR";
+    candleSeries.createPriceLine({
+      price: stopLoss, color: "#DA6A52", lineWidth: 2, lineStyle: 2,
+      axisLabelVisible: true, title: `stop (${stopLabel})`,
+    });
+    legendItems.push(`<span><i class="legend-swatch legend-swatch--stop"></i> Stop-loss (${stopLabel}): ${fmtMoney(stopLoss, bestLot.currency)}</span>`);
+  }
+  if (bestLot.custom_target != null) {
+    candleSeries.createPriceLine({
+      price: bestLot.custom_target, color: "#6DBE85", lineWidth: 2, lineStyle: 2,
+      axisLabelVisible: true, title: "cel",
+    });
+    legendItems.push(`<span><i class="legend-swatch legend-swatch--target"></i> Twój cel: ${fmtMoney(bestLot.custom_target, bestLot.currency)}</span>`);
+  }
+
+  const totalShares = lots.reduce((s, l) => s + l.shares, 0);
+  const totalCost = lots.reduce((s, l) => s + (l.cost_basis ?? l.shares * l.buy_price), 0);
+  if (totalShares > 0) {
+    const avgBuy = totalCost / totalShares;
+    candleSeries.createPriceLine({
+      price: avgBuy, color: "#8A93A8", lineWidth: 1, lineStyle: 1,
+      axisLabelVisible: true, title: "śr. zakup",
+    });
+    legendItems.push(`<span><i class="legend-swatch legend-swatch--avgbuy"></i> Śr. cena zakupu: ${fmtMoney(avgBuy.toFixed(2), bestLot.currency)}</span>`);
+  }
+
+  if (bestLot.reasons && bestLot.reasons.length) {
+    legendItems.push(`<span class="modal__legend-note">— ${escapeHtml(bestLot.reasons.join("; "))}</span>`);
+  }
+
+  const positionLegend = el("chartPositionLegend");
+  if (legendItems.length) {
+    positionLegend.innerHTML = legendItems.join("");
+    positionLegend.style.display = "";
   }
 }
 
@@ -781,11 +883,46 @@ async function loadPortfolio() {
   }
 }
 
+// Współdzielone przez renderPortfolio (wybór "najpilniejszej" transzy na
+// kartę grupy) i drawPositionPriceLines (ten sam wybór na wykresie) - było
+// zduplikowane wyłącznie w renderPortfolio, wyciągnięte żeby oba miejsca
+// zawsze zgadzały się co do tego, która transza jest "reprezentatywna".
+const ACTION_PRIORITY = {
+  "ROZWAŻ SPRZEDAŻ": 0,
+  "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE": 1,
+  "ROZWAŻ REALIZACJĘ ZYSKU": 2,
+  "TRZYMAJ": 3,
+  "BRAK DANYCH": 4,
+};
+
 function actionClass(action) {
   if (action === "ROZWAŻ SPRZEDAŻ" || action === "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE") return "avoid";
   if (action === "ROZWAŻ REALIZACJĘ ZYSKU") return "watch";
   if (action === "BRAK DANYCH") return "wait";
   return "buy";
+}
+
+// Stop-loss AKTYWNY (własny > ATR) i cel, zawsze widoczne na karcie pozycji -
+// wcześniej pokazywało się TYLKO gdy użytkownik ręcznie ustawił własny stop,
+// więc domyślny (ATR) stop-loss, mimo że policzony i realnie używany przez
+// alerty cenowe, był praktycznie niewidoczny.
+function stopTargetLineHtml(stopLoss, stopSource, target, currency) {
+  if (stopLoss == null && target == null) return "";
+  const parts = [];
+  if (stopLoss != null) {
+    const tag = stopSource === "own" ? "własny" : "ATR";
+    parts.push(`🛑 stop ${fmtMoney(stopLoss, currency)} <span class="stop-source-tag">(${tag})</span>`);
+  }
+  if (target != null) parts.push(`🎯 cel ${fmtMoney(target, currency)}`);
+  return `<div class="result-card__reason result-card__reason--stop">${parts.join(" · ")}</div>`;
+}
+
+// Tooltip pieczątki - "dlaczego" ta rekomendacja, na bazie tych samych
+// `reasons`, które backend już liczy (report.evaluate_portfolio_position),
+// ale wcześniej nigdzie w UI portfela się nie pojawiały.
+function actionTooltip(action, reasons) {
+  const base = action || "—";
+  return reasons && reasons.length ? `${base} — ${reasons.join("; ")}` : base;
 }
 
 function portfolioGroupSortValue(group, key) {
@@ -813,13 +950,7 @@ function renderPortfolio(positions, sortState) {
     return;
   }
 
-  const actionPriority = {
-    "ROZWAŻ SPRZEDAŻ": 0,
-    "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE": 1,
-    "ROZWAŻ REALIZACJĘ ZYSKU": 2,
-    "TRZYMAJ": 3,
-    "BRAK DANYCH": 4,
-  };
+  const actionPriority = ACTION_PRIORITY;
 
   const byTicker = new Map();
   positions.forEach((p) => {
@@ -860,6 +991,13 @@ function renderPortfolio(positions, sortState) {
       ticker, lots, currency, totalShares, totalCost, totalValue, avgBuyPrice, currentPrice,
       totalPl, totalPlPct, action: bestLot.action, actionPriority: actionPriority[bestLot.action] ?? 9,
       ageHtml: ageHtml + earningsHtml,
+      // Stop/cel/uzasadnienie NAJPILNIEJSZEJ transzy (ta sama, z której
+      // wzięto `action`) - reprezentatywne dla karty grupy; szczegóły per
+      // transza nadal widoczne po rozwinięciu (renderLotCard).
+      stopLoss: bestLot.custom_stop ?? bestLot.suggested_stop_loss ?? null,
+      stopSource: bestLot.custom_stop ? "own" : "atr",
+      target: bestLot.custom_target ?? null,
+      reasons: bestLot.reasons || [],
     });
   });
 
@@ -908,13 +1046,14 @@ function renderPortfolioGroupCard(g) {
   const header = document.createElement("div");
   header.className = "result-card portfolio-card portfolio-group__header result-card--with-sparkline result-card--portfolio-group";
   header.innerHTML = `
-    <div class="stamp stamp--${cls}" title="${escapeHtml(g.action)}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
+    <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(g.action, g.reasons))}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
     <div class="result-card__info">
       <div>
         <span class="result-card__ticker">${g.ticker}</span>
         <span class="result-card__name">${g.lots.length} ${g.lots.length === 1 ? "pozycja" : "pozycje/i"} • śr. ${fmtMoney(g.avgBuyPrice.toFixed(2), g.currency)}</span>
       </div>
       <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}<span class="portfolio-group__toggle">▾ rozwiń</span></div>
+      ${stopTargetLineHtml(g.stopLoss, g.stopSource, g.target, g.currency)}
     </div>
     <div class="result-card__metric">
       <div class="result-card__metric-value">${fmtMoney(g.currentPrice, g.currency)}</div>
@@ -1014,14 +1153,14 @@ function renderLotCard(p) {
   const card = document.createElement("div");
   card.className = "result-card portfolio-card lot-card";
   card.innerHTML = `
-    <div class="stamp stamp--${cls}" title="${escapeHtml(p.action || "—")}">${escapeHtml((p.action || "—")).split(" ")[0]}</div>
+    <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(p.action, p.reasons))}">${escapeHtml((p.action || "—")).split(" ")[0]}</div>
     <div class="result-card__info">
       <div>
         <span class="result-card__ticker">${p.shares} szt.</span>
         <span class="result-card__name">@ ${fmtMoney(p.buy_price, p.currency)}</span>
       </div>
       <div class="result-card__xtb">Kupione: ${p.buy_date} (${p.horizon || "—"})</div>
-      ${(p.custom_stop || p.custom_target) ? `<div class="result-card__reason">${p.custom_stop ? `🛑 stop ${fmtMoney(p.custom_stop, p.currency)}` : ""}${p.custom_stop && p.custom_target ? " · " : ""}${p.custom_target ? `🎯 cel ${fmtMoney(p.custom_target, p.currency)}` : ""}</div>` : ""}
+      ${stopTargetLineHtml(p.custom_stop ?? p.suggested_stop_loss ?? null, p.custom_stop ? "own" : "atr", p.custom_target ?? null, p.currency)}
       ${p.notes ? `<div class="result-card__reason">📝 ${escapeHtml(p.notes)}</div>` : ""}
     </div>
     <div class="result-card__metric">
@@ -1172,9 +1311,10 @@ function checkForAlerts(results, discovered) {
       appendLog({
         level: "error",
         message: `🔔 ${r.ticker}: ${r.technical.signal === "AT_TOP" ? "blisko szczytu trendu" : "gwałtowny spadek"} — sprawdź zakładkę Portfel.`,
+        ticker: r.ticker,
       });
     } else if (!isHeld && before !== undefined && cat.startsWith("WARTO OBSERWOWAĆ")) {
-      appendLog({ level: "success", message: `🔔 ${r.ticker}: nowy sygnał WARTO OBSERWOWAĆ.` });
+      appendLog({ level: "success", message: `🔔 ${r.ticker}: nowy sygnał WARTO OBSERWOWAĆ.`, ticker: r.ticker });
     }
   });
 
@@ -1847,6 +1987,10 @@ const logDrawerToggle = el("logDrawerToggle");
 function setLogDrawerCollapsed(collapsed) {
   logDrawer.classList.toggle("is-collapsed", collapsed);
   localStorage.setItem("logDrawerCollapsed", collapsed ? "1" : "0");
+  if (!collapsed) {
+    state.unseenAlertCount = 0;
+    updateLogDrawerBadge();
+  }
 }
 
 logDrawerToggle.addEventListener("click", () => {
