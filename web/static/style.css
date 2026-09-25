@@ -579,18 +579,22 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   flex-shrink: 0;
   opacity: 0.95;
 }
-/* Tylko "WARTO OBSERWOWAĆ" dostaje delikatną, oddychającą poświatę - to
-   jedyny sygnał, który realnie zachęca do działania (okazja), reszta
-   (poczekaj/unikaj) ma zostać spokojna, żeby oko wyłapywało właśnie
-   okazje, a nie migało wszędzie naraz. */
 .stamp--buy {
   color: var(--accent-green-bright);
   background: radial-gradient(circle at 35% 30%, rgba(109, 190, 133, 0.18), transparent 70%);
-  animation: stamp-glow 2.6s ease-in-out infinite;
 }
 .stamp--watch { color: var(--accent-amber); }
 .stamp--wait { color: var(--text-faint); }
 .stamp--avoid { color: var(--accent-red-bright); }
+/* Tylko "WARTO OBSERWOWAĆ" na watchliście/propozycjach AI (karty z klasą
+   .result-card--customizable) dostaje delikatną, oddychającą poświatę - to
+   jedyny sygnał, który realnie zachęca do działania TERAZ (świeża okazja).
+   `.stamp--buy` to ta sama klasa co "TRZYMAJ" w portfelu i "ZYSK" w
+   zamkniętych transakcjach - tam pulsowanie nie miałoby sensu (nic tam nie
+   trzeba "zauważyć i kliknąć"), więc scoped tylko do watchlisty. */
+.result-card--customizable .stamp--buy {
+  animation: stamp-glow 2.6s ease-in-out infinite;
+}
 @keyframes stamp-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(109, 190, 133, 0); }
   50% { box-shadow: 0 0 12px 1px rgba(109, 190, 133, 0.35); }
@@ -614,8 +618,17 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .result-card__reason { color: var(--text-dim); font-size: 0.75rem; margin-top: 0.2rem; }
 
 .result-card__metric { text-align: center; }
-.result-card__metric-value { font-family: var(--font-mono); font-weight: 600; font-size: 0.95rem; }
+.result-card__metric-value {
+  font-family: var(--font-mono); font-weight: 600; font-size: 0.95rem;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.result-card__metric-value.positive { color: var(--accent-green-bright); }
+.result-card__metric-value.negative { color: var(--accent-red-bright); }
 .result-card__metric-label { font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+/* Wynik zamkniętej transakcji to nagłówkowa liczba tego wiersza (odpowiednik
+   sumarycznych "stat tiles" gdzie indziej w aplikacji) - większa i pogrubiona,
+   żeby dało się skanować listę wzrokiem bez czytania każdej etykiety. */
+.result-card__metric--headline .result-card__metric-value { font-size: 1.2rem; }
 .result-card__sparkline {
   display: flex;
   align-items: center;

@@ -1538,8 +1538,8 @@ function renderClosedPortfolio(positions, summary) {
         <div class="result-card__metric-value">${fmtMoney(p.sell_price, p.currency)}</div>
         <div class="result-card__metric-label">${p.sell_date}</div>
       </div>
-      <div class="result-card__metric">
-        <div class="result-card__metric-value">${p.realized_pl_pct >= 0 ? "+" : ""}${p.realized_pl_pct}%</div>
+      <div class="result-card__metric result-card__metric--headline">
+        <div class="result-card__metric-value ${p.realized_pl_pct >= 0 ? "positive" : "negative"}">${p.realized_pl_pct >= 0 ? "+" : ""}${p.realized_pl_pct}%</div>
         <div class="result-card__metric-label">${fmtMoney(p.realized_pl, p.currency)}</div>
       </div>
       <div class="result-card__category category--${cls}">
