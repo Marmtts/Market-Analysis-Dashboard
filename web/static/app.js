@@ -690,7 +690,10 @@ async function openChart(ticker, name) {
     wickUpColor: "#4F9D69", wickDownColor: "#C1533D",
   });
   const ma50Series = chart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
-  const ma200Series = chart.addLineSeries({ color: "#DA6A52", lineWidth: 2 });
+  // Fiolet, nie czerwień - czerwień jest teraz ZAREZERWOWANA dla stop-lossu
+  // (patrz drawPositionPriceLines); wcześniej SMA200 i linia stop-lossu
+  // miały DOKŁADNIE ten sam odcień (#DA6A52) i wizualnie się zlewały.
+  const ma200Series = chart.addLineSeries({ color: "#8B7FE8", lineWidth: 2 });
 
   state.chart = chart;
 
@@ -751,18 +754,28 @@ function drawPositionPriceLines(candleSeries, ticker) {
   )[0];
   const legendItems = [];
 
+  // Paleta linii pozycji celowo NIE dzieli koloru z żadnym innym elementem
+  // wykresu (świece, SMA, strzałki werdyktów) - inaczej, przy kilku liniach
+  // naraz, użytkownik nie odróżni "to stop czy to SMA200" na pierwszy rzut
+  // oka. LargeDashed (grubszy rytm kreski) zamiast zwykłego Dashed - jedyny
+  // styl linii used wyłącznie tutaj, dodatkowe wizualne rozgraniczenie poza
+  // samym kolorem.
   const stopLoss = bestLot.custom_stop ?? bestLot.suggested_stop_loss ?? null;
   if (stopLoss != null) {
     const stopLabel = bestLot.custom_stop ? "własny" : "ATR";
     candleSeries.createPriceLine({
-      price: stopLoss, color: "#DA6A52", lineWidth: 2, lineStyle: 2,
+      price: stopLoss, color: "#DA6A52", lineWidth: 2, lineStyle: 3,
       axisLabelVisible: true, title: `stop (${stopLabel})`,
     });
     legendItems.push(`<span><i class="legend-swatch legend-swatch--stop"></i> Stop-loss (${stopLabel}): ${fmtMoney(stopLoss, bestLot.currency)}</span>`);
   }
   if (bestLot.custom_target != null) {
+    // Cyjan, nie zieleń - zieleń jest już zajęta przez świece wzrostowe I
+    // strzałkę "KUP" I akcent SMA - cel dostaje drugi, odrębny akcent marki
+    // (ten sam cyjan co gdzie indziej w UI), żeby nie utonął w tej samej
+    // zieleni co reszta wykresu.
     candleSeries.createPriceLine({
-      price: bestLot.custom_target, color: "#6DBE85", lineWidth: 2, lineStyle: 2,
+      price: bestLot.custom_target, color: "#56E1E3", lineWidth: 2, lineStyle: 3,
       axisLabelVisible: true, title: "cel",
     });
     legendItems.push(`<span><i class="legend-swatch legend-swatch--target"></i> Twój cel: ${fmtMoney(bestLot.custom_target, bestLot.currency)}</span>`);

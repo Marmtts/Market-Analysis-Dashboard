@@ -821,9 +821,11 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 .legend-swatch { display: inline-block; width: 14px; height: 3px; margin-right: 0.35rem; vertical-align: middle; }
 .legend-swatch--ma50 { background: var(--accent-gold); }
-.legend-swatch--ma200 { background: var(--accent-red-bright); }
+/* Fiolet - patrz komentarz przy ma200Series w app.js: SMA200 i stop-loss
+   miały wcześniej identyczny czerwony odcień i zlewały się na wykresie. */
+.legend-swatch--ma200 { background: #8B7FE8; }
 .legend-swatch--stop { background: var(--accent-red-bright); border-top: 1px dashed var(--bg-elevated); }
-.legend-swatch--target { background: var(--accent-green-bright); border-top: 1px dashed var(--bg-elevated); }
+.legend-swatch--target { background: var(--accent-cyan-bright); border-top: 1px dashed var(--bg-elevated); }
 .legend-swatch--avgbuy { background: var(--text-dim); }
 /* Drugi wiersz legendy (poziomy pozycji) - tylko gdy spółka jest w portfelu,
    patrz drawPositionPriceLines. Bez własnego marginesu górnego dwa wiersze
