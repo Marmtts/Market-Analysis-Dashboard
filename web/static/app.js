@@ -1932,7 +1932,7 @@ function benchmarkSectionHtml(bc) {
         <div title="Jaką część ruchu rynku portfel łapał w dni wzrostowe"><span>Wychwyt wzrostów</span><strong>${pct(bc.up_capture)}</strong></div>
         <div title="Jaką część ruchu rynku portfel łapał w dni spadkowe (mniej = lepiej)"><span>Wychwyt spadków</span><strong>${pct(bc.down_capture)}</strong></div>
       </div>
-      <div id="benchChartContainer" class="bench-chart-container"></div>
+      <div class="chart-frame"><div id="benchChartContainer" class="bench-chart-container"></div></div>
       <div class="modal__legend"><span><i class="legend-swatch legend-swatch--ma50"></i> Portfel (start = 100)</span><span><i class="legend-swatch legend-swatch--bench"></i> ${escapeHtml(bc.benchmark)} (start = 100)</span></div>
       <ul class="detail-list">${(bc.insights || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
     </div>`;

@@ -767,9 +767,11 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .detail-section {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.85rem 1rem;
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1.05rem;
+  transition: border-color 0.18s ease;
 }
+.detail-section:hover { border-color: var(--border-bright); }
 .detail-summary {
   display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
   background: var(--bg-elevated-2);
@@ -795,12 +797,14 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   gap: 0.6rem; margin-bottom: 0.7rem;
 }
 .metric-grid > div {
-  display: flex; flex-direction: column; gap: 0.15rem;
-  background: var(--bg-elevated-2); border-radius: var(--radius);
-  padding: 0.45rem 0.6rem;
+  display: flex; flex-direction: column; gap: 0.2rem;
+  background: var(--bg-elevated-2); border: 1px solid transparent; border-radius: var(--radius);
+  padding: 0.5rem 0.65rem;
+  transition: border-color 0.15s ease, transform 0.15s var(--ease);
 }
+.metric-grid > div:hover { border-color: var(--border-bright); transform: translateY(-1px); }
 .metric-grid span { font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
-.metric-grid strong { font-family: var(--font-mono); font-size: 0.85rem; }
+.metric-grid strong { font-family: var(--font-mono); font-size: 0.92rem; font-variant-numeric: tabular-nums; }
 
 .news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .news-item {
@@ -825,17 +829,22 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .calc-inputs input:focus { outline: none; border-color: var(--accent-gold); }
 .calc-result { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .calc-highlight {
-  flex: 1; min-width: 140px; background: var(--bg-elevated-2); border-radius: var(--radius);
-  padding: 0.5rem 0.7rem; display: flex; flex-direction: column; gap: 0.2rem;
+  flex: 1; min-width: 140px; background: var(--bg-elevated-2); border-radius: var(--radius-lg);
+  padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.25rem;
+  border: 1px solid transparent; transition: border-color 0.15s ease, transform 0.15s var(--ease);
 }
+.calc-highlight:hover { border-color: rgba(224, 188, 74, 0.4); transform: translateY(-1px); }
 .calc-highlight span { font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
-.calc-highlight strong { font-family: var(--font-mono); font-size: 1rem; color: var(--accent-gold-bright); }
+.calc-highlight strong { font-family: var(--font-mono); font-size: 1.1rem; color: var(--accent-gold-bright); font-variant-numeric: tabular-nums; }
 
 /* ---------------- Skuteczność narzędzia ---------------- */
 .eff-row {
   display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-  padding: 0.45rem 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap;
+  padding: 0.45rem 0.5rem; border-bottom: 1px dashed var(--border); flex-wrap: wrap;
+  border-radius: 4px; transition: background 0.15s ease;
+  margin: 0 -0.5rem;
 }
+.eff-row:hover { background: var(--bg-elevated-2); }
 .eff-row:last-of-type { border-bottom: none; }
 .eff-row__cat { font-size: 0.72rem; font-weight: 600; }
 .eff-row__stat { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); }
@@ -1272,15 +1281,34 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 .stats-grid strong.positive { color: var(--accent-green-bright); }
 .stats-grid strong.negative { color: var(--accent-red-bright); }
 .corr-wrap { overflow-x: auto; }
-.corr-table { border-collapse: separate; border-spacing: 2px; font-family: var(--font-mono); font-size: 0.7rem; }
+.corr-table { border-collapse: separate; border-spacing: 3px; font-family: var(--font-mono); font-size: 0.7rem; }
 .corr-table th { color: var(--text-dim); font-weight: 600; padding: 0.25rem 0.45rem; text-align: center; white-space: nowrap; }
 .corr-table tbody th { text-align: right; }
-.corr-table td { text-align: center; padding: 0.3rem 0.5rem; border-radius: 3px; min-width: 44px; color: var(--text); }
+.corr-table td {
+  text-align: center; padding: 0.32rem 0.5rem; border-radius: 5px; min-width: 44px; color: var(--text);
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+/* Delikatne "wyskoczenie" komórki pod kursorem - macierz zaczyna czytać się
+   jak coś interaktywnego, nie tylko statyczna tabelka liczb. */
+.corr-table td:hover { transform: scale(1.12); box-shadow: var(--shadow-xs); position: relative; z-index: 1; }
 .backup-download-link { display: block; text-align: center; text-decoration: none; margin-bottom: 0.6rem; }
 
 /* ---------------- Portfel vs benchmark ---------------- */
 .bench-chart-container { width: 100%; height: 220px; margin: 0.4rem 0 0.2rem; }
 .legend-swatch--bench { background: var(--text-dim); }
+
+/* ---------------- Ramka wokół wykresów (equity/benchmark) ---------------- */
+/* Celowo NA WRAPPERZE, nie na .equity-chart-container/.bench-chart-container
+   same w sobie - Lightweight Charts dostaje przy tworzeniu WYSOKOŚĆ na
+   sztywno (height: 260 w app.js, czytane tylko raz), więc dołożenie
+   paddingu bezpośrednio na kontenerze wykresu zmniejszyłoby jego content-
+   box PO fakcie i canvas wystawałby poza zaokrągloną ramkę. */
+.chart-frame {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem;
+}
 
 /* ---------------- Personalizacja panelu bocznego (zwijanie, kolejność) ---------------- */
 .panel__header {
