@@ -175,6 +175,11 @@ html, body {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--text);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.status-pill:has(.status-pill__dot.is-live) {
+  border-color: rgba(109, 190, 133, 0.45);
+  box-shadow: 0 0 0 1px rgba(109, 190, 133, 0.08);
 }
 .status-pill--muted { color: var(--text-dim); }
 .status-pill__dot {
@@ -218,7 +223,20 @@ html, body {
   border-color: var(--accent-gold-bright);
   box-shadow: var(--shadow-xs), var(--glow-gold);
 }
-.btn--primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn--primary:disabled {
+  opacity: 0.7; cursor: not-allowed; transform: none; box-shadow: none;
+  background: linear-gradient(100deg, var(--bg-elevated-2) 40%, var(--border-bright) 50%, var(--bg-elevated-2) 60%);
+  background-size: 220% 100%;
+  color: var(--text-dim);
+  animation: btn-busy-shimmer 1.6s linear infinite;
+}
+/* Przycisk "Analiza w toku..." - migający pasek zamiast statycznego,
+   przygaszonego przycisku, żeby było jasne że coś się DZIEJE w tle, nie że
+   przycisk jest po prostu zablokowany/zepsuty. */
+@keyframes btn-busy-shimmer {
+  from { background-position: 0% 0; }
+  to { background-position: -220% 0; }
+}
 .btn--secondary { width: 100%; margin-top: 0.4rem; }
 .btn--icon { padding: 0.3rem 0.6rem; font-size: 0.9rem; }
 
@@ -350,11 +368,20 @@ html, body {
   max-height: 260px;
   padding: 0.6rem 1.2rem;
 }
-.log__line { padding: 0.15rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.log__line {
+  padding: 0.15rem 0 0.15rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-left: 2px solid transparent;
+  animation: log-line-in 0.25s var(--ease);
+}
+@keyframes log-line-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby nic jej nie zasłaniało */
-.log__line--warning { color: var(--accent-amber); }
-.log__line--error { color: var(--accent-red-bright); }
-.log__line--success { color: var(--accent-green-bright); }
+.log__line--warning { color: var(--accent-amber); border-left-color: currentColor; }
+.log__line--error { color: var(--accent-red-bright); border-left-color: currentColor; }
+.log__line--success { color: var(--accent-green-bright); border-left-color: currentColor; }
 .log__ts { color: var(--text-faint); margin-right: 0.4rem; }
 
 /* ---------------- Main results ---------------- */
@@ -392,12 +419,13 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 
 .empty-state {
-  color: var(--text-faint);
-  font-style: italic;
-  padding: 2rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 2.2rem 1.5rem;
   text-align: center;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(circle at 50% 0%, rgba(201, 162, 39, 0.05), transparent 70%);
 }
 
 .results-grid { display: flex; flex-direction: column; gap: 0.75rem; }
