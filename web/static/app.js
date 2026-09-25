@@ -2277,6 +2277,105 @@ function initPanelCustomization() {
   updatePanelMoveButtons(sidebar);
 }
 
+// ---------------- Przeciąganie paneli (drag & drop) ----------------
+// Alternatywa dla przycisków ▲/▼ (initPanelCustomization) - te zostają
+// nietknięte jako dostępny, precyzyjny fallback. Technika "FLIP": przy
+// każdej zmianie pozycji placeholdera zapisujemy stare współrzędne
+// pozostałych paneli, wykonujemy reorder w DOM, po czym animujemy PANELE
+// (nie placeholder) z ich starej pozycji do nowej - bez tego reorder
+// flexboksa po prostu "przeskakiwałby" bez animacji.
+function initPanelDragReorder() {
+  const sidebar = document.querySelector("#tab-analysis .sidebar");
+  if (!sidebar) return;
+  const getPanels = () => Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]"));
+
+  getPanels().forEach((panel) => {
+    const handle = panel.querySelector(".panel__drag-handle");
+    if (!handle) return;
+
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.preventDefault();
+
+      const rect = panel.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+
+      const spacer = document.createElement("div");
+      spacer.className = "panel-drag-spacer";
+      spacer.style.height = `${rect.height}px`;
+      panel.after(spacer);
+
+      panel.classList.add("is-dragging");
+      Object.assign(panel.style, {
+        position: "fixed",
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        zIndex: "200",
+        margin: "0",
+      });
+
+      const onMove = (ev) => {
+        panel.style.left = `${ev.clientX - offsetX}px`;
+        panel.style.top = `${ev.clientY - offsetY}px`;
+
+        const siblings = Array.from(sidebar.children).filter((c) => c !== panel);
+        let target = null;
+        for (const sib of siblings) {
+          const r = sib.getBoundingClientRect();
+          if (ev.clientY < r.top + r.height / 2) { target = sib; break; }
+        }
+        if (target === spacer) return;
+        if (target && target.previousElementSibling === spacer) return;
+
+        // Wyklucza sam przeciągany panel - jego pozycja to left/top (fixed),
+        // nie flexbox, więc nie powinien brać udziału w animacji FLIP reszty.
+        const others = getPanels().filter((p) => p !== panel);
+        const oldRects = new Map(others.map((p) => [p, p.getBoundingClientRect()]));
+
+        if (target) sidebar.insertBefore(spacer, target);
+        else sidebar.appendChild(spacer);
+
+        others.forEach((p) => {
+          const oldRect = oldRects.get(p);
+          const newRect = p.getBoundingClientRect();
+          const dy = oldRect.top - newRect.top;
+          if (!dy) return;
+          p.style.transition = "none";
+          p.style.transform = `translateY(${dy}px)`;
+          requestAnimationFrame(() => {
+            p.style.transition = "transform 0.22s var(--ease)";
+            p.style.transform = "";
+            // Bez tego inline "transition: transform" zostałoby na stałe i
+            // nadpisywało pełną listę przejść z .panel (border-color/box-
+            // shadow na hover) po każdym przeciągnięciu - czyścimy inline
+            // style, gdy animacja się skończy, żeby reguła z arkusza znów
+            // przejęła kontrolę.
+            p.addEventListener("transitionend", () => { p.style.transition = ""; }, { once: true });
+          });
+        });
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        panel.classList.remove("is-dragging");
+        Object.assign(panel.style, {
+          position: "", left: "", top: "", width: "", zIndex: "", margin: "",
+        });
+        sidebar.insertBefore(panel, spacer);
+        spacer.remove();
+        saveSidebarOrder(sidebar);
+        updatePanelMoveButtons(sidebar);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp, { once: true });
+    });
+  });
+}
+
 // ---------------- Start ----------------
 (async function init() {
   // Zabezpieczenie: modal, szufladka logu i widget czatu MUSZĄ być
@@ -2290,6 +2389,7 @@ function initPanelCustomization() {
   applyColumnVisibility(state.columnPrefs);
   setupColumnSettings();
   initPanelCustomization();
+  initPanelDragReorder();
 
   setupSparklineHeaders();
   setupSortableHeaders();

@@ -1291,7 +1291,7 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   margin-bottom: 0.8rem;
 }
 .panel__header .panel__title { margin-bottom: 0; }
-.panel__controls { display: flex; align-items: center; gap: 0.1rem; flex-shrink: 0; }
+.panel__controls { display: flex; align-items: center; gap: 0.2rem; flex-shrink: 0; }
 .panel__ctrl-btn {
   background: none;
   border: none;
@@ -1310,6 +1310,36 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 .panel.is-collapsed .panel__body { display: none; }
 /* Panel w trakcie przenoszenia (krótki wizualny feedback po kliknięciu ▲/▼) */
 .panel.is-just-moved { border-color: var(--accent-gold); }
+
+/* ---------------- Przeciąganie paneli (drag & drop) ---------------- */
+/* Uchwyt to alternatywa dla ▲/▼, nie ich zamiennik - klawiatura/dotyk bez
+   pewnej ręki nadal ma prosty, jednoznaczny sposób zmiany kolejności. */
+.panel__drag-handle {
+  cursor: grab;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.3rem 0.25rem;
+  touch-action: none;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+.panel__drag-handle:hover { color: var(--accent-gold-bright); }
+.panel.is-dragging {
+  cursor: grabbing;
+  transform: rotate(1.4deg);
+  box-shadow: var(--shadow-lg), var(--glow-gold);
+  opacity: 0.97;
+}
+.panel.is-dragging .panel__drag-handle { cursor: grabbing; color: var(--accent-gold-bright); }
+/* Miejsce, w które wyląduje panel po puszczeniu - obrys zamiast wypełnionej
+   karty, żeby jednoznacznie czytać się jako "tu", a nie jak kolejny panel. */
+.panel-drag-spacer {
+  border: 2px dashed var(--accent-gold);
+  border-radius: var(--radius-lg);
+  background: rgba(201, 162, 39, 0.06);
+  box-sizing: border-box;
+}
 
 /* ---------------- Personalizacja kolumn (watchlista / propozycje AI) ---------------- */
 .section-header { position: relative; }
