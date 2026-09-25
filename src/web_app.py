@@ -61,6 +61,7 @@ from src.report import (
     compute_tax_summary, summarize_portfolio_by_currency,
     compute_portfolio_statistics, compute_benchmark_comparison,
     build_closed_trades_export_rows,
+    compute_twr_curve, prepare_cash_flows_for_currency,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -780,14 +781,30 @@ async def api_get_portfolio_equity_combined():
     base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
     points = db.get_portfolio_equity_combined_curve(base_currency)
     drawdown = compute_max_drawdown(points)
-    return sanitize_for_json({"points": points, "drawdown": drawdown, "base_currency": base_currency})
+    # TWR (time-weighted return) - w odróżnieniu od surowej wartości/kosztu
+    # wyżej, dokupienie/sprzedaż pozycji nie zniekształca wyniku, więc to
+    # jest uczciwa liczba do porównania z benchmarkiem (patrz report.py).
+    # Przepływy ze WSZYSTKICH walut przeliczone na base_currency kursem
+    # historycznym z dnia zdarzenia - stąd asyncio.to_thread (zapytania FX).
+    raw_flows = db.get_position_cash_flows()
+    twr_points = await asyncio.to_thread(
+        lambda: compute_twr_curve(points, prepare_cash_flows_for_currency(raw_flows, base_currency, True))
+    )
+    return sanitize_for_json({
+        "points": points, "drawdown": drawdown, "base_currency": base_currency, "twr_points": twr_points,
+    })
 
 
 @app.get("/api/portfolio/equity/{currency}")
 async def api_get_portfolio_equity(currency: str):
     points = db.get_portfolio_equity_curve(currency)
     drawdown = compute_max_drawdown(points)
-    return sanitize_for_json({"points": points, "drawdown": drawdown})
+    # TWR per-walutowy - przepływy są już w tej samej walucie co krzywa,
+    # więc bez konwersji FX (convert=False) i bez potrzeby osobnego wątku.
+    raw_flows = db.get_position_cash_flows(currency=currency.upper())
+    cash_flows = prepare_cash_flows_for_currency(raw_flows, currency.upper(), convert=False)
+    twr_points = compute_twr_curve(points, cash_flows)
+    return sanitize_for_json({"points": points, "drawdown": drawdown, "twr_points": twr_points})
 
 
 @app.get("/api/portfolio/closed")

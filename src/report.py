@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -458,6 +458,86 @@ def compute_max_drawdown(equity_points: list[dict]) -> dict:
         "max_drawdown_trough_date": max_dd_trough_ts,
         "current_drawdown_pct": round(current_dd_pct, 2),
     }
+
+
+def prepare_cash_flows_for_currency(raw_flows: list[dict], target_currency: str,
+                                     convert: bool) -> list[dict]:
+    """Zamienia surowe zdarzenia z db.get_position_cash_flows (kupno/sprzedaż,
+    każde we WŁASNEJ walucie notowania) na listę podpisanych kwot w jednej
+    walucie docelowej - wejście do compute_twr_curve. `convert=True` (krzywa
+    ŁĄCZNA) przelicza kursem HISTORYCZNYM z dnia zdarzenia; to wydajność
+    portfela, nie rozliczenie podatkowe, więc - w odróżnieniu od
+    compute_tax_summary - wystarczy przybliżony kurs rynkowy, bez
+    zachodu o oficjalny kurs NBP. Przepływ bez dostępnego kursu jest
+    pomijany (lepsze przybliżone TWR niż zepsuty cały wynik)."""
+    from .fx_rates import get_historical_fx_rate
+
+    out: list[dict] = []
+    for f in raw_flows:
+        amount = f["amount"]
+        if convert and f["currency"] != target_currency:
+            rate = get_historical_fx_rate(f["currency"], target_currency, f["date"])
+            if rate is None:
+                continue
+            amount *= rate
+        out.append({"date": f["date"], "signed_amount": amount if f["kind"] == "in" else -amount})
+    return out
+
+
+def compute_twr_curve(equity_points: list[dict], cash_flows: list[dict]) -> list[dict]:
+    """Liczy TWR (time-weighted return) - w przeciwieństwie do surowej
+    krzywej wartości/kosztu, dokupienie akcji NIE podbija sztucznie wyniku
+    i sprzedaż go nie zaniża, więc to jest uczciwa liczba do porównania z
+    benchmarkiem. Metoda: dla każdej pary kolejnych zdjęć krzywej liczymy
+    zwrot okresu metodą Modified Dietz (przepływ ważony liczbą dni, przez
+    jaką "pracował" w danym oknie), a okresy składamy GEOMETRYCZNIE w
+    skumulowany indeks (start = 100 w dniu pierwszego zdjęcia).
+
+    cash_flows: [{"date": "YYYY-MM-DD", "signed_amount": float}] - dodatnie
+    = wpłata (kupno), ujemne = wypłata (sprzedaż); patrz
+    prepare_cash_flows_for_currency. Przepływ z DNIA poprzedniego zdjęcia
+    liczy się jako już uwzględniony w nim (pomijamy), z dnia bieżącego
+    zdjęcia - jeszcze nie było zdjęcia, więc WLICZAMY."""
+    if len(equity_points) < 2:
+        return []
+
+    def _to_date(ts: str) -> date | None:
+        try:
+            return date.fromisoformat(ts[:10])
+        except ValueError:
+            return None
+
+    points = [{"ts": equity_points[0]["ts"], "index": 100.0}]
+    cum_index = 100.0
+
+    for prev, curr in zip(equity_points, equity_points[1:]):
+        prev_date, curr_date = _to_date(prev["ts"]), _to_date(curr["ts"])
+        v0, v1 = prev["total_value"], curr["total_value"]
+
+        if prev_date is None or curr_date is None or curr_date <= prev_date:
+            points.append({"ts": curr["ts"], "index": round(cum_index, 3)})
+            continue
+
+        period_days = (curr_date - prev_date).days
+        period_flows = [f for f in cash_flows
+                         if (d := _to_date(f["date"])) is not None and prev_date < d <= curr_date]
+
+        net_flow = 0.0
+        weighted_flow = 0.0
+        for f in period_flows:
+            signed = f["signed_amount"]
+            net_flow += signed
+            flow_date = _to_date(f["date"])
+            days_held = max(0, (curr_date - flow_date).days)
+            weighted_flow += signed * (days_held / period_days)
+
+        denom = v0 + weighted_flow
+        period_return = (v1 - v0 - net_flow) / denom if denom > 0 else 0.0
+
+        cum_index *= (1 + period_return)
+        points.append({"ts": curr["ts"], "index": round(cum_index, 3)})
+
+    return points
 
 
 def compute_portfolio_risk_summary(open_positions_evaluated: list[dict]) -> dict:

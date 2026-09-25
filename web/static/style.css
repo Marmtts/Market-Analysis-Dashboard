@@ -1082,7 +1082,12 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 /* ---------------- Krzywa kapitału ---------------- */
 .equity-chart-wrap { margin: 0.5rem 0 1.5rem; position: relative; }
 .equity-chart-container { width: 100%; height: 260px; }
-#equityCurrencySwitcher { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+.equity-controls {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 0.5rem; margin-bottom: 0.5rem;
+}
+#equityCurrencySwitcher, #equityViewSwitcher { display: flex; gap: 0.4rem; }
+#equityViewNote { margin: 0 0 0.6rem; }
 
 /* ---------------- Brief dnia ---------------- */
 .daily-brief {

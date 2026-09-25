@@ -1643,6 +1643,8 @@ function renderPortfolioRisk(data) {
 // ---------------- Krzywa kapitału portfela ----------------
 let equityChart = null;
 let equityCurrentCurrency = null;
+let equityViewMode = "value"; // "value" (wartość/koszt) | "twr" (skumulowany zwrot, oczyszczony z wpłat/wypłat)
+let equityLastData = null; // dane ostatniej odpowiedzi - przełącznik widoku nie robi ponownego fetcha
 
 async function loadPortfolioEquitySection() {
   try {
@@ -1652,6 +1654,7 @@ async function loadPortfolioEquitySection() {
     equityCurrentCurrency = (equityCurrentCurrency && options.includes(equityCurrentCurrency))
       ? equityCurrentCurrency : "COMBINED";
     renderEquityCurrencySwitcher(options);
+    renderEquityViewSwitcher();
     await loadPortfolioEquity(equityCurrentCurrency);
   } catch (err) {
     console.warn("Nie udało się pobrać walut krzywej kapitału:", err);
@@ -1676,22 +1679,60 @@ function renderEquityCurrencySwitcher(options) {
   });
 }
 
+function renderEquityViewSwitcher() {
+  const wrap = el("equityViewSwitcher");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  [["value", "Wartość"], ["twr", "Zwrot (TWR)"]].forEach(([mode, label]) => {
+    const btn = document.createElement("button");
+    btn.className = "currency-switch-btn" + (mode === equityViewMode ? " is-active" : "");
+    btn.textContent = label;
+    btn.title = mode === "twr"
+      ? "Prawdziwy zwrot z inwestycji - dokupienie/sprzedaż pozycji nie zniekształca wyniku (metoda Modified Dietz, złożona geometrycznie)"
+      : "Surowa wartość i koszt portfela w czasie";
+    btn.addEventListener("click", () => {
+      equityViewMode = mode;
+      wrap.querySelectorAll(".currency-switch-btn").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      renderEquityChart();
+    });
+    wrap.appendChild(btn);
+  });
+}
+
 async function loadPortfolioEquity(currency) {
   const endpoint = currency === "COMBINED" ? "/api/portfolio/equity/combined" : `/api/portfolio/equity/${encodeURIComponent(currency)}`;
   const res = await fetch(endpoint);
   if (!res.ok) return;
-  const data = await res.json();
+  equityLastData = await res.json();
+  renderEquityChart();
+}
+
+function renderEquityChart() {
+  const data = equityLastData;
   const container = el("equityChartContainer");
   const emptyState = el("equityEmptyState");
+  const note = el("equityViewNote");
+  if (!data) return;
 
-  if (!data.points || data.points.length < 2) {
+  const usingTwr = equityViewMode === "twr";
+  const points = usingTwr ? (data.twr_points || []) : (data.points || []);
+
+  if (!points || points.length < 2) {
+    emptyState.textContent = usingTwr
+      ? "📉 Za mało danych do policzenia prawdziwego zwrotu (TWR) - potrzeba co najmniej dwóch zdjęć krzywej kapitału z różnych dni."
+      : "📉 Za mało danych historycznych — krzywa pojawi się po kilku cyklach analizy.";
     emptyState.style.display = "";
     container.innerHTML = "";
     el("equityDrawdownLabel").textContent = "";
+    note.textContent = "";
     return;
   }
   emptyState.style.display = "none";
   container.innerHTML = "";
+  note.textContent = usingTwr
+    ? "Skumulowany, prawdziwy zwrot z inwestycji (start = 100) - w odróżnieniu od wykresu \"Wartość\", dokupienie lub sprzedaż pozycji NIE podbija ani nie zaniża tej liczby. Orientacyjne - przepływy w walutach obcych przeliczane są przybliżonym kursem rynkowym z dnia transakcji, nie oficjalnym kursem NBP."
+    : "";
 
   if (equityChart) {
     equityChart.remove();
@@ -1706,30 +1747,49 @@ async function loadPortfolioEquity(currency) {
     timeScale: { borderColor: "#2A3346" },
     rightPriceScale: { borderColor: "#2A3346" },
   });
-  const valueSeries = equityChart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
-  const costSeries = equityChart.addLineSeries({ color: "#8A93A8", lineWidth: 1, lineStyle: 2 });
 
   const toTime = (ts) => ts.split(" ")[0];
   const seen = new Set();
-  const valuePoints = [];
-  const costPoints = [];
-  data.points.forEach((p) => {
-    const t = toTime(p.ts);
-    if (seen.has(t)) return; // Lightweight Charts wymaga unikalnych, rosnących dat
-    seen.add(t);
-    valuePoints.push({ time: t, value: p.total_value });
-    costPoints.push({ time: t, value: p.total_cost });
-  });
-  valueSeries.setData(valuePoints);
-  costSeries.setData(costPoints);
-  equityChart.timeScale().fitContent();
 
-  const dd = data.drawdown;
-  if (dd && dd.available) {
-    el("equityDrawdownLabel").textContent =
-      `maks. obsunięcie: -${dd.max_drawdown_pct}% (${dd.max_drawdown_peak_date.split(" ")[0]} → ${dd.max_drawdown_trough_date.split(" ")[0]})` +
-      (dd.current_drawdown_pct > 0 ? `, bieżące: -${dd.current_drawdown_pct}%` : "");
+  if (usingTwr) {
+    const twrSeries = equityChart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
+    const twrPoints = [];
+    points.forEach((p) => {
+      const t = toTime(p.ts);
+      if (seen.has(t)) return;
+      seen.add(t);
+      twrPoints.push({ time: t, value: p.index });
+    });
+    twrSeries.setData(twrPoints);
+    const first = twrPoints[0].value, last = twrPoints[twrPoints.length - 1].value;
+    const totalReturn = ((last / first - 1) * 100).toFixed(1);
+    el("equityDrawdownLabel").textContent = `skumulowany zwrot: ${totalReturn >= 0 ? "+" : ""}${totalReturn}%`;
+  } else {
+    const valueSeries = equityChart.addLineSeries({ color: "#C9A227", lineWidth: 2 });
+    const costSeries = equityChart.addLineSeries({ color: "#8A93A8", lineWidth: 1, lineStyle: 2 });
+    const valuePoints = [];
+    const costPoints = [];
+    points.forEach((p) => {
+      const t = toTime(p.ts);
+      if (seen.has(t)) return; // Lightweight Charts wymaga unikalnych, rosnących dat
+      seen.add(t);
+      valuePoints.push({ time: t, value: p.total_value });
+      costPoints.push({ time: t, value: p.total_cost });
+    });
+    valueSeries.setData(valuePoints);
+    costSeries.setData(costPoints);
+
+    const dd = data.drawdown;
+    if (dd && dd.available) {
+      el("equityDrawdownLabel").textContent =
+        `maks. obsunięcie: -${dd.max_drawdown_pct}% (${dd.max_drawdown_peak_date.split(" ")[0]} → ${dd.max_drawdown_trough_date.split(" ")[0]})` +
+        (dd.current_drawdown_pct > 0 ? `, bieżące: -${dd.current_drawdown_pct}%` : "");
+    } else {
+      el("equityDrawdownLabel").textContent = "";
+    }
   }
+
+  equityChart.timeScale().fitContent();
 }
 
 // ---------------- Orientacyjne podsumowanie podatkowe ----------------

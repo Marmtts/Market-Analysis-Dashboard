@@ -649,6 +649,37 @@ def get_portfolio_equity_combined_curve(base_currency: str) -> list[dict]:
         ).fetchall()
         return [dict(r) for r in rows]
 
+
+def get_position_cash_flows(currency: str | None = None) -> list[dict]:
+    """Zwraca WSZYSTKIE zdarzenia przepływu gotówki portfela (kupno = wpływ,
+    sprzedaż = odpływ), na bazie tabeli `portfolio` (otwarte i zamknięte
+    pozycje). Każde kupno/sprzedaż ma już dokładną datę i kwotę w tej
+    tabeli - to JEST historia przepływów potrzebna do policzenia
+    prawdziwego (TWR) zwrotu portfela, bez dodawania osobnej tabeli
+    przepływów. `currency` opcjonalnie filtruje do jednej waluty notowania
+    (krzywa per-walutowa); bez filtra - wszystkie pozycje (krzywa łączna,
+    przeliczana na walutę bazową w report.py)."""
+    with _connect() as conn:
+        query = "SELECT ticker, shares, buy_price, buy_date, sell_price, sell_date, currency FROM portfolio"
+        params: tuple = ()
+        if currency:
+            query += " WHERE currency = ?"
+            params = (currency.upper(),)
+        rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+
+    flows: list[dict] = []
+    for r in rows:
+        flows.append({
+            "date": r["buy_date"], "amount": r["shares"] * r["buy_price"],
+            "currency": r["currency"], "kind": "in",
+        })
+        if r["sell_date"] and r["sell_price"] is not None:
+            flows.append({
+                "date": r["sell_date"], "amount": r["shares"] * r["sell_price"],
+                "currency": r["currency"], "kind": "out",
+            })
+    return flows
+
 # =====================================================================
 # Cache newsów historycznych (Finnhub) - unika ponownego pobierania tych
 # samych miesięcy nagłówków w KAŻDYM cyklu. Miesiące STARSZE niż bieżący

@@ -22,6 +22,17 @@ logger = logging.getLogger("xtb_trend_watch.fx_rates")
 _CACHE: dict[tuple[str, str], tuple[float, float]] = {}  # (from,to) -> (rate, timestamp)
 _TTL_SECONDS = 900  # 15 minut
 
+# Pamięć PORAŻKI dla kursów HISTORYCZNYCH (get_historical_fx_rate) - w
+# odróżnieniu od udanych zapytań, które trwale cache'ują się w SQLite
+# (fx_rate_cache), niepowodzenie nigdzie się nie zapisywało: para walutowa
+# bez notowań na yfinance (np. rzadziej płynne SEK) była odpytywana od nowa
+# przy KAŻDYM wywołaniu (np. compute_twr_curve dla krzywej łącznej liczy to
+# per przepływ gotówki - bez tej pamięci to dziesiątki zbędnych, powolnych
+# zapytań sieciowych przy każdym odświeżeniu widoku). W pamięci procesu
+# (nie SQLite) - restart serwera daje parze walutowej kolejną szansę.
+_HISTORICAL_FX_FAILURES: dict[str, float] = {}
+_HISTORICAL_FX_FAILURE_TTL_SECONDS = 6 * 3600  # 6h - to dane HISTORYCZNE, nie zmienią się w kolejnych minutach
+
 
 def get_fx_rate(from_currency: str, to_currency: str) -> float | None:
     """Zwraca ile jednostek to_currency odpowiada 1 jednostce from_currency.
@@ -95,6 +106,10 @@ def get_historical_fx_rate(from_currency: str, to_currency: str, date_str: str) 
     if persisted is not None:
         return persisted
 
+    failed_at = _HISTORICAL_FX_FAILURES.get(cache_key)
+    if failed_at is not None and (time.time() - failed_at) < _HISTORICAL_FX_FAILURE_TTL_SECONDS:
+        return None
+
     rate = _fetch_pair_historical(f"{from_currency}{to_currency}=X", date_str)
     if rate is None:
         inverse = _fetch_pair_historical(f"{to_currency}{from_currency}=X", date_str)
@@ -102,6 +117,9 @@ def get_historical_fx_rate(from_currency: str, to_currency: str, date_str: str) 
 
     if rate is not None:
         db.save_fx_rate_to_cache(cache_key, rate)
+        _HISTORICAL_FX_FAILURES.pop(cache_key, None)
+    else:
+        _HISTORICAL_FX_FAILURES[cache_key] = time.time()
     return rate
 
 
