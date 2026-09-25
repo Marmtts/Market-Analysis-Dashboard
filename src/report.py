@@ -527,6 +527,52 @@ def compute_portfolio_sector_exposure(open_positions_evaluated: list[dict],
     exposure.sort(key=lambda x: -x["pct_of_portfolio"])
     return exposure
 
+def _convert_trade_to_base_currency(p: dict, base_currency: str) -> dict:
+    """Przelicza JEDNĄ zamkniętą transakcję na walutę bazową - dla PLN
+    oficjalnym kursem NBP z dnia poprzedzającego transakcję (art. 11a ustawy
+    o PIT), w innych przypadkach przybliżonym kursem rynkowym (yfinance).
+    Wydzielone z compute_tax_summary, żeby export_closed_trades_csv liczył
+    DOKŁADNIE tę samą liczbę dla tej samej transakcji, zamiast powielać
+    logikę kursową w dwóch miejscach i ryzykować, że się rozjadą."""
+    from .fx_rates import get_historical_fx_rate, get_nbp_rate
+
+    currency = p.get("currency") or "USD"
+    sell_date = p.get("sell_date")
+
+    if currency == base_currency:
+        buy_rate = sell_rate = 1.0
+        used_fallback = False
+    elif base_currency == "PLN":
+        buy_rate = get_nbp_rate(currency, p["buy_date"], for_tax_purposes=True)
+        sell_rate = get_nbp_rate(currency, sell_date, for_tax_purposes=True)
+        used_fallback = buy_rate is None or sell_rate is None
+        if used_fallback:
+            buy_rate = buy_rate or get_historical_fx_rate(currency, base_currency, p["buy_date"])
+            sell_rate = sell_rate or get_historical_fx_rate(currency, base_currency, sell_date)
+    else:
+        used_fallback = True
+        buy_rate = get_historical_fx_rate(currency, base_currency, p["buy_date"])
+        sell_rate = get_historical_fx_rate(currency, base_currency, sell_date)
+
+    fallback_note = (
+        f"{p['ticker']}: kurs NBP niedostępny dla {currency} - użyto przybliżonego kursu rynkowego."
+        if used_fallback and base_currency == "PLN" and currency != base_currency else None
+    )
+
+    if buy_rate is None or sell_rate is None:
+        return {
+            "gain_base": None, "buy_rate": None, "sell_rate": None, "used_fallback": used_fallback,
+            "note": f"{p['ticker']} ({p['buy_date']} -> {sell_date}): brak kursu {currency}->{base_currency}, pominięto.",
+        }
+
+    cost = p["buy_price"] * p["shares"] * buy_rate
+    proceeds = p["sell_price"] * p["shares"] * sell_rate
+    return {
+        "gain_base": proceeds - cost, "buy_rate": buy_rate, "sell_rate": sell_rate,
+        "used_fallback": used_fallback, "note": fallback_note,
+    }
+
+
 def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN") -> dict:
     """Grupuje ZREALIZOWANE transakcje wg roku sprzedaży i liczy orientacyjny
     wynik podatkowy (podatek od zysków kapitałowych, 19% w Polsce - tzw.
@@ -535,8 +581,6 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
     o PIT) - to JEST poprawny prawnie kurs. Jeśli NBP jest niedostępny dla
     danej waluty/daty, spada na przybliżony kurs rynkowy (yfinance) i
     WYRAŹNIE to odnotowuje w conversion_notes oraz w polu 'nbp_compliant'."""
-    from .fx_rates import get_historical_fx_rate, get_nbp_rate
-
     by_year: dict[str, dict] = {}
     conversion_notes: list[str] = []
     any_fallback_used = False
@@ -546,35 +590,17 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
         if not sell_date:
             continue
         sell_year = sell_date[:4]
-        currency = p.get("currency") or "USD"
 
-        if currency == base_currency:
-            buy_rate = sell_rate = 1.0
-        elif base_currency == "PLN":
-            buy_rate = get_nbp_rate(currency, p["buy_date"], for_tax_purposes=True)
-            sell_rate = get_nbp_rate(currency, sell_date, for_tax_purposes=True)
-            if buy_rate is None or sell_rate is None:
-                any_fallback_used = True
-                buy_rate = buy_rate or get_historical_fx_rate(currency, base_currency, p["buy_date"])
-                sell_rate = sell_rate or get_historical_fx_rate(currency, base_currency, sell_date)
-                conversion_notes.append(
-                    f"{p['ticker']}: kurs NBP niedostępny dla {currency} - użyto przybliżonego kursu rynkowego."
-                )
-        else:
-            any_fallback_used = True
-            buy_rate = get_historical_fx_rate(currency, base_currency, p["buy_date"])
-            sell_rate = get_historical_fx_rate(currency, base_currency, sell_date)
-
-        if buy_rate is None or sell_rate is None:
-            conversion_notes.append(
-                f"{p['ticker']} ({p['buy_date']} -> {sell_date}): brak kursu {currency}->{base_currency}, pominięto."
-            )
+        conv = _convert_trade_to_base_currency(p, base_currency)
+        if conv["gain_base"] is None:
+            conversion_notes.append(conv["note"])
             continue
+        if conv["used_fallback"]:
+            any_fallback_used = True
+            if conv["note"]:
+                conversion_notes.append(conv["note"])
 
-        cost = p["buy_price"] * p["shares"] * buy_rate
-        proceeds = p["sell_price"] * p["shares"] * sell_rate
-        gain = proceeds - cost
-
+        gain = conv["gain_base"]
         bucket = by_year.setdefault(sell_year, {"gains": 0.0, "losses": 0.0, "count": 0, "trades": []})
         bucket["count"] += 1
         if gain >= 0:
@@ -582,7 +608,7 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
         else:
             bucket["losses"] += -gain
         bucket["trades"].append({"ticker": p["ticker"], "sell_date": sell_date,
-                                  "gain": round(gain, 2), "currency": currency})
+                                  "gain": round(gain, 2), "currency": p.get("currency") or "USD"})
 
     result = {}
     for year, b in sorted(by_year.items()):
@@ -602,6 +628,45 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
         "conversion_notes": conversion_notes,
         "nbp_compliant": base_currency == "PLN" and not any_fallback_used,
     }
+
+
+def build_closed_trades_export_rows(closed_positions: list[dict], base_currency: str = "PLN") -> tuple[list[str], list[list]]:
+    """Buduje nagłówek + wiersze do eksportu CSV historii zamkniętych
+    transakcji - surowe dane pozycji (w walucie notowania) PLUS, gdy się uda
+    przeliczyć, zysk/strata w walucie bazowej (ta sama logika kursowa co
+    compute_tax_summary - patrz _convert_trade_to_base_currency), żeby liczby
+    w eksporcie zgadzały się z panelem podsumowania podatkowego w UI.
+    Do wklejenia we własny arkusz rozliczenia (PIT-38 lub inny) - nie jest to
+    gotowe rozliczenie, patrz zastrzeżenia w panelu podatkowym."""
+    header = [
+        "Ticker", "Liczba akcji", "Data kupna", "Cena kupna", "Data sprzedaży", "Cena sprzedaży",
+        "Waluta", "Zysk/strata (waluta notowania)", "Zysk/strata %", "Dni w portfelu", "Notatka",
+        f"Kurs kupna -> {base_currency}", f"Kurs sprzedaży -> {base_currency}",
+        f"Zysk/strata ({base_currency})",
+    ]
+    rows: list[list] = []
+    for p in sorted(closed_positions, key=lambda x: x.get("sell_date") or ""):
+        if not p.get("sell_date"):
+            continue
+        pl_native = round((p["sell_price"] - p["buy_price"]) * p["shares"], 2)
+        pl_pct = round((p["sell_price"] - p["buy_price"]) / p["buy_price"] * 100, 2) if p["buy_price"] else ""
+        try:
+            buy_d = datetime.strptime(p["buy_date"], "%Y-%m-%d")
+            sell_d = datetime.strptime(p["sell_date"], "%Y-%m-%d")
+            holding_days = (sell_d - buy_d).days
+        except (ValueError, TypeError):
+            holding_days = ""
+
+        conv = _convert_trade_to_base_currency(p, base_currency)
+        rows.append([
+            p["ticker"], p["shares"], p["buy_date"], p["buy_price"], p["sell_date"], p["sell_price"],
+            p.get("currency") or "USD", pl_native, pl_pct, holding_days, p.get("notes") or "",
+            round(conv["buy_rate"], 4) if conv["buy_rate"] is not None else "",
+            round(conv["sell_rate"], 4) if conv["sell_rate"] is not None else "",
+            round(conv["gain_base"], 2) if conv["gain_base"] is not None else "",
+        ])
+    return header, rows
+
 
 def summarize_portfolio_by_currency(open_positions_evaluated: list[dict]) -> dict:
     """Grupuje otwarte pozycje po walucie (wartość/koszt/P&L%/ryzyko) -

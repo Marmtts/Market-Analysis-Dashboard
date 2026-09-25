@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
+import io
 import json
 import logging
 import sys
@@ -41,7 +43,7 @@ from contextlib import asynccontextmanager
 
 import yaml
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -58,6 +60,7 @@ from src.report import (
     compute_portfolio_risk_summary, compute_portfolio_sector_exposure,
     compute_tax_summary, summarize_portfolio_by_currency,
     compute_portfolio_statistics, compute_benchmark_comparison,
+    build_closed_trades_export_rows,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -809,6 +812,30 @@ async def api_get_tax_summary():
     # wielu transakcjach - w osobnym wątku, żeby nie blokować pętli asyncio.
     summary = await asyncio.to_thread(compute_tax_summary, closed, base_currency)
     return sanitize_for_json(summary)
+
+
+@app.get("/api/portfolio/closed/export")
+async def api_export_closed_trades_csv():
+    """CSV historii zamkniętych transakcji - do wklejenia we własny arkusz
+    rozliczenia podatkowego. ';' jako separator (domyślny separator listy
+    w polskich ustawieniach regionalnych Excela), BOM na początku pliku,
+    żeby polskie znaki (nazwy tickerów/notatki) wyświetliły się poprawnie
+    po otwarciu w Excelu zamiast krzaczków."""
+    closed = db.get_portfolio(status="closed")
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    header, rows = await asyncio.to_thread(build_closed_trades_export_rows, closed, base_currency)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";")
+    writer.writerow(header)
+    writer.writerows(rows)
+
+    filename = f"xtb_trend_watch_zamkniete_transakcje_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    return Response(
+        content="﻿" + buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 @app.post("/api/portfolio/{position_id}/close")
 async def api_close_position(position_id: int, req: ClosePositionRequest):

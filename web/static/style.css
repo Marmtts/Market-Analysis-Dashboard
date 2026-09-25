@@ -1466,6 +1466,24 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   white-space: nowrap;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
+/* Ten sam wygląd co przycisk "⚙ Kolumny", ale generyczny - używany też
+   przez link eksportu CSV w zakładce Zamknięte transakcje. */
+.section-header__action {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.section-header__action:hover { border-color: var(--accent-gold); color: var(--accent-gold-bright); }
 .col-settings-btn:hover, .col-settings-btn[aria-expanded="true"] {
   border-color: var(--accent-gold);
   color: var(--accent-gold-bright);
