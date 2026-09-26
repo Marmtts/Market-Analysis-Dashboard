@@ -344,12 +344,22 @@
       <h2><span class="section-header__icon">⚖</span>Rebalancing</h2>
     </div>
     <div class="section-card">
+      <h4 class="detail-section__title">Wg spółki</h4>
       <form class="add-form add-form--inline" id="targetForm">
         <input type="text" id="targetTicker" placeholder="Ticker (np. AAPL)" required autocomplete="off">
         <input type="number" id="targetPct" placeholder="Cel %" step="0.1" min="0" max="100" required>
         <button type="submit" class="btn btn--secondary">+ Ustaw cel</button>
       </form>
       <div id="rebalancingPanel"></div>
+
+      <h4 class="detail-section__title">Wg sektora</h4>
+      <form class="add-form add-form--inline" id="sectorTargetForm">
+        <input type="text" id="sectorTargetName" placeholder="Sektor (np. Technology)" required autocomplete="off">
+        <input type="number" id="sectorTargetPct" placeholder="Cel %" step="0.1" min="0" max="100" required>
+        <button type="submit" class="btn btn--secondary">+ Ustaw cel</button>
+      </form>
+      <p class="detail-disclaimer">Nazwa sektora musi się zgadzać z tą widoczną w panelu „Ryzyko i ekspozycja” (ekspozycja sektorowa) — pochodzi z danych fundamentalnych Yahoo Finance, np. „Technology”, „Healthcare”, „Financial Services”.</p>
+      <div id="rebalancingSectorPanel"></div>
     </div>
     </div>
 

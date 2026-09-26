@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.12"
+VERSION = "3.13"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -966,6 +966,14 @@ def part2(s: Story) -> None:
               "minimalnych wielkości zleceń u brokera. To punkt wyjścia do własnej decyzji, nie gotowe "
               "zlecenie. Dla tickera bez dzisiejszej pozycji cena pochodzi z ostatniego cyklu analizy — jeśli "
               "spółka nie jest jeszcze na watchliście, sugestia liczby akcji nie pojawi się (brak ceny).")
+    s.p("Pod tabelą „Wg spółki” znajduje się analogiczna sekcja <b>„Wg sektora”</b> — cel ustawiasz nie dla "
+        "pojedynczego tickera, tylko dla całego sektora (np. „Technology” ma stanowić maks. 30% portfela”). "
+        "Grupowanie sektorów jest identyczne jak w panelu „Ryzyko i ekspozycja” (dane fundamentalne Yahoo "
+        "Finance) — nazwa sektora we wpisywanym polu musi się z nim zgadzać, inaczej dashboard potraktuje "
+        "to jako nowy, pusty sektor. Ponieważ sektor to zwykle kilka różnych spółek, sugestia jest tu "
+        "wyłącznie KWOTOWA (dokup/sprzedaj ok. X w walucie bazowej gdzieś w tym sektorze) — bez wskazania "
+        "konkretnej spółki ani liczby akcji; najedź na nazwę sektora, żeby zobaczyć, które Twoje spółki się "
+        "do niego zaliczają.")
     s.h2("14.3 Portfel a benchmark")
     s.p("Pod miarami ryzyka w panelu „Korelacja i zmienność” znajduje się sekcja „Portfel a benchmark”. "
         "Odpowiada na pytanie, które trudno ocenić na oko: <b>czy portfel bije rynek dzięki trafnemu wyborowi "
@@ -1237,7 +1245,7 @@ def part3(s: Story) -> None:
         ["Notatki do pozycji (razem ze znacznikami importu XTB).",
          "Wyniki analizy i pamięć podręczna newsów/kursów (odbudują się automatycznie)."],
         ["Dywidendy (rozdział 12.6) — kwota, waluta, data, podatek u źródła.", ""],
-        ["Cele alokacji do rebalancingu (rozdział 14.2.1).", ""],
+        ["Cele alokacji do rebalancingu, wg spółki i wg sektora (rozdział 14.2.1).", ""],
     ], [50, 50])
     s.bullets([
         "Wczytanie jest bezpieczne do powtarzania: identyczne pozycje, spółki i dywidendy są pomijane (cele "
@@ -1458,6 +1466,9 @@ def part3(s: Story) -> None:
                                   "ustawiasz cel dla dowolnej spółki (także jeszcze nieposiadanej), panel "
                                   "pokazuje odchylenie od celu i sugestię kup/sprzedaj ile akcji. Kopia "
                                   "zapasowa (20.2) obejmuje teraz też cele alokacji."],
+        ["3.13", "Wrzesień 2026", "Rebalancing (14.2.1) rozszerzony o cele WG SEKTORA obok celów wg "
+                                  "spółki — ta sama logika grupowania co panel „Ryzyko i ekspozycja”, "
+                                  "sugestia kwotowa zamiast liczby akcji (sektor to zwykle kilka spółek)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

@@ -73,9 +73,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   macierz korelacji i współczynnik dywersyfikacji dla obecnych wag pozycji —
   pokazuje, czy kilka spółek to w praktyce jeden zakład (np. sektor AI/tech).
 - Rebalancing: opcjonalny cel wagi (%) per ticker (także dla spółki, której
-  jeszcze nie masz w portfelu), panel pokazuje odchylenie od celu i sugestię
-  kup/sprzedaj ile akcji, żeby wrócić w okolice celu — czysto orientacyjne
-  wyliczenie, bez kosztów transakcyjnych i podatku przy sprzedaży.
+  jeszcze nie masz w portfelu) LUB per sektor, panel pokazuje odchylenie od
+  celu i sugestię (kup/sprzedaj ile akcji dla tickera, kwotę dla sektora),
+  żeby wrócić w okolice celu — czysto orientacyjne wyliczenie, bez kosztów
+  transakcyjnych i podatku przy sprzedaży.
 - Porównanie portfela z benchmarkiem (SPY / WIG20 / własny): zwrot, beta,
   alfa, wychwyt wzrostów i spadków oraz wykres — odpowiada na pytanie, czy
   wynik to selekcja spółek, czy po prostu ekspozycja na rynek.
@@ -332,7 +333,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.12)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.13)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -373,7 +374,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.12). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.13). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).

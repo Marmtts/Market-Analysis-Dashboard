@@ -1149,6 +1149,7 @@ async function loadRebalancing() {
     const res = await fetch("/api/portfolio/rebalancing");
     const data = await res.json();
     renderRebalancing(data);
+    renderSectorRebalancing(data.sectors, data.base_currency);
   } catch (err) {
     console.warn("Nie udało się pobrać danych rebalancingu:", err);
   }
@@ -1213,6 +1214,70 @@ el("targetForm").addEventListener("submit", async (e) => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ticker, target_weight_pct: pct }),
+  });
+  if (res.ok) {
+    e.target.reset();
+    await loadRebalancing();
+  } else {
+    const b = await res.json().catch(() => ({}));
+    alert(b.detail || "Nie udało się ustawić celu.");
+  }
+});
+
+function renderSectorRebalancing(data, baseCurrency) {
+  const panel = el("rebalancingSectorPanel");
+  if (!data || !data.has_targets) {
+    panel.innerHTML = `<p class="empty-state">⚖ Brak ustawionych celów wg sektora.</p>`;
+    return;
+  }
+
+  const sumWarning = Math.abs(data.target_sum_pct - 100) > 0.5
+    ? `<p class="detail-disclaimer">⚠️ Suma celów to ${data.target_sum_pct}%, nie 100%.</p>`
+    : "";
+
+  let html = `<div class="dividend-table-wrap"><table class="data-table">
+    <thead><tr>
+      <th>Sektor</th><th>Aktualnie</th><th>Cel</th><th>Odchylenie</th><th>Sugestia</th><th></th>
+    </tr></thead><tbody>`;
+
+  data.suggestions.forEach((s) => {
+    const driftCls = s.needs_action ? (s.drift_pct > 0 ? "negative" : "positive") : "";
+    const action = s.needs_action
+      ? `${s.diff_value >= 0 ? "dokup" : "sprzedaj"} ~${fmtMoney(Math.abs(s.diff_value), baseCurrency)}`
+      : "—";
+    html += `<tr>
+      <td title="${s.tickers.length ? escapeHtml(s.tickers.join(", ")) : "brak dziś pozycji w tym sektorze"}">${escapeHtml(s.sector)}</td>
+      <td>${s.current_pct}%</td>
+      <td>${s.target_pct}%</td>
+      <td class="${driftCls}">${s.drift_pct >= 0 ? "+" : ""}${s.drift_pct} pkt%</td>
+      <td>${escapeHtml(action)}</td>
+      <td><button class="watchlist__remove" title="Usuń cel" data-sector="${escapeHtml(s.sector)}">✕</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>${sumWarning}
+    <p class="detail-disclaimer">⚖ Sugestia to kwota do dokupienia/sprzedania w SUMIE w tym sektorze, rozłożona na dowolne spółki, które do niego należą — bez wskazania konkretnej spółki ani liczby akcji.</p>`;
+
+  panel.innerHTML = html;
+  panel.querySelectorAll(".watchlist__remove").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await fetch(`/api/portfolio/sector-targets/${encodeURIComponent(btn.dataset.sector)}`, { method: "DELETE" });
+      await loadRebalancing();
+    });
+  });
+}
+
+el("sectorTargetForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const sector = el("sectorTargetName").value.trim();
+  const pct = parseFloat(el("sectorTargetPct").value);
+  if (!sector || isNaN(pct) || pct < 0 || pct > 100) {
+    alert("Podaj sektor i cel w przedziale 0-100%.");
+    return;
+  }
+  const res = await fetch("/api/portfolio/sector-targets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sector, target_weight_pct: pct }),
   });
   if (res.ok) {
     e.target.reset();
@@ -2644,7 +2709,7 @@ el("backupImportBtn").addEventListener("click", async () => {
       alert(data.detail || "Nie udało się wczytać kopii.");
       return;
     }
-    const msg = `Wczytano: ${data.positions_added} pozycji, ${data.watchlist_added} spółek, ${data.dividends_added ?? 0} dywidend i ${data.targets_set ?? 0} celów alokacji. ` +
+    const msg = `Wczytano: ${data.positions_added} pozycji, ${data.watchlist_added} spółek, ${data.dividends_added ?? 0} dywidend i ${(data.targets_set ?? 0) + (data.sector_targets_set ?? 0)} celów alokacji. ` +
       `Pominięto duplikaty: ${data.positions_skipped} pozycji, ${data.watchlist_skipped} spółek, ${data.dividends_skipped ?? 0} dywidend.`;
     appendLog({ level: "success", message: `📤 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📤 ${w}` }));

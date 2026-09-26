@@ -63,7 +63,7 @@ from src.report import (
     build_closed_trades_export_rows,
     compute_twr_curve, prepare_cash_flows_for_currency,
     compute_dividend_summary,
-    compute_rebalancing_suggestions, DEFAULT_REBALANCE_TOLERANCE_PCT,
+    compute_rebalancing_suggestions, compute_sector_rebalancing_suggestions, DEFAULT_REBALANCE_TOLERANCE_PCT,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -796,19 +796,33 @@ class TargetAllocationRequest(BaseModel):
     target_weight_pct: float
 
 
+class SectorTargetAllocationRequest(BaseModel):
+    sector: str
+    target_weight_pct: float
+
+
 @app.get("/api/portfolio/rebalancing")
 async def api_get_rebalancing():
     enriched = _get_enriched_open_positions()
     base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
     combined_positions, _ = _build_combined_portfolio_view(enriched, base_currency)
     targets = db.get_target_allocations()
+    cached = db.load_results_cache() or {}
+    fundamentals_by_ticker = {
+        r["ticker"]: r.get("fundamentals")
+        for r in (cached.get("results") or []) + (cached.get("discovered_results") or [])
+    }
+    sector_targets = db.get_sector_target_allocations()
+    tolerance_pct = _cfg.get("portfolio", {}).get("rebalance_tolerance_pct", DEFAULT_REBALANCE_TOLERANCE_PCT)
+    sector_result = compute_sector_rebalancing_suggestions(
+        combined_positions, fundamentals_by_ticker, sector_targets, tolerance_pct
+    )
 
     # Dla tickerów z ustawionym celem, ale bez dzisiejszej pozycji, potrzebny
     # jest jakiś punkt odniesienia ceny - bierzemy ostatnią znaną cenę z cache'u
     # wyników i przeliczamy na walutę bazową dzisiejszym kursem (ten sam
     # kompromis co reszta widoków łącznych portfela - orientacyjny podgląd,
     # nie kurs transakcyjny).
-    cached = db.load_results_cache() or {}
     results_by_ticker = {
         r["ticker"]: r for r in (cached.get("results") or []) + (cached.get("discovered_results") or [])
     }
@@ -829,9 +843,9 @@ async def api_get_rebalancing():
             continue
         price_lookup[ticker] = {"price": price * rate, "currency": base_currency}
 
-    tolerance_pct = _cfg.get("portfolio", {}).get("rebalance_tolerance_pct", DEFAULT_REBALANCE_TOLERANCE_PCT)
     result = compute_rebalancing_suggestions(combined_positions, targets, price_lookup, tolerance_pct)
     result["base_currency"] = base_currency
+    result["sectors"] = sector_result
     return sanitize_for_json(result)
 
 
@@ -851,6 +865,25 @@ async def api_delete_target_allocation(ticker: str):
     ok = db.delete_target_allocation(ticker)
     if not ok:
         raise HTTPException(status_code=404, detail="Nie znaleziono celu alokacji dla tego tickera.")
+    return {"status": "ok"}
+
+
+@app.post("/api/portfolio/sector-targets")
+async def api_set_sector_target_allocation(req: SectorTargetAllocationRequest):
+    sector = req.sector.strip()
+    if not sector:
+        raise HTTPException(status_code=400, detail="Podaj sektor.")
+    if req.target_weight_pct < 0 or req.target_weight_pct > 100:
+        raise HTTPException(status_code=400, detail="Docelowa waga musi być w przedziale 0-100%.")
+    db.set_sector_target_allocation(sector, req.target_weight_pct)
+    return {"status": "ok"}
+
+
+@app.delete("/api/portfolio/sector-targets/{sector}")
+async def api_delete_sector_target_allocation(sector: str):
+    ok = db.delete_sector_target_allocation(sector)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Nie znaleziono celu alokacji dla tego sektora.")
     return {"status": "ok"}
 
 

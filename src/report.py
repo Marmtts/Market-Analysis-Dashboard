@@ -677,6 +677,58 @@ def compute_rebalancing_suggestions(open_positions_evaluated: list[dict], target
     }
 
 
+def compute_sector_rebalancing_suggestions(open_positions_evaluated: list[dict], fundamentals_by_ticker: dict,
+                                            targets: dict[str, float],
+                                            tolerance_pct: float = DEFAULT_REBALANCE_TOLERANCE_PCT) -> dict:
+    """Jak compute_rebalancing_suggestions, ale wg SEKTORA zamiast pojedynczego
+    tickera - grupowanie identyczne jak compute_portfolio_sector_exposure.
+    Sugestia jest tu wyłącznie kwotowa (dokup/sprzedaj ok. X w walucie
+    bazowej w tym sektorze) - w przeciwieństwie do pojedynczego tickera nie
+    da się podać liczby akcji, bo sektor to zwykle kilka różnych spółek."""
+    by_sector: dict[str, dict] = {}
+    total_value = 0.0
+    for p in open_positions_evaluated:
+        value = p.get("market_value") or 0.0
+        total_value += value
+        fund = fundamentals_by_ticker.get(p["ticker"])
+        sector = fund.get("metrics", {}).get("sector") if fund and fund.get("available") else None
+        sector = sector or "Nieznany sektor"
+        bucket = by_sector.setdefault(sector, {"value": 0.0, "tickers": set()})
+        bucket["value"] += value
+        bucket["tickers"].add(p["ticker"])
+
+    all_sectors = set(by_sector) | set(targets)
+    suggestions = []
+    for sector in sorted(all_sectors):
+        b = by_sector.get(sector, {"value": 0.0, "tickers": set()})
+        current_pct = (b["value"] / total_value * 100) if total_value > 0 else 0.0
+        target_pct = targets.get(sector, 0.0)
+        drift_pct = current_pct - target_pct
+        target_value = total_value * target_pct / 100
+        diff_value = target_value - b["value"]
+
+        suggestions.append({
+            "sector": sector,
+            "current_pct": round(current_pct, 1),
+            "target_pct": round(target_pct, 1),
+            "drift_pct": round(drift_pct, 1),
+            "current_value": round(b["value"], 2),
+            "target_value": round(target_value, 2),
+            "diff_value": round(diff_value, 2),
+            "needs_action": abs(drift_pct) >= tolerance_pct,
+            "tickers": sorted(b["tickers"]),
+        })
+
+    suggestions.sort(key=lambda s: -abs(s["drift_pct"]))
+    return {
+        "total_value": round(total_value, 2),
+        "target_sum_pct": round(sum(targets.values()), 1),
+        "tolerance_pct": tolerance_pct,
+        "suggestions": suggestions,
+        "has_targets": bool(targets),
+    }
+
+
 def _convert_trade_to_base_currency(p: dict, base_currency: str) -> dict:
     """Przelicza JEDNĄ zamkniętą transakcję na walutę bazową - dla PLN
     oficjalnym kursem NBP z dnia poprzedzającego transakcję (art. 11a ustawy

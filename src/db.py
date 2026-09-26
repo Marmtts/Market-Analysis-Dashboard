@@ -140,6 +140,12 @@ CREATE TABLE IF NOT EXISTS target_allocations (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS sector_target_allocations (
+    sector TEXT PRIMARY KEY,
+    target_weight_pct REAL NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS dividends (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticker TEXT NOT NULL,
@@ -941,6 +947,32 @@ def delete_target_allocation(ticker: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_sector_target_allocation(sector: str, target_weight_pct: float) -> None:
+    sector = sector.strip()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO sector_target_allocations (sector, target_weight_pct, updated_at) "
+            "VALUES (?, ?, datetime('now')) "
+            "ON CONFLICT(sector) DO UPDATE SET target_weight_pct = excluded.target_weight_pct, "
+            "updated_at = excluded.updated_at",
+            (sector, target_weight_pct),
+        )
+        conn.commit()
+
+
+def get_sector_target_allocations() -> dict[str, float]:
+    with _connect() as conn:
+        rows = conn.execute("SELECT sector, target_weight_pct FROM sector_target_allocations").fetchall()
+    return {r["sector"]: r["target_weight_pct"] for r in rows}
+
+
+def delete_sector_target_allocation(sector: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM sector_target_allocations WHERE sector = ?", (sector.strip(),))
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: str,
                        notes: str = "", status: str = "open",
                        sell_price: float | None = None, sell_date: str | None = None,
@@ -993,6 +1025,9 @@ def export_backup() -> dict:
         targets = [dict(r) for r in conn.execute(
             "SELECT ticker, target_weight_pct FROM target_allocations ORDER BY ticker ASC"
         ).fetchall()]
+        sector_targets = [dict(r) for r in conn.execute(
+            "SELECT sector, target_weight_pct FROM sector_target_allocations ORDER BY sector ASC"
+        ).fetchall()]
     return {
         "app": BACKUP_APP_ID,
         "version": BACKUP_VERSION,
@@ -1001,6 +1036,7 @@ def export_backup() -> dict:
         "portfolio": portfolio,
         "dividends": dividends,
         "target_allocations": targets,
+        "sector_target_allocations": sector_targets,
     }
 
 
@@ -1035,16 +1071,17 @@ def import_backup(data) -> dict:
     portfolio = data.get("portfolio") or []
     dividends = data.get("dividends") or []  # opcjonalne - brak w kopiach sprzed tej funkcji
     targets = data.get("target_allocations") or []  # jw.
+    sector_targets = data.get("sector_target_allocations") or []  # jw.
     if not isinstance(watchlist, list) or not isinstance(portfolio, list) or not isinstance(dividends, list) \
-            or not isinstance(targets, list):
+            or not isinstance(targets, list) or not isinstance(sector_targets, list):
         raise ValueError("Uszkodzona struktura pliku kopii zapasowej.")
-    if len(watchlist) + len(portfolio) + len(dividends) + len(targets) > MAX_BACKUP_ROWS:
+    if len(watchlist) + len(portfolio) + len(dividends) + len(targets) + len(sector_targets) > MAX_BACKUP_ROWS:
         raise ValueError(f"Zbyt duży plik kopii (limit {MAX_BACKUP_ROWS} wierszy).")
 
     result = {"watchlist_added": 0, "watchlist_skipped": 0,
               "positions_added": 0, "positions_skipped": 0,
               "dividends_added": 0, "dividends_skipped": 0,
-              "targets_set": 0, "warnings": []}
+              "targets_set": 0, "sector_targets_set": 0, "warnings": []}
 
     def warn(msg: str) -> None:
         if len(result["warnings"]) < 20:
@@ -1169,6 +1206,28 @@ def import_backup(data) -> dict:
                 (ticker, pct),
             )
             result["targets_set"] += 1
+
+        for i, t in enumerate(sector_targets, 1):
+            if not isinstance(t, dict):
+                warn(f"Cele alokacji (sektory), wiersz {i}: nieprawidłowy format - pominięto.")
+                continue
+            sector = str(t.get("sector", "")).strip()
+            pct = t.get("target_weight_pct")
+            try:
+                pct = float(pct)
+            except (TypeError, ValueError):
+                pct = None
+            if not sector or pct is None or pct < 0:
+                warn(f"Cele alokacji (sektory), wiersz {i} ({sector or '?'}): niepoprawne dane - pominięto.")
+                continue
+            conn.execute(
+                "INSERT INTO sector_target_allocations (sector, target_weight_pct, updated_at) "
+                "VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(sector) DO UPDATE SET target_weight_pct = excluded.target_weight_pct, "
+                "updated_at = excluded.updated_at",
+                (sector, pct),
+            )
+            result["sector_targets_set"] += 1
 
         conn.commit()
     return result
