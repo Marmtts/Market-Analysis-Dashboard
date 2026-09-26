@@ -69,6 +69,7 @@ from src.chatbot import answer_chat_question
 from src.xtb_import import parse_xtb_report
 from src.fx_rates import get_fx_rate
 from src.notifications import notify_price_alerts, send_discord_alert
+from src.macro_calendar import get_upcoming_events
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("xtb_trend_watch.web_app")
@@ -642,7 +643,8 @@ async def api_get_results():
     cached = db.load_results_cache()
     if not cached:
         return JSONResponse({"generated_at": None, "results": [], "discovered_results": [],
-                              "macro_context": None, "macro_summary": ""})
+                              "macro_context": None, "macro_summary": "",
+                              "macro_calendar": get_upcoming_events(_cfg.get("macro_calendar", {}))})
     return cached
 
 

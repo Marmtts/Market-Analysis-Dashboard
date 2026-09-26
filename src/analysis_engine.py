@@ -30,6 +30,7 @@ from src.llm_sentiment import analyze_sentiment, analyze_historical_trend
 from src.discovery import discover_candidates
 from src.fundamentals import fetch_fundamentals
 from src.macro_context import fetch_macro_context, risk_regime_score_adjustment
+from src.macro_calendar import get_upcoming_events
 from src.report import combine_scores, build_company_report, compute_sector_concentration
 from src.json_utils import sanitize_for_json
 
@@ -316,6 +317,7 @@ def run_full_analysis(cfg: dict, watchlist: list[dict],
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "macro_context": macro_ctx_dict,
         "macro_summary": macro_summary,
+        "macro_calendar": get_upcoming_events(cfg.get("macro_calendar", {})),
         "results": all_results,
         "discovered_results": discovered_results,
         "sector_concentration": compute_sector_concentration(all_results + discovered_results),

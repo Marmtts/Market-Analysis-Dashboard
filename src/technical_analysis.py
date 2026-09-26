@@ -112,6 +112,14 @@ def analyze(ticker: str, history: pd.DataFrame, fifty_two_week_high: float,
     # stopniowej korekcie w trendzie wzrostowym (dobra okazja), jak i przy
     # nagłym krachu na złych newsach (fundamentalny szok) - bez tego rozróżnienia
     # narzędzie nagradzałoby oba scenariusze tak samo.
+    # Zmiana ceny w OSTATNIEJ sesji (odróżnij od recent_change_pct niżej, który
+    # patrzy kilka sesji wstecz) - używana głównie do heatmapy watchlisty.
+    day_change_pct = None
+    if len(close) >= 2:
+        prev_close = float(close.iloc[-2])
+        if prev_close:
+            day_change_pct = (last_close - prev_close) / prev_close * 100
+
     decline_lookback = cfg.get("sharp_decline_lookback_days", 5)
     decline_threshold_pct = cfg.get("sharp_decline_threshold_pct", 15)
     sharp_decline = False
@@ -219,6 +227,7 @@ def analyze(ticker: str, history: pd.DataFrame, fifty_two_week_high: float,
 
     metrics = {
         "last_price": last_close,
+        "day_change_pct": round(day_change_pct, 2) if day_change_pct is not None else None,
         "rsi": round(last_rsi, 2),
         "ma_short": round(last_ma_short, 2) if last_ma_short else None,
         "ma_long": round(last_ma_long, 2) if last_ma_long else None,

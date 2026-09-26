@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.7"
+VERSION = "3.8"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -453,6 +453,13 @@ def part1(s: Story) -> None:
         ["WYSOKI", "VIX wyraźnie podniesiony (domyślnie od 30) — próg sugestii kupna podwyższony "
                    "wyraźniej (o 0,10); zachowaj szczególną ostrożność z wielkością pozycji."],
     ], [22, 78])
+    s.p(f"Pod notatkami reżimu ryzyka panel pokazuje też <b>„Nadchodzące wydarzenia”</b> — najbliższe "
+        f"zaplanowane wydarzenia makro w oknie 14 dni (domyślnie): posiedzenia FOMC i RPP/NBP z decyzją o "
+        f"stopach procentowych oraz publikacje CPI (inflacja) USA. Lista dat pochodzi z "
+        f"{c('config.yaml')} (sekcja {c('macro_calendar')}), gdzie jest publikowana z wyprzedzeniem przez "
+        f"oficjalne instytucje (Fed, NBP, BLS) — narzędzie jej NIE scrapuje na żywo z zewnętrznych stron, "
+        f"więc wymaga ręcznej aktualizacji raz na jakiś czas, gdy instytucje opublikują harmonogram na "
+        f"kolejny rok (patrz rozdział 22).")
     s.h2("4.2 Koncentracja sektorowa")
     s.p("Jeżeli kilka spółek z Twojej watchlisty jednocześnie otrzyma kategorię „WARTO OBSERWOWAĆ” i "
         "należą do tego samego sektora (np. kilka spółek półprzewodnikowych), panel wyświetli "
@@ -503,6 +510,12 @@ def part1(s: Story) -> None:
         ["Kategoria", "Finalny werdykt narzędzia — patrz rozdział 6."],
     ], [22, 78])
     s.p("Kliknięcie w dowolną kartę otwiera pełny widok szczegółów tej spółki (rozdział 8).")
+    s.p("Przycisk <b>„Heatmapa”</b> (ikona płomienia) nad listą przełącza widok „Stałej watchlisty” z kart na siatkę "
+        "kolorowanych kafelków (jak np. na Finviz) — każda kafelka to ticker i procentowa zmiana ceny w "
+        "OSTATNIEJ sesji, kolor od czerwonego (spadek) przez neutralny do zielonego (wzrost), nasycenie "
+        "rośnie do +/-5%. Kliknięcie kafelki otwiera ten sam pełny widok szczegółów co karta. Przydatne do "
+        "szybkiego przeglądu całej watchlisty bez przewijania — wybór widoku jest zapamiętywany lokalnie "
+        "w przeglądarce.")
 
     # ------------------------------------------------------------ 6
     s.h1("6. Kategorie, sygnały i składniki wyniku")
@@ -1234,6 +1247,8 @@ def part3(s: Story) -> None:
          "(rozdział 21). Pusta lista wyłącza zastępniki dla danego wpisu."],
         ["technical.use_weekly_confirmation", "true", "Potwierdzanie sygnału dziennego trendem tygodniowym."],
         ["macro.vix_elevated_threshold / vix_high_threshold", "20 / 30", "Progi reżimów PODWYŻSZONY i WYSOKI."],
+        ["macro_calendar.days_ahead", "14", "Okno (w dniach), w którym wydarzenia z macro_calendar.events "
+                                            "pojawiają się jako „Nadchodzące wydarzenia” (rozdział 4.1)."],
         ["fundamentals.earnings_warning_days", "7", "Ile dni przed wynikami kwartalnymi pokazywać "
                                                     "ostrzeżenie."],
         ["news.use_historical_news / finnhub_api_key", "true / —",
@@ -1353,6 +1368,10 @@ def part3(s: Story) -> None:
                                  "wypłata i podsumowanie wg roku, wczytywane automatycznie przy imporcie "
                                  "XTB (z arkusza Cash Operations) albo dodawane ręcznie. Kopia zapasowa "
                                  "(20.2) obejmuje teraz też dywidendy."],
+        ["3.8", "Wrzesień 2026", "Kalendarz najbliższych wydarzeń makro (FOMC, RPP/NBP, CPI USA) w panelu "
+                                 "„Kontekst makro” (4.1), konfigurowalny w config.yaml. Heatmapa całej "
+                                 "watchlisty jako alternatywa dla widoku kart (5), kolorowana wg zmiany "
+                                 "ceny w ostatniej sesji."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

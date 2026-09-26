@@ -74,6 +74,7 @@
           </div>
         </div>
         <p class="macro-notes" id="macroNotes"></p>
+        <div id="macroCalendar"></div>
       </div>
     </section>
 
@@ -156,6 +157,7 @@
     <div class="section-header">
       <h2>Stała watchlista</h2>
       <span class="section-header__meta" id="mainGeneratedAt">brak danych</span>
+      <button type="button" class="section-header__action" id="heatmapToggleBtn" title="Przełącz między widokiem kart a heatmapą kolorowaną wg zmiany dnia">🔥 Heatmapa</button>
       <div class="col-settings">
         <button type="button" class="col-settings-btn" id="columnSettingsBtn" aria-expanded="false" aria-haspopup="true" title="Dostosuj widoczne kolumny (watchlista i propozycje AI)">⚙ Kolumny</button>
         <div class="col-settings__popover" id="columnSettingsPopover" hidden>
@@ -179,6 +181,7 @@
     <div class="results-grid" id="resultsGrid">
       <p class="empty-state">Czekam na pierwszy cykl analizy…</p>
     </div>
+    <div class="heatmap-grid" id="watchlistHeatmap" style="display:none"></div>
 
     <div class="section-header section-header--discovery">
       <h2>Propozycje AI <span class="tag-warn">wymaga weryfikacji</span></h2>

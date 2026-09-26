@@ -293,6 +293,23 @@ html, body {
   line-height: 1.45;
 }
 
+.macro-calendar { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.6rem; }
+.macro-calendar__title {
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--text-faint); margin-bottom: 0.4rem;
+}
+.macro-calendar__row {
+  display: flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0;
+  border-bottom: 1px dashed var(--border); font-size: 0.76rem;
+}
+.macro-calendar__row:last-child { border-bottom: none; }
+.macro-calendar__icon { flex: 0 0 auto; }
+.macro-calendar__label { flex: 1 1 auto; color: var(--text-dim); }
+.macro-calendar__days {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 0.7rem;
+  color: var(--text-faint); white-space: nowrap;
+}
+
 /* ---------------- Add company form ---------------- */
 .add-form { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.9rem; }
 .add-form input {
@@ -450,6 +467,27 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 
 .results-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+}
+.heatmap-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.9rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease), border-color 0.12s ease;
+}
+.heatmap-tile:hover { transform: translateY(-2px) scale(1.03); box-shadow: var(--shadow-sm); border-color: var(--border-bright); z-index: 1; }
+.heatmap-tile__ticker { font-family: var(--font-mono); font-weight: 700; font-size: 0.85rem; }
+.heatmap-tile__change { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); }
 
 /* ---------------- Result card ---------------- */
 :root {
@@ -1535,6 +1573,7 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 .section-header__action:hover { border-color: var(--accent-gold); color: var(--accent-gold-bright); }
+.section-header__action.is-active { border-color: var(--accent-gold-bright); color: var(--accent-gold-bright); background: rgba(212, 175, 55, 0.12); }
 /* Gdy dwa przyciski-pigułki siedzą w jednym nagłówku (Ryzyko i ekspozycja:
    test Discorda + sprawdź alerty) - tylko PIERWSZY dostaje auto-margines
    (odpycha całą parę do prawej), drugi zwykły odstęp, inaczej oba auto-

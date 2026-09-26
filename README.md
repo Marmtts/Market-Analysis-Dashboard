@@ -26,7 +26,14 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   razu, trend 12-miesięczny budowany własnym, lokalnym archiwum w czasie.
 - Podstawowa analiza fundamentalna: P/E, wzrost przychodów, marże,
   zadłużenie, cena docelowa i rekomendacja analityków Wall Street.
-- Szeroki kontekst makro (VIX, rentowność obligacji) jako filtr ryzyka.
+- Szeroki kontekst makro (VIX, rentowność obligacji) jako filtr ryzyka, plus
+  kalendarz najbliższych zaplanowanych wydarzeń (posiedzenia FOMC i RPP/NBP
+  z decyzją o stopach, publikacje CPI USA) w panelu bocznym — lista dat
+  publikowana z wyprzedzeniem przez oficjalne instytucje, konfigurowalna
+  w `config.yaml` (`macro_calendar`).
+- Heatmapa całej watchlisty (przycisk „🔥 Heatmapa” obok listy) — kolor
+  każdej kafelki wg zmiany ceny w ostatniej sesji, do szybkiego przeglądu
+  bez przewijania kart.
 - Ostrzeżenia o zbliżających się wynikach kwartalnych (badge na kartach,
   baner w panelu spółki, panel „Nadchodzące wyniki”, uwaga przy pozycjach
   w portfelu, wzmianka w briefie dnia i w czacie). Czysto informacyjne —
@@ -312,7 +319,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.7)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.8)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -328,6 +335,7 @@ xtb_trend_watch/
     ├── technical_analysis.py   # RSI/SMA/Bollinger/ATR/sharp_decline/siła względna
     ├── fundamentals.py         # P/E, wzrost, marże, cena docelowa, typ instrumentu (ETF/akcja), termin wyników
     ├── macro_context.py        # VIX, rentowność obligacji - filtr ryzyka
+    ├── macro_calendar.py        # kalendarz najbliższych wydarzeń makro (FOMC/RPP/CPI) z config.yaml
     ├── fx_rates.py             # kursy walut: bieżące, historyczne, oficjalne NBP
     ├── notifications.py        # powiadomienia zewnętrzne o alertach cenowych (Discord webhook)
     ├── news_sources.py         # newsy bieżące (yfinance) + RSS makro
@@ -352,7 +360,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.7). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.8). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -361,7 +369,7 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Sześć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
+Osiem pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
 zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
@@ -370,20 +378,17 @@ sprawdzenie okna przedwynikowego (`python -m src.backtest
 komentarz w kodzie `backtest.py`), uwzględnienie rzeczywistego kursu
 wymiany brokera (`buy_fx_rate`/`sell_fx_rate`) także przy ręcznym
 zamykaniu pozycji (przycisk 💰 pyta teraz opcjonalnie o kurs sprzedaży,
-analogicznie do pola przy dodawaniu) i śledzenie dywidend (sekcja 1
+analogicznie do pola przy dodawaniu), śledzenie dywidend (sekcja 1
 powyżej — przychód brutto/netto per wypłata, import z raportu XTB albo
-ręczne dodawanie). Szczegóły w
+ręczne dodawanie), kalendarz makro (sekcja 1 powyżej — FOMC/RPP/CPI,
+`config.yaml` → `macro_calendar`) i heatmapa watchlisty (przycisk „🔥
+Heatmapa” obok listy). Szczegóły w
 `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
 
 - Flaga „konto IKE” per pozycja — polskie konto IKE jest przy spełnieniu
   warunków zwolnione z podatku Belki, a dzisiejsze podsumowanie podatkowe
   (sekcja 15.2 instrukcji) liczy 19% od wszystkich zamkniętych transakcji
   bez rozróżnienia typu konta.
-- Kalendarz makro (NBP, FOMC, CPI) — dziś kontekst makro to migawka
-  bieżących wartości (VIX, rentowność obligacji), bez informacji co się
-  wydarzy w najbliższych dniach.
-- Heatmapa watchlisty — szybki przegląd całej listy kolorami wg zmiany
-  dnia, zamiast przewijania kart.
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
   stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.

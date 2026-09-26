@@ -256,6 +256,59 @@ function renderResultsGrid(containerId, results, emptyMessage, sortState) {
   if (isCustomizable) applyColumnVisibility(state.columnPrefs);
 }
 
+// ---------------- Heatmapa watchlisty (widok alternatywny do kart) ----------------
+state.heatmapMode = localStorage.getItem("heatmapMode") === "1";
+
+// Skala koloru wg zmiany dnia, nasycenie rośnie do +/-5% (dalej już maks. nasycenie) -
+// spójne z czerwienią/zielenią używaną gdzie indziej w interfejsie (positive/negative).
+function heatmapColor(changePct) {
+  if (changePct == null) return "rgba(148, 148, 158, 0.18)";
+  const capped = Math.max(-5, Math.min(5, changePct));
+  const intensity = Math.abs(capped) / 5;
+  return capped >= 0
+    ? `rgba(52, 199, 89, ${0.12 + intensity * 0.55})`
+    : `rgba(255, 69, 58, ${0.12 + intensity * 0.55})`;
+}
+
+function renderHeatmap(results) {
+  const wrap = el("watchlistHeatmap");
+  wrap.innerHTML = "";
+  if (!results || results.length === 0) {
+    wrap.innerHTML = `<p class="empty-state">Czekam na pierwszy cykl analizy…</p>`;
+    return;
+  }
+  const sorted = [...results].sort((a, b) => {
+    const va = a.technical?.metrics?.day_change_pct ?? -Infinity;
+    const vb = b.technical?.metrics?.day_change_pct ?? -Infinity;
+    return vb - va;
+  });
+  sorted.forEach((r) => {
+    const change = r.technical?.metrics?.day_change_pct;
+    const tile = document.createElement("div");
+    tile.className = "heatmap-tile";
+    tile.style.background = heatmapColor(change);
+    tile.innerHTML = `
+      <span class="heatmap-tile__ticker">${escapeHtml(r.ticker)}</span>
+      <span class="heatmap-tile__change">${change != null ? (change >= 0 ? "+" : "") + change.toFixed(2) + "%" : "—"}</span>
+    `;
+    tile.addEventListener("click", () => openChart(r.ticker, r.name));
+    wrap.appendChild(tile);
+  });
+}
+
+function setHeatmapMode(enabled) {
+  state.heatmapMode = enabled;
+  localStorage.setItem("heatmapMode", enabled ? "1" : "0");
+  el("heatmapToggleBtn").classList.toggle("is-active", enabled);
+  el("resultsGrid").style.display = enabled ? "none" : "";
+  document.querySelector('.results-header[data-sort-group="main"]').style.display = enabled ? "none" : "";
+  el("watchlistHeatmap").style.display = enabled ? "" : "none";
+  if (enabled) renderHeatmap(state.lastPayload?.results);
+}
+
+el("heatmapToggleBtn").addEventListener("click", () => setHeatmapMode(!state.heatmapMode));
+setHeatmapMode(state.heatmapMode);
+
 // ---------------- Sortowanie klikalnych nagłówków ----------------
 const state_sort = { main: { key: null, dir: "asc" }, discovered: { key: null, dir: "asc" }, portfolio: { key: null, dir: "asc" }, closed: { key: null, dir: "asc" } };
 
@@ -356,6 +409,28 @@ function renderMacro(macroContext) {
   notesEl.textContent = (macroContext.notes || []).join(" ");
 }
 
+const MACRO_EVENT_ICON = { FOMC: "🇺🇸", NBP: "🇵🇱", CPI: "📈" };
+
+function renderMacroCalendar(events) {
+  const wrap = el("macroCalendar");
+  if (!events || events.length === 0) {
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="macro-calendar">
+      <div class="macro-calendar__title">Nadchodzące wydarzenia</div>
+      ${events.map((e) => `
+        <div class="macro-calendar__row">
+          <span class="macro-calendar__icon">${MACRO_EVENT_ICON[e.kind] || "📅"}</span>
+          <span class="macro-calendar__label">${escapeHtml(e.label)}</span>
+          <span class="macro-calendar__days">${e.days_away === 0 ? "dziś" : e.days_away === 1 ? "jutro" : `za ${e.days_away} dni`}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
@@ -428,9 +503,11 @@ function applyResultsPayload(payload) {
 
   renderDailyBrief(payload.daily_brief);
   renderMacro(payload.macro_context);
+  renderMacroCalendar(payload.macro_calendar);
   renderSectorConcentration(payload.sector_concentration);
   renderUpcomingEarnings();
   renderResultsGrid("resultsGrid", payload.results, "Czekam na pierwszy cykl analizy…", state_sort.main);
+  if (state.heatmapMode) renderHeatmap(payload.results);
   renderResultsGrid("discoveredGrid", payload.discovered_results, "Brak propozycji w tym cyklu.", state_sort.discovered);
   el("mainGeneratedAt").textContent = payload.generated_at
     ? `ostatnia aktualizacja: ${formatDateTime(payload.generated_at)}`

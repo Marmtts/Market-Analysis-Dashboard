@@ -175,6 +175,44 @@ macro:
   threshold_increase_on_high_risk: 0.10
 
 # -------------------------------------------------------------
+# Kalendarz najbliższych wydarzeń makro (posiedzenia FOMC/RPP z decyzją
+# o stopach, publikacje CPI) - lista dat publikowanych z wyprzedzeniem przez
+# oficjalne instytucje (Fed, NBP, BLS), NIE scrapowana na żywo (patrz
+# macro_calendar.py). Warto zaktualizować raz na jakiś czas, kiedy
+# instytucje opublikują harmonogram na kolejny rok.
+# -------------------------------------------------------------
+macro_calendar:
+  days_ahead: 14   # pokazuj wydarzenia w oknie [dziś, dziś + tyle dni]
+  events:
+    # FOMC (Rezerwa Federalna USA) - data drugiego dnia posiedzenia (decyzja o stopach)
+    - { date: "2026-01-28", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-03-18", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-04-29", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-06-17", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-07-29", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-09-16", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-10-28", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2026-12-09", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2027-01-27", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    - { date: "2027-03-17", kind: "FOMC", label: "Decyzja FOMC (stopy procentowe USA)" }
+    # RPP/NBP - data drugiego dnia posiedzenia decyzyjnego (komunikat ok. 15:00)
+    - { date: "2026-01-14", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-02-04", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-03-04", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-04-09", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-05-06", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-06-02", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-07-08", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-09-09", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-10-07", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-11-04", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    - { date: "2026-12-02", kind: "NBP", label: "Decyzja RPP (stopy procentowe PLN)" }
+    # CPI USA (BLS) - publikacja inflacji za poprzedni miesiąc, godz. 8:30 ET
+    - { date: "2026-10-14", kind: "CPI", label: "Publikacja CPI USA (za wrzesień 2026)" }
+    - { date: "2026-11-10", kind: "CPI", label: "Publikacja CPI USA (za październik 2026)" }
+    - { date: "2026-12-10", kind: "CPI", label: "Publikacja CPI USA (za listopad 2026)" }
+
+# -------------------------------------------------------------
 # Wagi łączenia wyniku technicznego, sentymentu i fundamentów (suma = 1)
 # -------------------------------------------------------------
 scoring:
