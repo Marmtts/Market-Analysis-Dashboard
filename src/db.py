@@ -156,6 +156,17 @@ def init_db(seed_watchlist: list[dict] | None = None) -> None:
             # i dodają własną cenę docelową do alertów cenowych.
             "ALTER TABLE portfolio ADD COLUMN custom_stop REAL",
             "ALTER TABLE portfolio ADD COLUMN custom_target REAL",
+            # Rzeczywisty kurs wymiany (natywna waluta -> portfolio.base_currency)
+            # zastosowany przy KONKRETNEJ transakcji - broker (np. XTB) dolicza
+            # własną marżę do kursu rynkowego, więc "ile naprawdę zapłaciłem/
+            # dostałem w PLN" różni się od przeliczenia bieżącym/NBP kursem.
+            # Wypełniane automatycznie przy imporcie XTB (patrz xtb_import.py -
+            # Purchase/Sale Value z raportu) albo ręcznie przy dodawaniu pozycji.
+            # Używane WYŁĄCZNIE w widokach informacyjnych (portfolio łączne,
+            # krzywa TWR) - podsumowanie podatkowe zostaje przy kursie NBP,
+            # bo tego wymaga prawo, niezależnie od realnego kursu brokera.
+            "ALTER TABLE portfolio ADD COLUMN buy_fx_rate REAL",
+            "ALTER TABLE portfolio ADD COLUMN sell_fx_rate REAL",
         ]:
             try:
                 conn.execute(stmt)
@@ -420,13 +431,14 @@ def get_score_history(ticker: str, limit: int = 400) -> list[dict]:
 # =====================================================================
 
 def add_position(ticker: str, shares: float, buy_price: float, buy_date: str, notes: str = "",
-                 custom_stop: float | None = None, custom_target: float | None = None) -> int:
+                 custom_stop: float | None = None, custom_target: float | None = None,
+                 buy_fx_rate: float | None = None) -> int:
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target),
+            "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, "
+            "buy_fx_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, buy_fx_rate),
         )
         conn.commit()
         return cur.lastrowid
@@ -456,13 +468,14 @@ def remove_position(position_id: int) -> bool:
 
 def update_position(position_id: int, ticker: str, shares: float, buy_price: float,
                      buy_date: str, notes: str = "",
-                     custom_stop: float | None = None, custom_target: float | None = None) -> bool:
+                     custom_stop: float | None = None, custom_target: float | None = None,
+                     buy_fx_rate: float | None = None) -> bool:
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
             "UPDATE portfolio SET ticker = ?, shares = ?, buy_price = ?, buy_date = ?, notes = ?, "
-            "custom_stop = ?, custom_target = ? WHERE id = ?",
-            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, position_id),
+            "custom_stop = ?, custom_target = ?, buy_fx_rate = ? WHERE id = ?",
+            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, buy_fx_rate, position_id),
         )
         conn.commit()
         return cur.rowcount > 0
@@ -660,7 +673,8 @@ def get_position_cash_flows(currency: str | None = None) -> list[dict]:
     (krzywa per-walutowa); bez filtra - wszystkie pozycje (krzywa łączna,
     przeliczana na walutę bazową w report.py)."""
     with _connect() as conn:
-        query = "SELECT ticker, shares, buy_price, buy_date, sell_price, sell_date, currency FROM portfolio"
+        query = ("SELECT ticker, shares, buy_price, buy_date, sell_price, sell_date, currency, "
+                  "buy_fx_rate, sell_fx_rate FROM portfolio")
         params: tuple = ()
         if currency:
             query += " WHERE currency = ?"
@@ -671,12 +685,12 @@ def get_position_cash_flows(currency: str | None = None) -> list[dict]:
     for r in rows:
         flows.append({
             "date": r["buy_date"], "amount": r["shares"] * r["buy_price"],
-            "currency": r["currency"], "kind": "in",
+            "currency": r["currency"], "kind": "in", "fx_rate": r.get("buy_fx_rate"),
         })
         if r["sell_date"] and r["sell_price"] is not None:
             flows.append({
                 "date": r["sell_date"], "amount": r["shares"] * r["sell_price"],
-                "currency": r["currency"], "kind": "out",
+                "currency": r["currency"], "kind": "out", "fx_rate": r.get("sell_fx_rate"),
             })
     return flows
 
@@ -763,19 +777,44 @@ def get_imported_xtb_ids() -> set[str]:
     return ids
 
 
+def backfill_xtb_fx_rate(xtb_id: str, buy_fx_rate: float | None, sell_fx_rate: float | None) -> bool:
+    """Uzupełnia buy_fx_rate/sell_fx_rate dla JUŻ zaimportowanej pozycji XTB
+    (dopasowanej po znaczniku [XTB:<id>] w notatce), TYLKO tam gdzie te pola
+    są jeszcze puste (COALESCE) - nigdy nie nadpisuje ręcznie wpisanego kursu.
+    Pozwala uzupełnić kursy w pozycjach zaimportowanych PRZED wprowadzeniem
+    tej funkcji przez zwykłe ponowne wczytanie tego samego pliku XTB, bez
+    tworzenia duplikatów (import i tak je pomija jako już zaimportowane -
+    ten backfill działa właśnie w tej samej ścieżce pominięcia)."""
+    if buy_fx_rate is None and sell_fx_rate is None:
+        return False
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE portfolio SET buy_fx_rate = COALESCE(buy_fx_rate, ?), "
+            "sell_fx_rate = COALESCE(sell_fx_rate, ?) "
+            "WHERE notes LIKE ? AND (buy_fx_rate IS NULL OR sell_fx_rate IS NULL)",
+            (buy_fx_rate, sell_fx_rate, f"%[XTB:{xtb_id}]%"),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: str,
                        notes: str = "", status: str = "open",
                        sell_price: float | None = None, sell_date: str | None = None,
-                       currency: str = "USD") -> int:
+                       currency: str = "USD", buy_fx_rate: float | None = None,
+                       sell_fx_rate: float | None = None) -> int:
     """Jak add_position(), ale pozwala od razu ustawić status/sprzedaż/walutę -
     używane przez import XTB, żeby zamknięte transakcje trafiały od razu
-    jako zamknięte, a nie jako otwarte wymagające ręcznej sprzedaży."""
+    jako zamknięte, a nie jako otwarte wymagające ręcznej sprzedaży.
+    buy_fx_rate/sell_fx_rate - rzeczywisty kurs z raportu XTB, patrz komentarz
+    przy migracji kolumn w init_db()."""
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
             "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, status, "
-            "sell_price, sell_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, currency),
+            "sell_price, sell_date, currency, buy_fx_rate, sell_fx_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, currency,
+             buy_fx_rate, sell_fx_rate),
         )
         conn.commit()
         return cur.lastrowid
@@ -799,7 +838,7 @@ def export_backup() -> dict:
         ).fetchall()]
         portfolio = [dict(r) for r in conn.execute(
             "SELECT ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, "
-            "currency, custom_stop, custom_target FROM portfolio ORDER BY id ASC"
+            "currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate FROM portfolio ORDER BY id ASC"
         ).fetchall()]
     return {
         "app": BACKUP_APP_ID,
@@ -889,6 +928,8 @@ def import_backup(data) -> dict:
             currency = str(p.get("currency") or "USD").strip().upper()[:10]
             custom_stop = _positive_number(p.get("custom_stop"))
             custom_target = _positive_number(p.get("custom_target"))
+            buy_fx_rate = _positive_number(p.get("buy_fx_rate"))
+            sell_fx_rate = _positive_number(p.get("sell_fx_rate"))
             notes = _sanitize_text(p.get("notes", ""))
 
             duplicate = conn.execute(
@@ -908,9 +949,10 @@ def import_backup(data) -> dict:
             )
             conn.execute(
                 "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, status, sell_price, "
-                "sell_date, currency, custom_stop, custom_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "sell_date, currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date,
-                 currency, custom_stop, custom_target),
+                 currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate),
             )
             result["positions_added"] += 1
 

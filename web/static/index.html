@@ -210,6 +210,8 @@
           <input type="number" id="posBuyPrice" placeholder="Cena zakupu" step="0.01" min="0" required>
         </div>
         <input type="date" id="posBuyDate" required>
+        <input type="number" id="posBuyFxRate" placeholder="Własny kurs wymiany (opcj.)" step="0.0001" min="0"
+               title="Rzeczywisty kurs zastosowany przez brokera przy tej transakcji (np. z marżą XTB) - jeśli podasz, dashboard użyje go zamiast bieżącego kursu rynkowego do przeliczenia kosztu tej pozycji na walutę bazową w podsumowaniu portfela i krzywej TWR.">
         <div class="add-form__row">
           <input type="number" id="posCustomStop" placeholder="Stop-loss (opcj.)" step="0.01" min="0">
           <input type="number" id="posCustomTarget" placeholder="Cel cenowy (opcj.)" step="0.01" min="0">

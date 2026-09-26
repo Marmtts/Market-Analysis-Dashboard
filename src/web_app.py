@@ -223,7 +223,14 @@ def _build_combined_portfolio_view(enriched_positions: list[dict], base_currency
     """Przelicza kwoty pieniężne KAŻDEJ pozycji na base_currency, żeby móc
     je bezpiecznie zsumować (bez tego mieszalibyśmy np. USD i PLN jak tę
     samą jednostkę - patrz naprawiony bug w compute_portfolio_sector_exposure).
-    Zwraca (przeliczone_pozycje, zbiór_walut_ktorych_nie_udalo_sie_przeliczyc)."""
+    Zwraca (przeliczone_pozycje, zbiór_walut_ktorych_nie_udalo_sie_przeliczyc).
+
+    Koszt (cost_basis) używa REALNEGO kursu z transakcji (buy_fx_rate), jeśli
+    jest znany (import XTB albo ręcznie wpisany przy dodawaniu pozycji) -
+    broker dolicza własną marżę do kursu rynkowego, więc "ile naprawdę
+    zapłaciłeś w PLN" różni się od przeliczenia dzisiejszym kursem. Bieżąca
+    wartość (market_value) ZAWSZE liczona kursem AKTUALNYM - gdybyś sprzedał
+    dziś, dostałbyś dzisiejszy kurs, nie ten z dnia zakupu."""
     converted = []
     skipped = set()
     for p in enriched_positions:
@@ -232,10 +239,21 @@ def _build_combined_portfolio_view(enriched_positions: list[dict], base_currency
         if rate is None:
             skipped.add(currency)
             continue
+        cost_rate = p.get("buy_fx_rate") or rate
         p2 = dict(p)
-        for key in ("market_value", "cost_basis", "unrealized_value", "current_price", "suggested_stop_loss"):
+        for key in ("market_value", "current_price", "suggested_stop_loss"):
             if p2.get(key) is not None:
                 p2[key] = p2[key] * rate
+        if p2.get("cost_basis") is not None:
+            p2["cost_basis"] = p2["cost_basis"] * cost_rate
+        # Pochodne pola PRZELICZONE OD NOWA z już skonwertowanych market_value/
+        # cost_basis, a nie przeskalowane jednym kursem jak dawniej - inaczej,
+        # skoro koszt i wartość mogą teraz używać RÓŻNYCH kursów, unrealized_value
+        # przestałby się zgadzać z market_value - cost_basis.
+        if p2.get("market_value") is not None and p2.get("cost_basis") is not None:
+            p2["unrealized_value"] = round(p2["market_value"] - p2["cost_basis"], 2)
+            p2["unrealized_pct"] = (round(p2["unrealized_value"] / p2["cost_basis"] * 100, 2)
+                                     if p2["cost_basis"] else None)
         p2["original_currency"] = currency  # potrzebne np. do wyboru benchmarku wg dominującej waluty
         p2["currency"] = base_currency  # dla compute_portfolio_risk_summary - jeden wspólny "koszyk"
         converted.append(p2)
@@ -567,6 +585,12 @@ class AddPositionRequest(BaseModel):
     notes: str = ""
     custom_stop: float | None = None      # własny stop-loss (opcjonalnie)
     custom_target: float | None = None    # własna cena docelowa (opcjonalnie)
+    # Rzeczywisty kurs wymiany (natywna waluta -> portfolio.base_currency)
+    # zastosowany przy TEJ transakcji - opcjonalnie, gdy broker dolicza własną
+    # marżę do kursu rynkowego (np. XTB), więc dzisiejszy/NBP kurs nie
+    # odzwierciedla, ile faktycznie zapłacono. Patrz komentarz przy migracji
+    # kolumn w db.init_db().
+    buy_fx_rate: float | None = None
 
 
 class ClosePositionRequest(BaseModel):
@@ -627,18 +651,24 @@ async def api_import_xtb(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Nie udało się odczytać pliku: {exc}")
 
     already_imported = db.get_imported_xtb_ids()
-    imported_open = imported_closed = skipped_duplicates = 0
+    imported_open = imported_closed = skipped_duplicates = fx_rates_backfilled = 0
     needs_review: list[str] = []
 
     for row in parsed["open"]:
         if row["xtb_id"] in already_imported:
             skipped_duplicates += 1
+            # Pozycja już istnieje (np. zaimportowana ZANIM ta funkcja się
+            # pojawiła) - uzupełnij tylko brakujący kurs, nic więcej. Bez
+            # tego ponowny import tego samego pliku nigdy by nie donosił
+            # rzeczywistego kursu do pozycji sprzed tej zmiany.
+            if db.backfill_xtb_fx_rate(row["xtb_id"], row.get("buy_fx_rate"), None):
+                fx_rates_backfilled += 1
             continue
         db.add_company(row["ticker"], name=row["ticker"], source="xtb_import")
         db.add_position_full(
             ticker=row["ticker"], shares=row["shares"], buy_price=row["buy_price"],
             buy_date=row["buy_date"], notes=f"Import XTB [XTB:{row['xtb_id']}]",
-            status="open", currency=row["currency"],
+            status="open", currency=row["currency"], buy_fx_rate=row.get("buy_fx_rate"),
         )
         imported_open += 1
         if row["ticker"] == row["original_ticker"] and "." in row["original_ticker"]:
@@ -647,13 +677,16 @@ async def api_import_xtb(file: UploadFile = File(...)):
     for row in parsed["closed"]:
         if row["xtb_id"] in already_imported:
             skipped_duplicates += 1
+            if db.backfill_xtb_fx_rate(row["xtb_id"], row.get("buy_fx_rate"), row.get("sell_fx_rate")):
+                fx_rates_backfilled += 1
             continue
         db.add_company(row["ticker"], name=row["ticker"], source="xtb_import")
         db.add_position_full(
             ticker=row["ticker"], shares=row["shares"], buy_price=row["buy_price"],
             buy_date=row["buy_date"], notes=f"Import XTB [XTB:{row['xtb_id']}]",
             status="closed", sell_price=row["sell_price"], sell_date=row["sell_date"],
-            currency=row["currency"],
+            currency=row["currency"], buy_fx_rate=row.get("buy_fx_rate"),
+            sell_fx_rate=row.get("sell_fx_rate"),
         )
         imported_closed += 1
 
@@ -663,6 +696,7 @@ async def api_import_xtb(file: UploadFile = File(...)):
         "imported_open": imported_open,
         "imported_closed": imported_closed,
         "skipped_duplicates": skipped_duplicates,
+        "fx_rates_backfilled": fx_rates_backfilled,
         "warnings": parsed["warnings"],
     }
 
@@ -922,15 +956,16 @@ async def api_add_position(req: AddPositionRequest):
     ticker = req.ticker.strip().upper()
     if not ticker or req.shares <= 0 or req.buy_price <= 0:
         raise HTTPException(status_code=400, detail="Nieprawidłowe dane pozycji.")
-    for level in (req.custom_stop, req.custom_target):
+    for level in (req.custom_stop, req.custom_target, req.buy_fx_rate):
         if level is not None and level <= 0:
-            raise HTTPException(status_code=400, detail="Własny stop-loss i cel muszą być dodatnie.")
+            raise HTTPException(status_code=400, detail="Własny stop-loss, cel i kurs wymiany muszą być dodatnie.")
     # Jeśli spółki nie ma jeszcze na watchliście, dodajemy ją automatycznie,
     # żeby zaczęła być analizowana w kolejnych cyklach (inaczej nigdy nie
     # dostaniemy aktualnej ceny/sygnału do oceny tej pozycji).
     db.add_company(ticker, name=ticker, source="portfolio")
     position_id = db.add_position(ticker, req.shares, req.buy_price, req.buy_date, req.notes,
-                                   custom_stop=req.custom_stop, custom_target=req.custom_target)
+                                   custom_stop=req.custom_stop, custom_target=req.custom_target,
+                                   buy_fx_rate=req.buy_fx_rate)
 
     # Ustalamy walutę od razu, jeśli mamy ją w cache'u z ostatniej analizy -
     # inaczej pozycja domyślnie pokazuje USD do najbliższego cyklu.
@@ -958,12 +993,13 @@ async def api_update_position(position_id: int, req: AddPositionRequest):
     ticker = req.ticker.strip().upper()
     if not ticker or req.shares <= 0 or req.buy_price <= 0:
         raise HTTPException(status_code=400, detail="Nieprawidłowe dane pozycji.")
-    for level in (req.custom_stop, req.custom_target):
+    for level in (req.custom_stop, req.custom_target, req.buy_fx_rate):
         if level is not None and level <= 0:
-            raise HTTPException(status_code=400, detail="Własny stop-loss i cel muszą być dodatnie.")
+            raise HTTPException(status_code=400, detail="Własny stop-loss, cel i kurs wymiany muszą być dodatnie.")
     db.add_company(ticker, name=ticker, source="portfolio")
     ok = db.update_position(position_id, ticker, req.shares, req.buy_price, req.buy_date, req.notes,
-                             custom_stop=req.custom_stop, custom_target=req.custom_target)
+                             custom_stop=req.custom_stop, custom_target=req.custom_target,
+                             buy_fx_rate=req.buy_fx_rate)
     if not ok:
         raise HTTPException(status_code=404, detail="Nie znaleziono pozycji.")
     return {"status": "ok"}

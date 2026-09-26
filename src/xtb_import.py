@@ -80,6 +80,51 @@ def _to_date_str(value) -> str | None:
     return None
 
 
+def _position_id_key(position_id) -> str | None:
+    """Normalizuje Position ID (openpyxl zwraca float, np. 2798298883.0) do
+    stałego formatu string, żeby dopasowywać wiersze między arkuszami."""
+    if position_id in (None, ""):
+        return None
+    return str(int(position_id)) if isinstance(position_id, float) else str(position_id)
+
+
+def _implied_fx_rate(account_ccy_amount, shares, native_price) -> float | None:
+    """Kurs wymiany UKRYTY w kwocie rozliczonej w walucie konta - broker (np.
+    XTB) dolicza własną marżę do kursu rynkowego, więc to jedyny sposób na
+    odtworzenie kursu, jaki REALNIE zastosowano, zamiast zgadywać go kursem
+    rynkowym/NBP z dnia transakcji."""
+    if account_ccy_amount is None or not shares or not native_price:
+        return None
+    native_total = shares * native_price
+    if not native_total:
+        return None
+    return abs(account_ccy_amount) / native_total
+
+
+def _parse_cash_operations_buy_totals(wb) -> dict[str, float]:
+    """Sumuje kwoty 'Stock purchase' z arkusza Cash Operations per Position ID
+    - jedyne źródło rzeczywistego kosztu w walucie konta dla OTWARTYCH pozycji
+    (arkusz Open Positions go nie ma). XTB czasem dzieli jeden zakup na kilka
+    operacji gotówkowych (osobne partie konwersji waluty) - suma odtwarza
+    całkowitą kwotę niezależnie od tego, na ile wierszy została podzielona."""
+    totals: dict[str, float] = {}
+    if "Cash Operations" not in wb.sheetnames:
+        return totals
+    ws = wb["Cash Operations"]
+    header_row, cols = _find_header(ws, ["Type", "Amount", "Position ID"])
+    if not header_row:
+        return totals
+    for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+        if row[cols["Type"]] != "Stock purchase":
+            continue
+        key = _position_id_key(row[cols["Position ID"]])
+        amount = row[cols["Amount"]]
+        if key is None or amount is None:
+            continue
+        totals[key] = totals.get(key, 0.0) + float(amount)
+    return totals
+
+
 def parse_xtb_report(file_bytes: bytes) -> dict:
     """Zwraca {"open": [...], "closed": [...], "warnings": [...]}. Każdy
     element open/closed to dict gotowy do wstawienia do bazy portfela."""
@@ -87,6 +132,11 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
     warnings: list[str] = []
     open_rows: list[dict] = []
     closed_rows: list[dict] = []
+
+    # Kwoty rzeczywiście obciążające konto (waluta konta, z marżą brokera
+    # wliczoną) dla OTWARTYCH pozycji - arkusz Open Positions samych kwot
+    # historycznego kosztu nie ma, tylko bieżącą wartość.
+    cash_buy_totals = _parse_cash_operations_buy_totals(wb)
 
     # --- Open Positions: tylko wiersze POJEDYNCZYCH transakcji (Type=BUY,
     # z wypełnioną datą otwarcia) - wiersze zagregowane (bez daty) pomijamy.
@@ -114,17 +164,24 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
                     warnings.append(f"Nierozpoznany sufiks giełdy dla {xtb_ticker} - "
                                      f"zaimportowano jako '{yahoo_ticker}', ZWERYFIKUJ ręcznie.")
 
+                id_key = _position_id_key(position_id)
+                buy_fx_rate = _implied_fx_rate(cash_buy_totals.get(id_key), float(volume), float(open_price))
+
                 open_rows.append({
-                    "xtb_id": str(int(position_id)) if isinstance(position_id, float) else str(position_id),
+                    "xtb_id": id_key,
                     "ticker": yahoo_ticker,
                     "original_ticker": xtb_ticker,
                     "shares": round(float(volume), 6),
                     "buy_price": round(float(open_price), 6),
                     "buy_date": _to_date_str(open_time) or datetime.now().strftime("%Y-%m-%d"),
                     "currency": guess_currency(xtb_ticker),
+                    "buy_fx_rate": round(buy_fx_rate, 6) if buy_fx_rate else None,
                 })
 
     # --- Closed Positions: każdy wiersz to już pojedyncza, zamknięta transakcja.
+    # W przeciwieństwie do Open Positions, ten arkusz MA bezpośrednio kwoty w
+    # walucie konta (Purchase Value / Sale Value) - nie trzeba sięgać do
+    # Cash Operations.
     if "Closed Positions" in wb.sheetnames:
         ws = wb["Closed Positions"]
         header_row, cols = _find_header(ws, ["Ticker", "Open Price", "Close Price", "Position ID"])
@@ -150,9 +207,14 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
                     warnings.append(f"Nierozpoznany sufiks giełdy dla {xtb_ticker} - "
                                      f"zaimportowano jako '{yahoo_ticker}', ZWERYFIKUJ ręcznie.")
 
+                purchase_value = row[cols["Purchase Value"]] if "Purchase Value" in cols else None
+                sale_value = row[cols["Sale Value"]] if "Sale Value" in cols else None
+                buy_fx_rate = _implied_fx_rate(purchase_value, float(volume), float(open_price))
+                sell_fx_rate = _implied_fx_rate(sale_value, float(volume), float(close_price))
+
                 position_id = row[cols["Position ID"]]
                 closed_rows.append({
-                    "xtb_id": str(int(position_id)) if isinstance(position_id, float) else str(position_id),
+                    "xtb_id": _position_id_key(position_id),
                     "ticker": yahoo_ticker,
                     "original_ticker": xtb_ticker,
                     "shares": round(float(volume), 6),
@@ -161,6 +223,8 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
                     "sell_price": round(float(close_price), 6),
                     "sell_date": _to_date_str(row[cols["Close Time (UTC)"]]) or "",
                     "currency": guess_currency(xtb_ticker),
+                    "buy_fx_rate": round(buy_fx_rate, 6) if buy_fx_rate else None,
+                    "sell_fx_rate": round(sell_fx_rate, 6) if sell_fx_rate else None,
                 })
 
     return {"open": open_rows, "closed": closed_rows, "warnings": warnings}

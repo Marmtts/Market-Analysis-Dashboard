@@ -465,18 +465,21 @@ def prepare_cash_flows_for_currency(raw_flows: list[dict], target_currency: str,
     """Zamienia surowe zdarzenia z db.get_position_cash_flows (kupno/sprzedaż,
     każde we WŁASNEJ walucie notowania) na listę podpisanych kwot w jednej
     walucie docelowej - wejście do compute_twr_curve. `convert=True` (krzywa
-    ŁĄCZNA) przelicza kursem HISTORYCZNYM z dnia zdarzenia; to wydajność
-    portfela, nie rozliczenie podatkowe, więc - w odróżnieniu od
-    compute_tax_summary - wystarczy przybliżony kurs rynkowy, bez
-    zachodu o oficjalny kurs NBP. Przepływ bez dostępnego kursu jest
-    pomijany (lepsze przybliżone TWR niż zepsuty cały wynik)."""
+    ŁĄCZNA) przelicza REALNYM kursem transakcji (`f["fx_rate"]`), jeśli jest
+    znany - patrz kolumny buy_fx_rate/sell_fx_rate w portfolio (import XTB
+    albo ręcznie wpisany przy dodawaniu pozycji). Bez tego spada na
+    przybliżony kurs rynkowy z dnia zdarzenia; to wydajność portfela, nie
+    rozliczenie podatkowe, więc - w odróżnieniu od compute_tax_summary -
+    wystarczy przybliżenie, bez zachodu o oficjalny kurs NBP. Przepływ bez
+    ŻADNEGO dostępnego kursu jest pomijany (lepsze przybliżone TWR niż
+    zepsuty cały wynik)."""
     from .fx_rates import get_historical_fx_rate
 
     out: list[dict] = []
     for f in raw_flows:
         amount = f["amount"]
         if convert and f["currency"] != target_currency:
-            rate = get_historical_fx_rate(f["currency"], target_currency, f["date"])
+            rate = f.get("fx_rate") or get_historical_fx_rate(f["currency"], target_currency, f["date"])
             if rate is None:
                 continue
             amount *= rate

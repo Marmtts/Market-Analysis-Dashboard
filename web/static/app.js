@@ -1293,6 +1293,7 @@ function startEditPosition(p) {
   el("posBuyPrice").value = p.buy_price;
   el("posBuyDate").value = p.buy_date;
   el("posNotes").value = p.notes || "";
+  el("posBuyFxRate").value = p.buy_fx_rate ?? "";
   el("posCustomStop").value = p.custom_stop ?? "";
   el("posCustomTarget").value = p.custom_target ?? "";
   el("posSubmitBtn").textContent = "Zapisz zmiany";
@@ -1307,6 +1308,9 @@ function duplicatePosition(p) {
   el("posBuyPrice").value = p.buy_price;
   el("posBuyDate").value = new Date().toISOString().slice(0, 10);
   el("posNotes").value = p.notes || "";
+  // Kurs wymiany celowo NIE jest kopiowany - to nowa transakcja z dzisiejszą
+  // datą, więc stary kurs z poprzedniego zakupu by tu nie pasował.
+  el("posBuyFxRate").value = "";
   el("posCustomStop").value = p.custom_stop ?? "";
   el("posCustomTarget").value = p.custom_target ?? "";
   el("posSubmitBtn").textContent = "+ Dodaj pozycję";
@@ -1336,6 +1340,7 @@ el("portfolioForm").addEventListener("submit", async (e) => {
     buy_price: parseFloat(el("posBuyPrice").value),
     buy_date: el("posBuyDate").value,
     notes: el("posNotes").value.trim(),
+    buy_fx_rate: parseOptionalNumber(el("posBuyFxRate").value),
     custom_stop: parseOptionalNumber(el("posCustomStop").value),
     custom_target: parseOptionalNumber(el("posCustomTarget").value),
   };
@@ -2135,6 +2140,7 @@ el("xtbImportBtn").addEventListener("click", async () => {
     }
     let msg = `Zaimportowano: ${data.imported_open} otwartych, ${data.imported_closed} zamkniętych pozycji.`;
     if (data.skipped_duplicates) msg += ` Pominięto ${data.skipped_duplicates} już zaimportowanych wcześniej.`;
+    if (data.fx_rates_backfilled) msg += ` Uzupełniono rzeczywisty kurs wymiany dla ${data.fx_rates_backfilled} wcześniej zaimportowanych pozycji.`;
     appendLog({ level: "success", message: `📥 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📥 ${w}` }));
     alert(msg + (data.warnings?.length ? `\n\nUwagi (patrz też log na żywo):\n${data.warnings.slice(0, 5).join("\n")}` : ""));
