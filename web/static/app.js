@@ -928,6 +928,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab === "portfolio") {
       loadPortfolio();
       loadPortfolioEquitySection();
+      loadDividends();
     }
     if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
   });
@@ -947,6 +948,120 @@ async function loadPortfolio() {
     console.warn("Nie udało się pobrać portfela:", err);
   }
 }
+
+// ---------------- Dywidendy ----------------
+async function loadDividends() {
+  try {
+    const res = await fetch("/api/dividends");
+    const data = await res.json();
+    renderDividendSummary(data.summary);
+    renderDividendTable(data.dividends);
+  } catch (err) {
+    console.warn("Nie udało się pobrać dywidend:", err);
+  }
+}
+
+function renderDividendSummary(summary) {
+  const panel = el("dividendSummaryPanel");
+  const years = Object.keys(summary?.by_year || {}).sort().reverse();
+  if (years.length === 0) {
+    panel.innerHTML = `<p class="empty-state">💵 Brak zarejestrowanych dywidend — dodaj ręcznie po lewej albo zaimportuj raport XTB.</p>`;
+    return;
+  }
+
+  let html = `<div class="detail-section">
+    <h4 class="detail-section__title">💵 Przychód z dywidend (${escapeHtml(summary.base_currency)})</h4>
+    <div class="metric-grid">
+      <div><span>Łącznie brutto</span><strong class="positive">+${summary.total_gross.toFixed(2)}</strong></div>
+      <div><span>Podatek u źródła</span><strong class="negative">-${summary.total_wht.toFixed(2)}</strong></div>
+      <div><span>Łącznie netto</span><strong class="positive">+${summary.total_net.toFixed(2)}</strong></div>
+    </div>`;
+
+  years.forEach((year) => {
+    const y = summary.by_year[year];
+    html += `
+      <div class="tax-year-card">
+        <div class="tax-year-card__header"><strong>${year}</strong><span>${y.count} wypłat</span></div>
+        <div class="metric-grid">
+          <div><span>Brutto</span><strong class="positive">+${y.gross.toFixed(2)}</strong></div>
+          <div><span>Podatek u źródła</span><strong class="negative">-${y.wht.toFixed(2)}</strong></div>
+          <div><span>Netto</span><strong class="positive">+${y.net.toFixed(2)}</strong></div>
+        </div>
+      </div>`;
+  });
+
+  if (summary.conversion_notes && summary.conversion_notes.length) {
+    html += `<ul class="detail-list">${summary.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+  }
+
+  html += `<p class="detail-disclaimer">⚠️ To podsumowanie przepływu gotówki, NIE rozliczenie podatkowe. Polski podatek od dywidend zagranicznych to różnica między 19% a podatkiem u źródła już potrąconym za granicą (jeśli stawka źródłowa jest niższa) — narzędzie tej ewentualnej dopłaty nie wylicza. Skonsultuj się z doradcą podatkowym.</p></div>`;
+  panel.innerHTML = html;
+}
+
+function renderDividendTable(dividends) {
+  const wrap = el("dividendTableWrap");
+  if (!dividends || dividends.length === 0) {
+    wrap.innerHTML = "";
+    return;
+  }
+
+  let html = `<table class="data-table">
+    <thead><tr>
+      <th>Data</th><th>Spółka</th><th>Brutto</th><th>Podatek u źródła</th><th>Netto</th><th>Źródło</th><th></th>
+    </tr></thead><tbody>`;
+
+  dividends.forEach((d) => {
+    const wht = d.withholding_tax || 0;
+    const net = d.amount_gross - wht;
+    html += `<tr>
+      <td>${escapeHtml(d.pay_date)}</td>
+      <td>${escapeHtml(d.ticker)}</td>
+      <td>${fmtMoney(d.amount_gross, d.currency)}</td>
+      <td>${wht ? "-" + fmtMoney(wht, d.currency) : "—"}</td>
+      <td>${fmtMoney(net, d.currency)}</td>
+      <td title="${escapeHtml(d.notes || "")}">${d.source === "xtb_import" ? "XTB" : "ręczne"}</td>
+      <td><button class="watchlist__remove" title="Usuń" data-id="${d.id}">✕</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll(".watchlist__remove").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Usunąć tę dywidendę?")) return;
+      await fetch(`/api/dividends/${btn.dataset.id}`, { method: "DELETE" });
+      await loadDividends();
+    });
+  });
+}
+
+el("dividendForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {
+    ticker: el("divTicker").value.trim(),
+    currency: el("divCurrency").value.trim(),
+    pay_date: el("divPayDate").value,
+    amount_gross: parseFloat(el("divAmountGross").value),
+    withholding_tax: el("divWithholdingTax").value ? parseFloat(el("divWithholdingTax").value) : null,
+    notes: el("divNotes").value.trim(),
+  };
+  if (!payload.ticker || !payload.currency || !payload.pay_date || isNaN(payload.amount_gross) || payload.amount_gross <= 0) {
+    alert("Uzupełnij ticker, walutę, datę i prawidłową kwotę brutto.");
+    return;
+  }
+  const res = await fetch("/api/dividends", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    e.target.reset();
+    await loadDividends();
+  } else {
+    const b = await res.json().catch(() => ({}));
+    alert(b.detail || "Nie udało się dodać dywidendy.");
+  }
+});
 
 // Współdzielone przez renderPortfolio (wybór "najpilniejszej" transzy na
 // kartę grupy) i drawPositionPriceLines (ten sam wybór na wykresie) - było
@@ -2155,11 +2270,13 @@ el("xtbImportBtn").addEventListener("click", async () => {
     if (data.skipped_duplicates) msg += ` Pominięto ${data.skipped_duplicates} już zaimportowanych wcześniej.`;
     if (data.fx_rates_backfilled) msg += ` Uzupełniono rzeczywisty kurs wymiany dla ${data.fx_rates_backfilled} wcześniej zaimportowanych pozycji.`;
     if (data.closed_from_reimport) msg += ` Zamknięto ${data.closed_from_reimport} pozycji sprzedanych u brokera od poprzedniego importu.`;
+    if (data.imported_dividends) msg += ` Zaimportowano ${data.imported_dividends} dywidend.`;
     appendLog({ level: "success", message: `📥 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📥 ${w}` }));
     alert(msg + (data.warnings?.length ? `\n\nUwagi (patrz też log na żywo):\n${data.warnings.slice(0, 5).join("\n")}` : ""));
     fileInput.value = "";
     await loadPortfolio();
+    await loadDividends();
     await loadClosedPortfolio();
   } catch (err) {
     alert("Błąd połączenia podczas importu.");
@@ -2338,8 +2455,8 @@ el("backupImportBtn").addEventListener("click", async () => {
       alert(data.detail || "Nie udało się wczytać kopii.");
       return;
     }
-    const msg = `Wczytano: ${data.positions_added} pozycji i ${data.watchlist_added} spółek. ` +
-      `Pominięto duplikaty: ${data.positions_skipped} pozycji, ${data.watchlist_skipped} spółek.`;
+    const msg = `Wczytano: ${data.positions_added} pozycji, ${data.watchlist_added} spółek i ${data.dividends_added ?? 0} dywidend. ` +
+      `Pominięto duplikaty: ${data.positions_skipped} pozycji, ${data.watchlist_skipped} spółek, ${data.dividends_skipped ?? 0} dywidend.`;
     appendLog({ level: "success", message: `📤 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📤 ${w}` }));
     alert(msg + (data.warnings && data.warnings.length ? `\n\nUwagi:\n${data.warnings.slice(0, 5).join("\n")}` : ""));
@@ -2347,6 +2464,7 @@ el("backupImportBtn").addEventListener("click", async () => {
     el("backupFileNameLabel").textContent = "📂 Wybierz plik kopii (.json)";
     await loadPortfolio();
     await loadClosedPortfolio();
+    await loadDividends();
   } catch (err) {
     alert("Błąd połączenia podczas wczytywania kopii.");
   } finally {

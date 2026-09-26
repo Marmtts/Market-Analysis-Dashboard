@@ -62,6 +62,7 @@ from src.report import (
     compute_portfolio_statistics, compute_benchmark_comparison,
     build_closed_trades_export_rows,
     compute_twr_curve, prepare_cash_flows_for_currency,
+    compute_dividend_summary,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -599,6 +600,15 @@ class ClosePositionRequest(BaseModel):
     sell_fx_rate: float | None = None
 
 
+class AddDividendRequest(BaseModel):
+    ticker: str
+    currency: str
+    pay_date: str  # "YYYY-MM-DD"
+    amount_gross: float
+    withholding_tax: float | None = None
+    notes: str = ""
+
+
 class ChatRequest(BaseModel):
     messages: list[dict]  # [{"role": "user"|"assistant", "content": "..."}]
 
@@ -701,6 +711,23 @@ async def api_import_xtb(file: UploadFile = File(...)):
         )
         imported_closed += 1
 
+    already_imported_dividends = db.get_imported_dividend_xtb_ids()
+    imported_dividends = skipped_dividend_duplicates = 0
+    for row in parsed.get("dividends", []):
+        # Dywidendy bez ID operacji (nietypowy raport) importujemy zawsze -
+        # bez tego jednego wspólnego pola do deduplikacji nie da się bezpiecznie
+        # pominąć duplikatów, a utrata realnej wypłaty jest gorsza niż rzadki
+        # duplikat przy powtórnym imporcie tego samego pliku.
+        if row["xtb_cash_op_id"] and row["xtb_cash_op_id"] in already_imported_dividends:
+            skipped_dividend_duplicates += 1
+            continue
+        db.add_dividend(
+            ticker=row["ticker"], currency=row["currency"], pay_date=row["pay_date"],
+            amount_gross=row["amount_gross"], withholding_tax=row.get("withholding_tax"),
+            source="xtb_import", xtb_cash_op_id=row["xtb_cash_op_id"], notes=row.get("notes", ""),
+        )
+        imported_dividends += 1
+
     await manager.broadcast({"type": "watchlist_changed"})
 
     return {
@@ -709,6 +736,8 @@ async def api_import_xtb(file: UploadFile = File(...)):
         "skipped_duplicates": skipped_duplicates,
         "fx_rates_backfilled": fx_rates_backfilled,
         "closed_from_reimport": closed_from_reimport,
+        "imported_dividends": imported_dividends,
+        "skipped_dividend_duplicates": skipped_dividend_duplicates,
         "warnings": parsed["warnings"],
     }
 
@@ -944,6 +973,37 @@ async def api_export_closed_trades_csv():
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+@app.get("/api/dividends")
+async def api_get_dividends():
+    dividends = db.get_dividends()
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    summary = await asyncio.to_thread(compute_dividend_summary, dividends, base_currency)
+    return sanitize_for_json({"dividends": dividends, "summary": summary})
+
+
+@app.post("/api/dividends")
+async def api_add_dividend(req: AddDividendRequest):
+    if req.amount_gross <= 0:
+        raise HTTPException(status_code=400, detail="Nieprawidłowa kwota dywidendy.")
+    ticker = req.ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Podaj ticker.")
+    dividend_id = db.add_dividend(
+        ticker=ticker, currency=req.currency.strip().upper(), pay_date=req.pay_date,
+        amount_gross=req.amount_gross, withholding_tax=req.withholding_tax,
+        source="manual", notes=req.notes,
+    )
+    return {"status": "ok", "id": dividend_id}
+
+
+@app.delete("/api/dividends/{dividend_id}")
+async def api_delete_dividend(dividend_id: int):
+    ok = db.delete_dividend(dividend_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Nie znaleziono dywidendy.")
+    return {"status": "ok"}
+
 
 @app.post("/api/portfolio/{position_id}/close")
 async def api_close_position(position_id: int, req: ClosePositionRequest):

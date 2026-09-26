@@ -133,6 +133,22 @@ CREATE TABLE IF NOT EXISTS fx_rate_cache (
     rate REAL NOT NULL,
     stored_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS dividends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    pay_date TEXT NOT NULL,
+    amount_gross REAL NOT NULL,
+    withholding_tax REAL,           -- podatek u źródła potrącony przez brokera (dodatnia liczba) - NULL, jeśli nieznany
+    source TEXT NOT NULL DEFAULT 'manual',   -- 'manual' | 'xtb_import'
+    xtb_cash_op_id TEXT,            -- ID operacji gotówkowej z raportu XTB - do idempotentnego importu
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_dividends_ticker ON dividends(ticker, pay_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dividends_xtb_cash_op ON dividends(xtb_cash_op_id)
+    WHERE xtb_cash_op_id IS NOT NULL;
 """
 
 # Ile "zdjęć" werdyktu trzymamy na spółkę w score_history - zapobiega
@@ -824,6 +840,48 @@ def close_previously_imported_xtb_position(xtb_id: str, sell_price: float, sell_
         return cur.rowcount > 0
 
 
+def get_imported_dividend_xtb_ids() -> set[str]:
+    """Zbiór ID operacji gotówkowych (Cash Operations) już zaimportowanych jako
+    dywidendy - używane do pominięcia duplikatów przy ponownym imporcie tego
+    samego lub nowszego raportu XTB."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT xtb_cash_op_id FROM dividends WHERE xtb_cash_op_id IS NOT NULL"
+        ).fetchall()
+    return {r["xtb_cash_op_id"] for r in rows}
+
+
+def add_dividend(ticker: str, currency: str, pay_date: str, amount_gross: float,
+                  withholding_tax: float | None = None, source: str = "manual",
+                  xtb_cash_op_id: str | None = None, notes: str = "") -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO dividends (ticker, currency, pay_date, amount_gross, withholding_tax, "
+            "source, xtb_cash_op_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (ticker, currency, pay_date, amount_gross, withholding_tax, source, xtb_cash_op_id, notes),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def get_dividends(ticker: str | None = None) -> list[dict]:
+    with _connect() as conn:
+        if ticker:
+            rows = conn.execute(
+                "SELECT * FROM dividends WHERE ticker = ? ORDER BY pay_date DESC, id DESC", (ticker,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM dividends ORDER BY pay_date DESC, id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_dividend(dividend_id: int) -> bool:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM dividends WHERE id = ?", (dividend_id,))
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: str,
                        notes: str = "", status: str = "open",
                        sell_price: float | None = None, sell_date: str | None = None,
@@ -866,12 +924,17 @@ def export_backup() -> dict:
             "SELECT ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, "
             "currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate FROM portfolio ORDER BY id ASC"
         ).fetchall()]
+        dividends = [dict(r) for r in conn.execute(
+            "SELECT ticker, currency, pay_date, amount_gross, withholding_tax, source, notes "
+            "FROM dividends ORDER BY id ASC"
+        ).fetchall()]
     return {
         "app": BACKUP_APP_ID,
         "version": BACKUP_VERSION,
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "watchlist": watchlist,
         "portfolio": portfolio,
+        "dividends": dividends,
     }
 
 
@@ -904,13 +967,15 @@ def import_backup(data) -> dict:
 
     watchlist = data.get("watchlist") or []
     portfolio = data.get("portfolio") or []
-    if not isinstance(watchlist, list) or not isinstance(portfolio, list):
+    dividends = data.get("dividends") or []  # opcjonalne - brak w kopiach sprzed tej funkcji
+    if not isinstance(watchlist, list) or not isinstance(portfolio, list) or not isinstance(dividends, list):
         raise ValueError("Uszkodzona struktura pliku kopii zapasowej.")
-    if len(watchlist) + len(portfolio) > MAX_BACKUP_ROWS:
+    if len(watchlist) + len(portfolio) + len(dividends) > MAX_BACKUP_ROWS:
         raise ValueError(f"Zbyt duży plik kopii (limit {MAX_BACKUP_ROWS} wierszy).")
 
     result = {"watchlist_added": 0, "watchlist_skipped": 0,
-              "positions_added": 0, "positions_skipped": 0, "warnings": []}
+              "positions_added": 0, "positions_skipped": 0,
+              "dividends_added": 0, "dividends_skipped": 0, "warnings": []}
 
     def warn(msg: str) -> None:
         if len(result["warnings"]) < 20:
@@ -981,6 +1046,37 @@ def import_backup(data) -> dict:
                  currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate),
             )
             result["positions_added"] += 1
+
+        for i, d in enumerate(dividends, 1):
+            if not isinstance(d, dict):
+                warn(f"Dywidendy, wiersz {i}: nieprawidłowy format - pominięto.")
+                continue
+            ticker = str(d.get("ticker", "")).strip().upper()
+            amount_gross = _positive_number(d.get("amount_gross"))
+            pay_date = d.get("pay_date")
+            if not ticker or amount_gross is None or not _valid_date_str(pay_date):
+                warn(f"Dywidendy, wiersz {i} ({ticker or '?'}): niepoprawne dane - pominięto.")
+                continue
+            currency = str(d.get("currency") or "USD").strip().upper()[:10]
+            withholding_tax = _positive_number(d.get("withholding_tax"))
+            source = str(d.get("source") or "backup")
+            notes = _sanitize_text(d.get("notes", ""))
+
+            duplicate = conn.execute(
+                "SELECT 1 FROM dividends WHERE ticker = ? AND pay_date = ? AND currency = ? "
+                "AND amount_gross = ? LIMIT 1",
+                (ticker, pay_date, currency, amount_gross),
+            ).fetchone()
+            if duplicate:
+                result["dividends_skipped"] += 1
+                continue
+
+            conn.execute(
+                "INSERT INTO dividends (ticker, currency, pay_date, amount_gross, withholding_tax, "
+                "source, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ticker, currency, pay_date, amount_gross, withholding_tax, source, notes),
+            )
+            result["dividends_added"] += 1
 
         conn.commit()
     return result

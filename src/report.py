@@ -713,6 +713,109 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
     }
 
 
+def _convert_dividend_to_base_currency(d: dict, base_currency: str) -> dict:
+    """Przelicza JEDNĄ wypłatę dywidendy na walutę bazową - ta sama logika
+    kursowa co zamknięte transakcje (_convert_trade_to_base_currency): dla
+    PLN oficjalny kurs NBP z dnia poprzedzającego wypłatę, w innych
+    przypadkach przybliżony kurs rynkowy (yfinance)."""
+    from .fx_rates import get_historical_fx_rate, get_nbp_rate
+
+    currency = d.get("currency") or "USD"
+    pay_date = d.get("pay_date")
+
+    if currency == base_currency:
+        rate, used_fallback = 1.0, False
+    elif base_currency == "PLN":
+        rate = get_nbp_rate(currency, pay_date, for_tax_purposes=True)
+        used_fallback = rate is None
+        if used_fallback:
+            rate = get_historical_fx_rate(currency, base_currency, pay_date)
+    else:
+        used_fallback = True
+        rate = get_historical_fx_rate(currency, base_currency, pay_date)
+
+    if rate is None:
+        return {
+            "gross_base": None, "wht_base": None, "net_base": None, "used_fallback": used_fallback,
+            "note": f"{d['ticker']} ({pay_date}): brak kursu {currency}->{base_currency}, pominięto.",
+        }
+
+    gross_base = d["amount_gross"] * rate
+    wht_base = (d.get("withholding_tax") or 0.0) * rate
+    return {
+        "gross_base": gross_base, "wht_base": wht_base, "net_base": gross_base - wht_base,
+        "used_fallback": used_fallback, "note": None,
+    }
+
+
+def compute_dividend_summary(dividends: list[dict], base_currency: str = "PLN") -> dict:
+    """Grupuje otrzymane dywidendy wg roku i spółki, licząc łączny przychód
+    brutto/netto (po podatku u źródła) w walucie bazowej. CZYSTO
+    INFORMACYJNE - polski podatek od dywidend zagranicznych to różnica
+    między 19% a podatkiem u źródła już potrąconym za granicą (jeśli stawka
+    źródłowa jest niższa), a to narzędzie NIE liczy tej ewentualnej dopłaty -
+    traktuj wynik jako podsumowanie przepływu gotówki, nie gotowe
+    rozliczenie PIT."""
+    by_year: dict[str, dict] = {}
+    by_ticker: dict[str, dict] = {}
+    conversion_notes: list[str] = []
+    any_fallback_used = False
+    total_gross = total_wht = total_net = 0.0
+
+    for d in dividends:
+        pay_date = d.get("pay_date")
+        if not pay_date:
+            continue
+        conv = _convert_dividend_to_base_currency(d, base_currency)
+        if conv["gross_base"] is None:
+            conversion_notes.append(conv["note"])
+            continue
+        if conv["used_fallback"]:
+            any_fallback_used = True
+
+        gross, wht, net = conv["gross_base"], conv["wht_base"], conv["net_base"]
+        total_gross += gross
+        total_wht += wht
+        total_net += net
+
+        year = pay_date[:4]
+        yb = by_year.setdefault(year, {"gross": 0.0, "wht": 0.0, "net": 0.0, "count": 0})
+        yb["gross"] += gross
+        yb["wht"] += wht
+        yb["net"] += net
+        yb["count"] += 1
+
+        ticker = d["ticker"]
+        tb = by_ticker.setdefault(ticker, {"gross_base": 0.0, "net_base": 0.0, "count": 0,
+                                            "currency": d.get("currency"), "last_pay_date": pay_date})
+        tb["gross_base"] += gross
+        tb["net_base"] += net
+        tb["count"] += 1
+        if pay_date > tb["last_pay_date"]:
+            tb["last_pay_date"] = pay_date
+
+    by_year_result = {
+        y: {"gross": round(b["gross"], 2), "wht": round(b["wht"], 2), "net": round(b["net"], 2), "count": b["count"]}
+        for y, b in sorted(by_year.items())
+    }
+    by_ticker_result = {
+        t: {"gross_base": round(b["gross_base"], 2), "net_base": round(b["net_base"], 2),
+            "count": b["count"], "currency": b["currency"], "last_pay_date": b["last_pay_date"]}
+        for t, b in sorted(by_ticker.items(), key=lambda kv: -kv[1]["net_base"])
+    }
+
+    return {
+        "base_currency": base_currency,
+        "total_gross": round(total_gross, 2),
+        "total_wht": round(total_wht, 2),
+        "total_net": round(total_net, 2),
+        "by_year": by_year_result,
+        "by_ticker": by_ticker_result,
+        "conversion_notes": conversion_notes,
+        "nbp_compliant": base_currency == "PLN" and not any_fallback_used,
+    }
+
+
 def build_closed_trades_export_rows(closed_positions: list[dict], base_currency: str = "PLN") -> tuple[list[str], list[list]]:
     """Buduje nagłówek + wiersze do eksportu CSV historii zamkniętych
     transakcji - surowe dane pozycji (w walucie notowania) PLUS, gdy się uda

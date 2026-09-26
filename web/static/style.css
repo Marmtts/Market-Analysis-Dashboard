@@ -1411,6 +1411,20 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 .corr-table td:hover { transform: scale(1.12); box-shadow: var(--shadow-xs); position: relative; z-index: 1; }
 .backup-download-link { display: block; text-align: center; text-decoration: none; margin-bottom: 0.6rem; }
 
+/* ---------------- Tabela dywidend ---------------- */
+.dividend-table-wrap { overflow-x: auto; margin-top: 0.8rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.data-table th {
+  text-align: left; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em;
+  font-size: 0.65rem; font-weight: 600; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.data-table tbody tr:hover { background: var(--surface-hover, rgba(255, 255, 255, 0.03)); }
+.data-table .watchlist__remove { margin: 0; }
+
 /* ---------------- Portfel vs benchmark ---------------- */
 .bench-chart-container { width: 100%; height: 220px; margin: 0.4rem 0 0.2rem; }
 .legend-swatch--bench { background: var(--text-dim); }

@@ -232,7 +232,26 @@
       </label>
       <input type="file" id="xtbImportFile" accept=".xlsx,.xls" class="file-input-hidden">
       <button class="btn btn--secondary" id="xtbImportBtn">📥 Importuj pozycje</button>
-      <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte.</p>
+      <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte. Ten sam import wczytuje też otrzymane dywidendy (sekcja „Dywidendy” niżej).</p>
+    </section>
+
+    <section class="panel sidebar-subpanel">
+      <h3 class="panel__subtitle"><span class="panel__subtitle-icon">💵</span>Dodaj dywidendę ręcznie</h3>
+      <form class="add-form" id="dividendForm">
+        <input type="text" id="divTicker" placeholder="Ticker (np. MSFT)" required autocomplete="off">
+        <div class="add-form__row">
+          <input type="number" id="divAmountGross" placeholder="Kwota brutto" step="0.01" min="0" required>
+          <input type="text" id="divCurrency" placeholder="Waluta (np. USD)" maxlength="10" required>
+        </div>
+        <div class="add-form__row">
+          <input type="date" id="divPayDate" required>
+          <input type="number" id="divWithholdingTax" placeholder="Podatek u źródła (opcj.)" step="0.01" min="0">
+        </div>
+        <input type="text" id="divNotes" placeholder="Notatka (opcjonalnie)" autocomplete="off">
+        <div class="form-btn-row">
+          <button type="submit" class="btn btn--primary">+ Dodaj dywidendę</button>
+        </div>
+      </form>
     </section>
 
     <section class="panel sidebar-subpanel">
@@ -243,7 +262,7 @@
       </label>
       <input type="file" id="backupImportFile" accept=".json,application/json" class="file-input-hidden">
       <button class="btn btn--secondary" id="backupImportBtn">📤 Wczytaj kopię</button>
-      <p class="detail-disclaimer">Kopia zawiera watchlistę oraz cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel). Wczytanie jest bezpieczne do powtarzania — identyczne pozycje i spółki są pomijane. Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
+      <p class="detail-disclaimer">Kopia zawiera watchlistę, cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel) oraz dywidendy. Wczytanie jest bezpieczne do powtarzania — identyczne pozycje, spółki i dywidendy są pomijane. Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
     </section>
   </aside>
   <section class="main">
@@ -296,6 +315,12 @@
     <div class="results-grid" id="portfolioGrid">
       <p class="empty-state">📭 Brak pozycji — dodaj pierwszą po lewej stronie.</p>
     </div>
+
+    <div class="section-header">
+      <h2><span class="section-header__icon">💵</span>Dywidendy</h2>
+    </div>
+    <div class="section-card" id="dividendSummaryPanel"></div>
+    <div class="dividend-table-wrap" id="dividendTableWrap"></div>
   </section>
 </main>
 

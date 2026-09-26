@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.6"
+VERSION = "3.7"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -816,6 +816,27 @@ def part2(s: Story) -> None:
               "sygnał techniczny — nie uwzględniają Twojej sytuacji podatkowej, kosztów transakcyjnych ani "
               "indywidualnej tolerancji ryzyka. To nie jest porada inwestycyjna ani podatkowa.")
 
+    s.h2("12.6 Dywidendy")
+    s.p("Na dole zakładki Portfel znajduje się sekcja „Dywidendy” — podsumowanie otrzymanego przychodu "
+        "(brutto, podatek u źródła, netto) w walucie bazowej, rozbite wg roku, oraz pełna tabela "
+        "pojedynczych wypłat z możliwością usunięcia dowolnej pozycji (✕).")
+    s.bullets([
+        "Import z raportu XTB (rozdział 12.4) wczytuje wypłacone dywidendy automatycznie z arkusza „Cash "
+        "Operations” — nie trzeba wpisywać ich ręcznie. Kwota brutto i ewentualny podatek u źródła "
+        "potrącony przez brokera parowane są po numerze pozycji, a nie po czasie operacji (dokładniejsze "
+        "przy kilku dywidendach tego samego dnia). Import jest idempotentny jak reszta raportu — ponowne "
+        "wczytanie tego samego lub nowszego pliku nie tworzy duplikatów.",
+        "Formularz „Dodaj dywidendę ręcznie” w panelu bocznym pozwala dopisać wypłatę spoza raportu XTB "
+        "(np. inny broker) — ticker, kwota brutto, waluta, data, opcjonalnie podatek u źródła i notatka.",
+    ])
+    s.callout("note",
+              "To podsumowanie przepływu gotówki, NIE rozliczenie podatkowe. Polski podatek od dywidend "
+              "zagranicznych to różnica między 19% a podatkiem u źródła już potrąconym za granicą (jeśli "
+              "stawka źródłowa jest niższa) — narzędzie tej ewentualnej dopłaty nie wylicza, podobnie jak "
+              "nie uwzględnia specyfiki kont zwolnionych z podatku (np. IKE). Kwoty w walucie bazowej "
+              "przeliczane są, tak jak w podsumowaniu podatkowym (rozdział 15.2), oficjalnym kursem NBP z "
+              "dnia poprzedzającego wypłatę.")
+
     # ------------------------------------------------------------ 13
     s.h1("13. Waluty i podsumowanie łączne portfela")
     s.p("Każda spółka ma wykrytą walutę notowania (np. USD dla spółek amerykańskich, PLN dla polskich jak "
@@ -1131,8 +1152,8 @@ def part3(s: Story) -> None:
     ])
     s.h2("20.2 Eksport i import kopii zapasowej")
     s.p("W zakładce Portfel, w sekcji „Kopia zapasowa”, przycisk „Pobierz kopię (JSON)” zapisuje plik "
-        "z watchlistą i całym portfelem. Aby wczytać kopię (np. po przeniesieniu na nowy komputer), wybierz "
-        "plik i kliknij „Wczytaj kopię”.")
+        "z watchlistą, całym portfelem i dywidendami. Aby wczytać kopię (np. po przeniesieniu na nowy "
+        "komputer), wybierz plik i kliknij „Wczytaj kopię”.")
     s.table(["Wchodzi do kopii", "NIE wchodzi do kopii"], [
         ["Watchlista (ticker, nazwa, symbol XTB).", "Konfiguracja config.yaml (przenieś osobno)."],
         ["Otwarte i zamknięte pozycje portfela wraz z notatkami i walutą.", "Historia werdyktów i wykresy "
@@ -1140,10 +1161,11 @@ def part3(s: Story) -> None:
         ["Własne poziomy stop-loss i cel cenowy.", "Krzywe kapitału (odbudują się z kolejnych cykli)."],
         ["Notatki do pozycji (razem ze znacznikami importu XTB).",
          "Wyniki analizy i pamięć podręczna newsów/kursów (odbudują się automatycznie)."],
+        ["Dywidendy (rozdział 12.6) — kwota, waluta, data, podatek u źródła.", ""],
     ], [50, 50])
     s.bullets([
-        "Wczytanie jest bezpieczne do powtarzania: identyczne pozycje i spółki są pomijane, więc ponowny "
-        "import tego samego pliku nie tworzy duplikatów.",
+        "Wczytanie jest bezpieczne do powtarzania: identyczne pozycje, spółki i dywidendy są pomijane, więc "
+        "ponowny import tego samego pliku nie tworzy duplikatów.",
         "Niepoprawne wiersze są pomijane z ostrzeżeniem (widocznym w komunikacie i w logu), a reszta pliku "
         "jest wczytywana. Plik, który nie jest kopią XTB Trend Watch, zostanie odrzucony w całości. "
         "Limit to 5 MB i 5000 wierszy.",
@@ -1327,6 +1349,10 @@ def part3(s: Story) -> None:
                                  "imporcie automatycznie zamykana w dashboardzie zamiast zostawać otwartą na "
                                  "zawsze (import rozpoznawał ten sam numer pozycji jako duplikat i tylko "
                                  "dogrywał kurs, nigdy nie zmieniając statusu)."],
+        ["3.7", "Wrzesień 2026", "Nowy rozdział 12.6: śledzenie dywidend — przychód brutto/netto per "
+                                 "wypłata i podsumowanie wg roku, wczytywane automatycznie przy imporcie "
+                                 "XTB (z arkusza Cash Operations) albo dodawane ręcznie. Kopia zapasowa "
+                                 "(20.2) obejmuje teraz też dywidendy."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

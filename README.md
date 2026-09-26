@@ -68,7 +68,13 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   Positions”) — idempotentny, mapuje symbole XTB na tickery Yahoo Finance.
   Pozycja zaimportowana wcześniej jako otwarta, a od tego czasu sprzedana
   u brokera, jest przy ponownym imporcie automatycznie zamykana.
-- Kopia zapasowa watchlisty i portfela (eksport/import JSON, idempotentny).
+- Śledzenie dywidend: przychód brutto/netto (po podatku u źródła) per
+  wypłata, podsumowanie wg roku i spółki w walucie bazowej. Ten sam import
+  XTB wczytuje wypłacone dywidendy automatycznie z arkusza „Cash
+  Operations” (idempotentnie), albo dodaj je ręcznie w zakładce Portfel.
+  Czysto informacyjne — nie liczy ewentualnej dopłaty do 19% podatku od
+  dywidend zagranicznych.
+- Kopia zapasowa watchlisty, portfela i dywidend (eksport/import JSON, idempotentny).
 - Alerty cenowe niezależne od pełnego cyklu (sprawdzanie samej ceny co
   kilka minut, bez angażowania LLM/newsów): poniżej stop-lossu (własnego
   albo z ATR), osiągnięcie ceny docelowej analityków i własnego celu.
@@ -306,7 +312,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.6)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.7)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -335,7 +341,7 @@ xtb_trend_watch/
     ├── calibration_report.py          # (badawcze) kalibracja sentymentu LLM
     ├── daily_aggregate_calibration.py # (badawcze) jw., sentyment zagregowany dziennie
     ├── backfill_history.py     # symulacja przeszłych cykli technicznych na historii cen
-    ├── report.py                # scoring, kategorie, ryzyko i statystyki portfela (korelacje, Sharpe), podatki, koncentracja sektorowa
+    ├── report.py                # scoring, kategorie, ryzyko i statystyki portfela (korelacje, Sharpe), podatki, dywidendy, koncentracja sektorowa
     ├── xtb_import.py            # import pozycji z raportu XTB (.xlsx)
     ├── json_utils.py            # sanityzacja NaN/Infinity przed serializacją JSON
     ├── db.py                    # SQLite: watchlist, portfolio, cache, historia, skuteczność, kopia zapasowa
@@ -346,7 +352,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.6). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.7). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -355,18 +361,29 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Pięć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
+Sześć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
 zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
 sprawdzenie okna przedwynikowego (`python -m src.backtest
 --check-earnings-window` — wynik: brak sygnału, scoring bez zmian, patrz
-komentarz w kodzie `backtest.py`) i uwzględnienie rzeczywistego kursu
+komentarz w kodzie `backtest.py`), uwzględnienie rzeczywistego kursu
 wymiany brokera (`buy_fx_rate`/`sell_fx_rate`) także przy ręcznym
 zamykaniu pozycji (przycisk 💰 pyta teraz opcjonalnie o kurs sprzedaży,
-analogicznie do pola przy dodawaniu). Szczegóły w
+analogicznie do pola przy dodawaniu) i śledzenie dywidend (sekcja 1
+powyżej — przychód brutto/netto per wypłata, import z raportu XTB albo
+ręczne dodawanie). Szczegóły w
 `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
 
+- Flaga „konto IKE” per pozycja — polskie konto IKE jest przy spełnieniu
+  warunków zwolnione z podatku Belki, a dzisiejsze podsumowanie podatkowe
+  (sekcja 15.2 instrukcji) liczy 19% od wszystkich zamkniętych transakcji
+  bez rozróżnienia typu konta.
+- Kalendarz makro (NBP, FOMC, CPI) — dziś kontekst makro to migawka
+  bieżących wartości (VIX, rentowność obligacji), bez informacji co się
+  wydarzy w najbliższych dniach.
+- Heatmapa watchlisty — szybki przegląd całej listy kolorami wg zmiany
+  dnia, zamiast przewijania kart.
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
   stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.

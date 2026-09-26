@@ -125,9 +125,83 @@ def _parse_cash_operations_buy_totals(wb) -> dict[str, float]:
     return totals
 
 
+def _parse_dividends(wb) -> tuple[list[dict], list[str]]:
+    """Wyciąga wypłaty dywidend z arkusza Cash Operations: każda dywidenda to
+    wiersz Type='Dividend' (kwota brutto w walucie konta), czasem sparowany z
+    wierszem Type='Withholding tax' (podatek u źródła potrącony automatycznie
+    przez brokera, kwota ujemna) - arkusz nie łączy ich żadnym wspólnym ID
+    operacji, więc parujemy po (Ticker, Position ID), bo te DWA wiersze tej
+    samej wypłaty zawsze mają identyczne Position ID (sam Time bywa o ułamek
+    sekundy przesunięty między nimi - zweryfikowane na realnym eksporcie).
+    Przy braku Position ID (nietypowy raport) spada na (Ticker, Time)."""
+    warnings: list[str] = []
+    if "Cash Operations" not in wb.sheetnames:
+        return [], warnings
+    ws = wb["Cash Operations"]
+    header_row, cols = _find_header(ws, ["Type", "Ticker", "Time", "Amount", "ID"])
+    if not header_row:
+        return [], warnings
+    has_position_id = "Position ID" in cols
+
+    raw_rows = list(ws.iter_rows(min_row=header_row + 1, values_only=True))
+
+    def pairing_key(row) -> tuple | None:
+        ticker = row[cols.get("Ticker")]
+        if ticker is None:
+            return None
+        ticker = str(ticker).strip()
+        if has_position_id:
+            pos_id = _position_id_key(row[cols["Position ID"]])
+            if pos_id:
+                return (ticker, "pos", pos_id)
+        time_ = row[cols["Time"]]
+        return (ticker, "time", time_) if time_ is not None else None
+
+    wht_by_key: dict[tuple, float] = {}
+    for row in raw_rows:
+        if row[cols["Type"]] != "Withholding tax":
+            continue
+        key = pairing_key(row)
+        amount = row[cols["Amount"]]
+        if key is None or amount is None:
+            continue
+        wht_by_key[key] = wht_by_key.get(key, 0.0) + float(amount)
+
+    dividend_rows: list[dict] = []
+    for row in raw_rows:
+        if row[cols["Type"]] != "Dividend":
+            continue
+        xtb_ticker, amount = row[cols.get("Ticker")], row[cols["Amount"]]
+        op_id = row[cols.get("ID")] if "ID" in cols else None
+        if xtb_ticker is None or amount is None:
+            continue
+        xtb_ticker = str(xtb_ticker).strip()
+
+        yahoo_ticker, confident = map_xtb_ticker(xtb_ticker)
+        if not confident:
+            warnings.append(f"Nierozpoznany sufiks giełdy dla dywidendy {xtb_ticker} - "
+                             f"zaimportowano jako '{yahoo_ticker}', ZWERYFIKUJ ręcznie.")
+
+        key = pairing_key(row)
+        wht = wht_by_key.get(key) if key else None
+        comment = row[cols["Comment"]] if "Comment" in cols else None
+        dividend_rows.append({
+            "xtb_cash_op_id": str(int(op_id)) if isinstance(op_id, float) else (str(op_id) if op_id is not None else None),
+            "ticker": yahoo_ticker,
+            "original_ticker": xtb_ticker,
+            "currency": guess_currency(xtb_ticker),
+            "pay_date": _to_date_str(row[cols["Time"]]) or "",
+            "amount_gross": round(float(amount), 6),
+            "withholding_tax": round(abs(wht), 6) if wht else None,
+            "notes": str(comment) if comment else "",
+        })
+    return dividend_rows, warnings
+
+
 def parse_xtb_report(file_bytes: bytes) -> dict:
-    """Zwraca {"open": [...], "closed": [...], "warnings": [...]}. Każdy
-    element open/closed to dict gotowy do wstawienia do bazy portfela."""
+    """Zwraca {"open": [...], "closed": [...], "dividends": [...],
+    "warnings": [...]}. Każdy element to dict gotowy do wstawienia do bazy
+    portfela / tabeli dywidend."""
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
     warnings: list[str] = []
     open_rows: list[dict] = []
@@ -227,4 +301,7 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
                     "sell_fx_rate": round(sell_fx_rate, 6) if sell_fx_rate else None,
                 })
 
-    return {"open": open_rows, "closed": closed_rows, "warnings": warnings}
+    dividend_rows, dividend_warnings = _parse_dividends(wb)
+    warnings.extend(dividend_warnings)
+
+    return {"open": open_rows, "closed": closed_rows, "dividends": dividend_rows, "warnings": warnings}
