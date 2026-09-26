@@ -20,7 +20,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   maksimum, wykrywanie gwałtownych spadków ("spadający nóż") i siła
   względna wobec benchmarku (S&P500 / WIG20 / inne, w zależności od waluty).
 - Sentyment newsów (bieżący + trend 12-miesięczny) przez **lokalny LLM**
-  (Ollama) z fallbackiem słownikowym offline.
+  (Ollama) z fallbackiem słownikowym offline. Dla spółek z GPW (tickery
+  `.WA`), gdzie Finnhub zwraca 403, uzupełniające źródło to ogólny kanał
+  RSS o GPW filtrowany po nazwie spółki (sekcja 5) — bieżący sentyment od
+  razu, trend 12-miesięczny budowany własnym, lokalnym archiwum w czasie.
 - Podstawowa analiza fundamentalna: P/E, wzrost przychodów, marże,
   zadłużenie, cena docelowa i rekomendacja analityków Wall Street.
 - Szeroki kontekst makro (VIX, rentowność obligacji) jako filtr ryzyka.
@@ -201,6 +204,28 @@ Jeśli nie chcesz newsów historycznych, ustaw `news.use_historical_news: false`
 — narzędzie będzie działać w pełni offline (poza pobieraniem cen), korzystając
 z prostego analizatora słownikowego.
 
+### Spółki z GPW (Finnhub 403)
+
+Finnhub w darmowym planie zwraca 403 dla większości spółek spoza głównych
+giełd US, a `yfinance` ma bardzo skąpe pokrycie polskich tickerów — dla
+spółek z sufiksem `.WA` narzędzie samo z siebie miałoby więc praktycznie
+zerowy sentyment. Zamiast scrapować podstrony pojedynczych spółek (kruche,
+zależne od struktury HTML — świadomie odrzucone), narzędzie filtruje jeden,
+ogólny kanał RSS o GPW (`news.gpw_rss_url`, domyślnie Bankier.pl) po nazwie
+spółki z watchlisty:
+
+- **Bieżący sentyment** — dopasowane nagłówki dokładają się od razu do tych
+  z `yfinance`, niezależnie od `use_historical_news`.
+- **Trend 12-miesięczny** — wymaga `use_historical_news: true`. Ponieważ
+  kanał RSS pokazuje tylko "teraz" (bez archiwum), narzędzie przy każdym
+  cyklu dopisuje dzisiejsze trafienia do lokalnego cache'u (ten sam
+  mechanizm co Finnhub) — po kilku miesiącach działania dashboardu spółki
+  z GPW dostają własny, realny trend zamiast być zawsze puste.
+  **To nie odtwarza przeszłości** — trend zacznie się pojawiać dopiero od
+  momentu włączenia tej funkcji, nie wstecz.
+
+Ustaw `news.gpw_rss_url: ""`, żeby wyłączyć to źródło.
+
 ---
 
 ## 6. Powiadomienia Discord o alertach cenowych (opcjonalnie)
@@ -319,7 +344,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.0). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.3). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -328,15 +353,23 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-- Prawdziwa (ważona czasem, TWR) krzywa kapitału na tle benchmarku —
-  wymaga zapisywania przepływów gotówki (wpłat i wypłat), których snapshoty
-  krzywej kapitału dziś nie zawierają. Obecne porównanie z benchmarkiem
-  dotyczy hipotetycznego portfela o obecnych wagach.
-- Sprawdzenie w backteście, czy okno tuż przed wynikami kwartalnymi
-  pogarsza sygnały GOOD_ENTRY; jeśli tak, ostrzeżenie o wynikach mogłoby
-  obniżać kategorię zamiast tylko informować.
-- Alternatywne źródła newsów dla spółek spoza głównych giełd US (Finnhub
-  zwraca 403 dla większości spółek z GPW) — obecnie świadomie pominięte
-  jako zbyt kruche (scrapowanie) względem korzyści.
-- Eksport historii zamkniętych transakcji do CSV (np. do arkusza z rozliczeniem
-  podatkowym).
+Cztery pomysły z tej sekcji zostały już zrealizowane: TWR na tle
+benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
+Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
+zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje) i
+sprawdzenie okna przedwynikowego (`python -m src.backtest
+--check-earnings-window` — wynik: brak sygnału, scoring bez zmian, patrz
+komentarz w kodzie `backtest.py`). Szczegóły wszystkich czterech w
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
+
+- Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
+  stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
+  cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.
+- Testy automatyczne (Playwright) pokrywające najnowsze funkcje UI
+  (przeciąganie paneli, przełącznik TWR, odznaka alertów).
+- Wykorzystanie rzeczywistego kursu wymiany brokera (`buy_fx_rate`/
+  `sell_fx_rate`, importowane automatycznie z raportu XTB albo wpisywane
+  ręcznie przy dodawaniu pozycji) także przy ręcznym zamykaniu pozycji
+  (dziś dotyczy tylko dodawania), i opis w instrukcji PDF (jeszcze nie
+  zaktualizowanej o tę funkcję) — ewentualnie też przy
+  eksporcie CSV.

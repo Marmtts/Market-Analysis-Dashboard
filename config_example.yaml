@@ -125,6 +125,19 @@ news:
   historical_lookback_days: 365   # ile dni wstecz przeglądać
   max_headlines_per_month: 4      # limit nagłówków pobieranych na miesiąc na spółkę
 
+  # -----------------------------------------------------------
+  # Uzupełniające źródło newsów dla spółek z GPW (tickery z sufiksem .WA) -
+  # Finnhub (wyżej) zwraca 403 dla większości spółek spoza głównych giełd US
+  # (typowe dla GPW), a yfinance ma bardzo skąpe pokrycie polskich tickerów.
+  # Zamiast kruchego scrapowania podstron pojedynczych spółek, filtrujemy
+  # jeden, ogólny kanał RSS o GPW po nazwie spółki. Działa niezależnie od
+  # use_historical_news powyżej dla BIEŻĄCEGO sentymentu (dokłada nagłówki
+  # do tych z yfinance); dla "trendu 12 mies." wymaga use_historical_news:
+  # true - wtedy co cykl dopisuje dzisiejsze trafienia do lokalnego cache'u,
+  # budując WŁASNE archiwum w czasie (bez odtworzenia przeszłości - RSS nie
+  # ma historii, tylko "teraz"). Puste = wyłączone.
+  gpw_rss_url: "https://www.bankier.pl/rss/gielda.xml"
+
 # -------------------------------------------------------------
 # Lokalny LLM (Ollama) do analizy sentymentu newsów
 # -------------------------------------------------------------

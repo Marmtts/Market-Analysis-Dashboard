@@ -22,7 +22,9 @@ from src.market_data import (
     get_ticker_data, fetch_benchmark_history, get_benchmark_fallbacks, BenchmarkUnavailable,
 )
 from src.technical_analysis import analyze_multi_timeframe, AT_TOP_DISTANCE_PENALTY, compute_relative_strength
-from src.news_sources import get_ticker_news, get_macro_headlines
+from src.news_sources import (
+    get_ticker_news, get_macro_headlines, get_gpw_market_headlines, filter_headlines_for_company, Headline,
+)
 from src.news_history import fetch_historical_news_by_month
 from src.llm_sentiment import analyze_sentiment, analyze_historical_trend
 from src.discovery import discover_candidates
@@ -87,21 +89,66 @@ def analyze_company(company: dict, cfg: dict, threshold_adjustment: float = 0.0,
     if cfg["news"].get("use_ticker_news_from_yfinance", True):
         headlines = get_ticker_news(ticker, max_headlines=cfg["news"]["max_headlines_per_ticker"])
 
+    # Uzupełnienie dla GPW (.WA) - Finnhub (niżej) zwraca 403 dla większości
+    # takich spółek (poza darmowym planem), a yfinance wyżej ma bardzo skąpe
+    # pokrycie polskich tickerów. Zamiast scrapować podstrony pojedynczych
+    # spółek (kruche, już wcześniej rozważone i odrzucone), filtrujemy jeden,
+    # ogólny kanał RSS o GPW po nazwie spółki - patrz news_sources.py.
+    # gpw_matches jest też reużywane niżej do budowania lokalnego archiwum
+    # historycznego (patrz komentarz przy `trend`).
+    gpw_matches: list = []
+    gpw_rss_url = cfg["news"].get("gpw_rss_url")
+    if ticker.upper().endswith(".WA") and gpw_rss_url:
+        gpw_feed = get_gpw_market_headlines(gpw_rss_url)
+        gpw_matches = filter_headlines_for_company(gpw_feed, name, ticker.split(".")[0])
+        seen_titles = {h.title for h in headlines}
+        for h in gpw_matches:
+            if h.title not in seen_titles:
+                headlines.append(h)
+                seen_titles.add(h.title)
+
     sentiment = analyze_sentiment(ticker, name, headlines, cfg["llm"])
 
     trend = None
     if cfg["news"].get("use_historical_news", False):
-        api_key = cfg["news"].get("finnhub_api_key", "")
-        if api_key:
-            progress(f"  Pobieram newsy historyczne dla {ticker} (Finnhub, "
-                      f"{cfg['news'].get('historical_lookback_days', 365)} dni wstecz)...", "info")
-            monthly_headlines = fetch_historical_news_by_month(
-                ticker,
-                api_key=api_key,
-                days_back=cfg["news"].get("historical_lookback_days", 365),
-                max_per_month=cfg["news"].get("max_headlines_per_month", 4),
-            )
-            trend = analyze_historical_trend(ticker, name, monthly_headlines, cfg["llm"])
+        if ticker.upper().endswith(".WA"):
+            # Finnhub jest tu POMIJANY CELOWO, nie tylko "nieudany" - wiadomo
+            # z góry, że zwróci 403 (poza darmowym planem dla spółek spoza
+            # głównych giełd US), więc odpytywanie go marnowałoby zapytanie
+            # co cykl bez szans powodzenia. Zamiast tego budujemy WŁASNY,
+            # lokalny odpowiednik historii: co cykl dopisujemy dzisiejsze
+            # trafienia z ogólnego kanału RSS o GPW (gpw_matches, wyżej) do
+            # cache'u BIEŻĄCEGO miesiąca (ten sam news_cache co Finnhub, patrz
+            # news_history.py), a trend liczymy z tego, co się w cache'u
+            # uzbierało - nawet z jednego miesiąca. WAŻNE ograniczenie: nie da
+            # się tak odtworzyć PRZESZŁOŚCI (RSS nie ma archiwum, tylko
+            # "teraz") - ale po kilku miesiącach działania dashboardu "trend
+            # sentymentu" dla spółek z GPW zacznie mieć realne dane zamiast
+            # być zawsze niedostępny.
+            from . import db
+            if gpw_matches:
+                month_key = datetime.now().strftime("%Y-%m")
+                existing = db.get_cached_news_months(ticker).get(month_key, [])
+                existing_titles = {h["title"] for h in existing}
+                new_entries = [h.__dict__ for h in gpw_matches if h.title not in existing_titles]
+                if new_entries:
+                    db.save_news_month_to_cache(ticker, month_key, existing + new_entries)
+            cached_months = db.get_cached_news_months(ticker)
+            if cached_months:
+                monthly_headlines = {mk: [Headline(**h) for h in hs] for mk, hs in cached_months.items()}
+                trend = analyze_historical_trend(ticker, name, monthly_headlines, cfg["llm"])
+        else:
+            api_key = cfg["news"].get("finnhub_api_key", "")
+            if api_key:
+                progress(f"  Pobieram newsy historyczne dla {ticker} (Finnhub, "
+                          f"{cfg['news'].get('historical_lookback_days', 365)} dni wstecz)...", "info")
+                monthly_headlines = fetch_historical_news_by_month(
+                    ticker,
+                    api_key=api_key,
+                    days_back=cfg["news"].get("historical_lookback_days", 365),
+                    max_per_month=cfg["news"].get("max_headlines_per_month", 4),
+                )
+                trend = analyze_historical_trend(ticker, name, monthly_headlines, cfg["llm"])
 
     fundamentals = None
     if cfg.get("fundamentals", {}).get("enabled", False):
