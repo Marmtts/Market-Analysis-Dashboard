@@ -1308,7 +1308,7 @@ function renderPortfolioGroupCard(g) {
     <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(g.action, g.reasons))}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
     <div class="result-card__info">
       <div>
-        <span class="result-card__ticker">${g.ticker}</span>
+        <span class="result-card__ticker">${g.ticker}</span>${g.lots.every((l) => l.account_type === "ike") ? ` <span class="ike-badge" title="Konto IKE - podatek zależy od wieku przy wypłacie, patrz zakładka Zamknięte transakcje">IKE</span>` : ""}
         <span class="result-card__name">${g.lots.length} ${g.lots.length === 1 ? "pozycja" : "pozycje/i"} • śr. ${fmtMoney(g.avgBuyPrice.toFixed(2), g.currency)}</span>
       </div>
       <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}<span class="portfolio-group__toggle">▾ rozwiń</span></div>
@@ -1418,7 +1418,7 @@ function renderLotCard(p) {
         <span class="result-card__ticker">${p.shares} szt.</span>
         <span class="result-card__name">@ ${fmtMoney(p.buy_price, p.currency)}</span>
       </div>
-      <div class="result-card__xtb">Kupione: ${p.buy_date} (${p.horizon || "—"})</div>
+      <div class="result-card__xtb">Kupione: ${p.buy_date} (${p.horizon || "—"})${p.account_type === "ike" ? ` <span class="ike-badge" title="Konto IKE - podatek zależy od wieku przy wypłacie, patrz zakładka Zamknięte transakcje">IKE</span>` : ""}</div>
       ${stopTargetLineHtml(p.custom_stop ?? p.suggested_stop_loss ?? null, p.custom_stop ? "own" : "atr", p.custom_target ?? null, p.currency)}
       ${p.notes ? `<div class="result-card__reason">📝 ${escapeHtml(p.notes)}</div>` : ""}
     </div>
@@ -1503,6 +1503,7 @@ function startEditPosition(p) {
   el("posBuyFxRate").value = p.buy_fx_rate ?? "";
   el("posCustomStop").value = p.custom_stop ?? "";
   el("posCustomTarget").value = p.custom_target ?? "";
+  el("posAccountIke").checked = p.account_type === "ike";
   el("posSubmitBtn").textContent = "Zapisz zmiany";
   el("posCancelEditBtn").style.display = "";
   el("posTicker").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1520,6 +1521,7 @@ function duplicatePosition(p) {
   el("posBuyFxRate").value = "";
   el("posCustomStop").value = p.custom_stop ?? "";
   el("posCustomTarget").value = p.custom_target ?? "";
+  el("posAccountIke").checked = p.account_type === "ike";
   el("posSubmitBtn").textContent = "+ Dodaj pozycję";
   el("posCancelEditBtn").style.display = "none";
   el("posTicker").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1550,6 +1552,7 @@ el("portfolioForm").addEventListener("submit", async (e) => {
     buy_fx_rate: parseOptionalNumber(el("posBuyFxRate").value),
     custom_stop: parseOptionalNumber(el("posCustomStop").value),
     custom_target: parseOptionalNumber(el("posCustomTarget").value),
+    account_type: el("posAccountIke").checked ? "ike" : "standard",
   };
   if (!body.ticker || !body.shares || !body.buy_price || !body.buy_date) return;
 
@@ -1942,7 +1945,7 @@ function renderClosedPortfolio(positions, summary) {
       <div class="stamp stamp--${cls}">${p.realized_pl >= 0 ? "▲<br>ZYSK" : "▼<br>STRATA"}</div>
       <div class="result-card__info">
         <div>
-          <span class="result-card__ticker">${p.ticker}</span>
+          <span class="result-card__ticker">${p.ticker}</span>${p.account_type === "ike" ? ` <span class="ike-badge" title="Konto IKE - podatek zależy od wieku przy wypłacie, patrz podsumowanie podatkowe niżej">IKE</span>` : ""}
           <span class="result-card__name">${p.shares} szt. (${p.holding_days ?? "?"} dni)</span>
         </div>
         ${p.notes ? `<div class="result-card__reason">📝 ${escapeHtml(p.notes)}</div>` : ""}
@@ -2220,20 +2223,11 @@ async function loadTaxSummary() {
   }
 }
 
-function renderTaxSummary(data) {
-  const panel = el("taxSummaryPanel");
-  const years = Object.keys(data.by_year || {}).sort().reverse();
-  if (years.length === 0) {
-    panel.innerHTML = "";
-    return;
-  }
-
-  let html = `<div class="detail-section">
-    <h4 class="detail-section__title">📊 Orientacyjne podsumowanie podatkowe (${escapeHtml(data.base_currency)})</h4>
-    <div class="tax-year-grid">`;
-
+function taxYearCardsHtml(byYear, extraField) {
+  const years = Object.keys(byYear || {}).sort().reverse();
+  let html = `<div class="tax-year-grid">`;
   years.forEach((year) => {
-    const y = data.by_year[year];
+    const y = byYear[year];
     html += `
       <div class="tax-year-card">
         <div class="tax-year-card__header"><strong>${year}</strong><span>${y.trade_count} transakcji</span></div>
@@ -2241,11 +2235,38 @@ function renderTaxSummary(data) {
           <div><span>Zyski</span><strong class="positive">+${y.total_gains.toFixed(2)}</strong></div>
           <div><span>Straty</span><strong class="negative">-${y.total_losses.toFixed(2)}</strong></div>
           <div><span>Wynik netto</span><strong class="${y.net_result >= 0 ? "positive" : "negative"}">${y.net_result >= 0 ? "+" : ""}${y.net_result.toFixed(2)}</strong></div>
-          <div><span>Szac. podatek (19%)</span><strong>${y.estimated_tax_19pct.toFixed(2)}</strong></div>
+          <div>${extraField ? extraField(y) : `<span>Szac. podatek (19%)</span><strong>${y.estimated_tax_19pct.toFixed(2)}</strong>`}</div>
         </div>
       </div>`;
   });
   html += `</div>`;
+  return html;
+}
+
+function renderTaxSummary(data) {
+  const panel = el("taxSummaryPanel");
+  const hasStandard = Object.keys(data.by_year || {}).length > 0;
+  const hasIke = Object.keys(data.by_year_ike || {}).length > 0;
+  if (!hasStandard && !hasIke) {
+    panel.innerHTML = "";
+    return;
+  }
+
+  let html = "";
+
+  if (hasStandard) {
+    html += `<div class="detail-section">
+      <h4 class="detail-section__title">📊 Orientacyjne podsumowanie podatkowe (${escapeHtml(data.base_currency)})</h4>
+      ${taxYearCardsHtml(data.by_year)}
+    </div>`;
+  }
+
+  if (hasIke) {
+    html += `<div class="detail-section">
+      <h4 class="detail-section__title">🏛 Konto IKE (${escapeHtml(data.base_currency)})</h4>
+      ${taxYearCardsHtml(data.by_year_ike, (y) => `<span>Podatek (2 scenariusze)</span><strong>0 lub ${y.estimated_tax_19pct.toFixed(2)}</strong>`)}
+      <p class="detail-disclaimer">🏛 IKE jest zwolnione z podatku Belki TYLKO gdy wypłata następuje po osiągnięciu wieku emerytalnego (lub spełnieniu innych warunków ustawowych) — wtedy podatek wynosi 0. Wcześniejsza wypłata (zwrot) jest opodatkowana DOKŁADNIE tak samo jak konto standardowe (19% od wyniku netto, w kolumnie „Podatek” druga wartość). Narzędzie nie zna Twojego wieku ani okoliczności wypłaty — sam oceń, który scenariusz Cię dotyczy.</p>`;
+  }
 
   if (data.conversion_notes && data.conversion_notes.length) {
     html += `<ul class="detail-list">${data.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
@@ -2254,7 +2275,7 @@ function renderTaxSummary(data) {
   const disclaimer = data.nbp_compliant
     ? `⚠️ To orientacyjne wyliczenie pomocnicze, nie zastępuje samodzielnego rozliczenia PIT-38. Kursy walut obcych zostały przeliczone OFICJALNYM średnim kursem NBP z dnia poprzedzającego transakcję (zgodnie z art. 11a ustawy o PIT). Mimo to zawsze zweryfikuj kwoty przed złożeniem deklaracji i skonsultuj się z doradcą podatkowym.`
     : `⚠️ To orientacyjne wyliczenie, NIE oficjalne rozliczenie podatkowe. Część transakcji przeliczono PRZYBLIŻONYM kursem rynkowym (NBP był niedostępny dla części dat/walut) - patrz uwagi wyżej. Przed złożeniem deklaracji zweryfikuj dokładne kwoty w tabelach kursów NBP i skonsultuj się z doradcą podatkowym.`;
-  html += `<p class="detail-disclaimer">${disclaimer}</p></div>`;
+  html += `<p class="detail-disclaimer">${disclaimer}</p>`;
 
   panel.innerHTML = html;
 }

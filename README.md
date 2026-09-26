@@ -61,7 +61,11 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   (drawdown), per waluta i łączna.
 - Historia zamkniętych transakcji + orientacyjne podsumowanie podatkowe
   (podatek od zysków kapitałowych, PIT-38) liczone **oficjalnym kursem NBP**
-  zgodnie z art. 11a ustawy o PIT.
+  zgodnie z art. 11a ustawy o PIT. Pozycje oznaczone jako konto **IKE**
+  (ręcznie albo automatycznie — rozpoznawane z kolumny „Product” raportu
+  XTB) liczone są osobno, z dwoma scenariuszami podatku (0 zł przy wypłacie
+  po wieku emerytalnym, 19% w przeciwnym razie) — narzędzie nie zna Twojego
+  wieku ani okoliczności wypłaty, więc nie zakłada żadnego z góry.
 - Kalkulator wielkości pozycji (na bazie ATR) przy każdej analizowanej spółce.
 - Własny stop-loss i własny cel cenowy per pozycja (opcjonalne): nadpisują
   sugestię z ATR w rekomendacji, w panelu ryzyka i w alertach cenowych.
@@ -324,7 +328,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.10)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.11)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -365,7 +369,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.10). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.11). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -374,7 +378,7 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Osiem pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
+Dziewięć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
 zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
@@ -386,14 +390,13 @@ zamykaniu pozycji (przycisk 💰 pyta teraz opcjonalnie o kurs sprzedaży,
 analogicznie do pola przy dodawaniu), śledzenie dywidend (sekcja 1
 powyżej — przychód brutto/netto per wypłata, import z raportu XTB albo
 ręczne dodawanie), kalendarz makro (sekcja 1 powyżej — FOMC/RPP/CPI,
-`config.yaml` → `macro_calendar`) i heatmapa watchlisty (przycisk „🔥
-Heatmapa” obok listy). Szczegóły w
+`config.yaml` → `macro_calendar`), heatmapa watchlisty (przycisk „🔥
+Heatmapa” obok listy) i flaga „konto IKE” per pozycja (sekcja 1 powyżej —
+rozpoznawana automatycznie z importu XTB albo ustawiana ręcznie; podatek
+liczony jako dwa scenariusze, bo zależy od wieku przy wypłacie, którego
+narzędzie nie zna). Szczegóły w
 `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
 
-- Flaga „konto IKE” per pozycja — polskie konto IKE jest przy spełnieniu
-  warunków zwolnione z podatku Belki, a dzisiejsze podsumowanie podatkowe
-  (sekcja 15.2 instrukcji) liczy 19% od wszystkich zamkniętych transakcji
-  bez rozróżnienia typu konta.
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
   stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.

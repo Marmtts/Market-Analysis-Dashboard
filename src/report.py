@@ -656,16 +656,11 @@ def _convert_trade_to_base_currency(p: dict, base_currency: str) -> dict:
     }
 
 
-def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN") -> dict:
-    """Grupuje ZREALIZOWANE transakcje wg roku sprzedaży i liczy orientacyjny
-    wynik podatkowy (podatek od zysków kapitałowych, 19% w Polsce - tzw.
-    'podatek Belki'). Dla base_currency='PLN' używa OFICJALNEGO średniego
-    kursu NBP z dnia poprzedzającego transakcję (zgodnie z art. 11a ustawy
-    o PIT) - to JEST poprawny prawnie kurs. Jeśli NBP jest niedostępny dla
-    danej waluty/daty, spada na przybliżony kurs rynkowy (yfinance) i
-    WYRAŹNIE to odnotowuje w conversion_notes oraz w polu 'nbp_compliant'."""
+def _group_trades_by_year(closed_positions: list[dict], base_currency: str,
+                           conversion_notes: list[str]) -> tuple[dict, bool]:
+    """Wspólna logika grupowania wg roku dla compute_tax_summary - wydzielona,
+    żeby liczyć konto standardowe i IKE osobno, ale tą samą, spójną metodą."""
     by_year: dict[str, dict] = {}
-    conversion_notes: list[str] = []
     any_fallback_used = False
 
     for p in closed_positions:
@@ -704,12 +699,38 @@ def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN"
             "estimated_tax_19pct": round(max(0.0, net) * 0.19, 2),
             "trades": b["trades"],
         }
+    return result, any_fallback_used
+
+
+def compute_tax_summary(closed_positions: list[dict], base_currency: str = "PLN") -> dict:
+    """Grupuje ZREALIZOWANE transakcje wg roku sprzedaży i liczy orientacyjny
+    wynik podatkowy (podatek od zysków kapitałowych, 19% w Polsce - tzw.
+    'podatek Belki'). Dla base_currency='PLN' używa OFICJALNEGO średniego
+    kursu NBP z dnia poprzedzającego transakcję (zgodnie z art. 11a ustawy
+    o PIT) - to JEST poprawny prawnie kurs. Jeśli NBP jest niedostępny dla
+    danej waluty/daty, spada na przybliżony kurs rynkowy (yfinance) i
+    WYRAŹNIE to odnotowuje w conversion_notes oraz w polu 'nbp_compliant'.
+
+    Pozycje oznaczone jako account_type='ike' są liczone OSOBNO (by_year_ike)
+    - IKE jest zwolnione z podatku Belki TYLKO przy wypłacie po osiągnięciu
+    wieku emerytalnego (lub innych warunkach ustawowych z ustawy o IKE);
+    wcześniejsza wypłata (zwrot) jest opodatkowana jak konto standardowe.
+    Narzędzie nie zna Twojego wieku ani okoliczności wypłaty, więc NIE zakłada
+    ani zwolnienia, ani opodatkowania - pokazuje kwotę, a decyzję którego
+    scenariusza użyć zostawia Tobie (patrz callout w UI)."""
+    standard_positions = [p for p in closed_positions if p.get("account_type") != "ike"]
+    ike_positions = [p for p in closed_positions if p.get("account_type") == "ike"]
+
+    conversion_notes: list[str] = []
+    by_year, fallback_standard = _group_trades_by_year(standard_positions, base_currency, conversion_notes)
+    by_year_ike, fallback_ike = _group_trades_by_year(ike_positions, base_currency, conversion_notes)
 
     return {
         "base_currency": base_currency,
-        "by_year": result,
+        "by_year": by_year,
+        "by_year_ike": by_year_ike,
         "conversion_notes": conversion_notes,
-        "nbp_compliant": base_currency == "PLN" and not any_fallback_used,
+        "nbp_compliant": base_currency == "PLN" and not (fallback_standard or fallback_ike),
     }
 
 
@@ -825,7 +846,7 @@ def build_closed_trades_export_rows(closed_positions: list[dict], base_currency:
     Do wklejenia we własny arkusz rozliczenia (PIT-38 lub inny) - nie jest to
     gotowe rozliczenie, patrz zastrzeżenia w panelu podatkowym."""
     header = [
-        "Ticker", "Liczba akcji", "Data kupna", "Cena kupna", "Data sprzedaży", "Cena sprzedaży",
+        "Ticker", "Konto", "Liczba akcji", "Data kupna", "Cena kupna", "Data sprzedaży", "Cena sprzedaży",
         "Waluta", "Zysk/strata (waluta notowania)", "Zysk/strata %", "Dni w portfelu", "Notatka",
         f"Kurs kupna -> {base_currency}", f"Kurs sprzedaży -> {base_currency}",
         f"Zysk/strata ({base_currency})",
@@ -845,7 +866,8 @@ def build_closed_trades_export_rows(closed_positions: list[dict], base_currency:
 
         conv = _convert_trade_to_base_currency(p, base_currency)
         rows.append([
-            p["ticker"], p["shares"], p["buy_date"], p["buy_price"], p["sell_date"], p["sell_price"],
+            p["ticker"], "IKE" if p.get("account_type") == "ike" else "standardowe",
+            p["shares"], p["buy_date"], p["buy_price"], p["sell_date"], p["sell_price"],
             p.get("currency") or "USD", pl_native, pl_pct, holding_days, p.get("notes") or "",
             round(conv["buy_rate"], 4) if conv["buy_rate"] is not None else "",
             round(conv["sell_rate"], 4) if conv["sell_rate"] is not None else "",

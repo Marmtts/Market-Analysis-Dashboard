@@ -1334,6 +1334,24 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 /* ---------------- Formularz: pola powiązane obok siebie ---------------- */
 .add-form__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem; }
 .add-form__row input { width: 100%; min-width: 0; }
+.checkbox-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.82rem; color: var(--text); cursor: pointer;
+}
+.checkbox-row input[type="checkbox"] { accent-color: var(--accent-gold); width: 15px; height: 15px; }
+
+.ike-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-gold);
+  color: var(--accent-gold-bright);
+  vertical-align: middle;
+}
 
 /* ---------------- Układ jednokolumnowy (np. zamknięte transakcje) ---------------- */
 .layout--single { grid-template-columns: 1fr; max-width: 1200px; }

@@ -593,6 +593,10 @@ class AddPositionRequest(BaseModel):
     # odzwierciedla, ile faktycznie zapłacono. Patrz komentarz przy migracji
     # kolumn w db.init_db().
     buy_fx_rate: float | None = None
+    # 'standard' | 'ike' - patrz komentarz przy migracji kolumn w db.init_db()
+    # i przy report.compute_tax_summary (podatek dla IKE zależy od okoliczności
+    # wypłaty, których to narzędzie nie zna).
+    account_type: str = "standard"
 
 
 class ClosePositionRequest(BaseModel):
@@ -676,12 +680,14 @@ async def api_import_xtb(file: UploadFile = File(...)):
             # rzeczywistego kursu do pozycji sprzed tej zmiany.
             if db.backfill_xtb_fx_rate(row["xtb_id"], row.get("buy_fx_rate"), None):
                 fx_rates_backfilled += 1
+            db.backfill_xtb_account_type(row["xtb_id"], row.get("account_type", "standard"))
             continue
         db.add_company(row["ticker"], name=row["ticker"], source="xtb_import")
         db.add_position_full(
             ticker=row["ticker"], shares=row["shares"], buy_price=row["buy_price"],
             buy_date=row["buy_date"], notes=f"Import XTB [XTB:{row['xtb_id']}]",
             status="open", currency=row["currency"], buy_fx_rate=row.get("buy_fx_rate"),
+            account_type=row.get("account_type", "standard"),
         )
         imported_open += 1
         if row["ticker"] == row["original_ticker"] and "." in row["original_ticker"]:
@@ -698,10 +704,12 @@ async def api_import_xtb(file: UploadFile = File(...)):
                 row.get("buy_fx_rate"), row.get("sell_fx_rate"),
             ):
                 closed_from_reimport += 1
+                db.backfill_xtb_account_type(row["xtb_id"], row.get("account_type", "standard"))
                 continue
             skipped_duplicates += 1
             if db.backfill_xtb_fx_rate(row["xtb_id"], row.get("buy_fx_rate"), row.get("sell_fx_rate")):
                 fx_rates_backfilled += 1
+            db.backfill_xtb_account_type(row["xtb_id"], row.get("account_type", "standard"))
             continue
         db.add_company(row["ticker"], name=row["ticker"], source="xtb_import")
         db.add_position_full(
@@ -709,7 +717,7 @@ async def api_import_xtb(file: UploadFile = File(...)):
             buy_date=row["buy_date"], notes=f"Import XTB [XTB:{row['xtb_id']}]",
             status="closed", sell_price=row["sell_price"], sell_date=row["sell_date"],
             currency=row["currency"], buy_fx_rate=row.get("buy_fx_rate"),
-            sell_fx_rate=row.get("sell_fx_rate"),
+            sell_fx_rate=row.get("sell_fx_rate"), account_type=row.get("account_type", "standard"),
         )
         imported_closed += 1
 
@@ -1033,13 +1041,15 @@ async def api_add_position(req: AddPositionRequest):
     for level in (req.custom_stop, req.custom_target, req.buy_fx_rate):
         if level is not None and level <= 0:
             raise HTTPException(status_code=400, detail="Własny stop-loss, cel i kurs wymiany muszą być dodatnie.")
+    if req.account_type not in ("standard", "ike"):
+        raise HTTPException(status_code=400, detail="Nieprawidłowy typ konta.")
     # Jeśli spółki nie ma jeszcze na watchliście, dodajemy ją automatycznie,
     # żeby zaczęła być analizowana w kolejnych cyklach (inaczej nigdy nie
     # dostaniemy aktualnej ceny/sygnału do oceny tej pozycji).
     db.add_company(ticker, name=ticker, source="portfolio")
     position_id = db.add_position(ticker, req.shares, req.buy_price, req.buy_date, req.notes,
                                    custom_stop=req.custom_stop, custom_target=req.custom_target,
-                                   buy_fx_rate=req.buy_fx_rate)
+                                   buy_fx_rate=req.buy_fx_rate, account_type=req.account_type)
 
     # Ustalamy walutę od razu, jeśli mamy ją w cache'u z ostatniej analizy -
     # inaczej pozycja domyślnie pokazuje USD do najbliższego cyklu.
@@ -1070,10 +1080,12 @@ async def api_update_position(position_id: int, req: AddPositionRequest):
     for level in (req.custom_stop, req.custom_target, req.buy_fx_rate):
         if level is not None and level <= 0:
             raise HTTPException(status_code=400, detail="Własny stop-loss, cel i kurs wymiany muszą być dodatnie.")
+    if req.account_type not in ("standard", "ike"):
+        raise HTTPException(status_code=400, detail="Nieprawidłowy typ konta.")
     db.add_company(ticker, name=ticker, source="portfolio")
     ok = db.update_position(position_id, ticker, req.shares, req.buy_price, req.buy_date, req.notes,
                              custom_stop=req.custom_stop, custom_target=req.custom_target,
-                             buy_fx_rate=req.buy_fx_rate)
+                             buy_fx_rate=req.buy_fx_rate, account_type=req.account_type)
     if not ok:
         raise HTTPException(status_code=404, detail="Nie znaleziono pozycji.")
     return {"status": "ok"}

@@ -88,6 +88,14 @@ def _position_id_key(position_id) -> str | None:
     return str(int(position_id)) if isinstance(position_id, float) else str(position_id)
 
 
+def _map_xtb_product(product) -> str:
+    """Normalizuje kolumnę 'Product' z raportu XTB (typ subkonta - np. 'IKE',
+    'IKZE', 'Individual') do account_type zapisywanego w portfolio: 'ike' dla
+    subkonta IKE, 'standard' dla wszystkich pozostałych (w tym IKZE - ma inne
+    zasady podatkowe niż IKE, nie próbujemy tego rozróżniać automatycznie)."""
+    return "ike" if str(product or "").strip().upper() == "IKE" else "standard"
+
+
 def _implied_fx_rate(account_ccy_amount, shares, native_price) -> float | None:
     """Kurs wymiany UKRYTY w kwocie rozliczonej w walucie konta - broker (np.
     XTB) dolicza własną marżę do kursu rynkowego, więc to jedyny sposób na
@@ -250,6 +258,7 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
                     "buy_date": _to_date_str(open_time) or datetime.now().strftime("%Y-%m-%d"),
                     "currency": guess_currency(xtb_ticker),
                     "buy_fx_rate": round(buy_fx_rate, 6) if buy_fx_rate else None,
+                    "account_type": _map_xtb_product(row[cols["Product"]]) if "Product" in cols else "standard",
                 })
 
     # --- Closed Positions: każdy wiersz to już pojedyncza, zamknięta transakcja.
@@ -299,6 +308,7 @@ def parse_xtb_report(file_bytes: bytes) -> dict:
                     "currency": guess_currency(xtb_ticker),
                     "buy_fx_rate": round(buy_fx_rate, 6) if buy_fx_rate else None,
                     "sell_fx_rate": round(sell_fx_rate, 6) if sell_fx_rate else None,
+                    "account_type": _map_xtb_product(row[cols["Product"]]) if "Product" in cols else "standard",
                 })
 
     dividend_rows, dividend_warnings = _parse_dividends(wb)

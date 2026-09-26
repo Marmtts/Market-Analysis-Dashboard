@@ -183,6 +183,14 @@ def init_db(seed_watchlist: list[dict] | None = None) -> None:
             # bo tego wymaga prawo, niezależnie od realnego kursu brokera.
             "ALTER TABLE portfolio ADD COLUMN buy_fx_rate REAL",
             "ALTER TABLE portfolio ADD COLUMN sell_fx_rate REAL",
+            # 'standard' | 'ike'. IKE (Indywidualne Konto Emerytalne) jest zwolnione
+            # z podatku Belki TYLKO przy wypłacie po osiągnięciu wieku emerytalnego
+            # (lub innych warunkach ustawowych) - wcześniejsza wypłata (zwrot) jest
+            # opodatkowana tak samo jak konto standardowe. Narzędzie NIE zna Twojego
+            # wieku ani okoliczności wypłaty, więc podsumowanie podatkowe (report.py:
+            # compute_tax_summary) pokazuje dla pozycji IKE OBA scenariusze zamiast
+            # zgadywać, który dotyczy Ciebie - patrz komentarz przy tej funkcji.
+            "ALTER TABLE portfolio ADD COLUMN account_type TEXT NOT NULL DEFAULT 'standard'",
         ]:
             try:
                 conn.execute(stmt)
@@ -448,13 +456,13 @@ def get_score_history(ticker: str, limit: int = 400) -> list[dict]:
 
 def add_position(ticker: str, shares: float, buy_price: float, buy_date: str, notes: str = "",
                  custom_stop: float | None = None, custom_target: float | None = None,
-                 buy_fx_rate: float | None = None) -> int:
+                 buy_fx_rate: float | None = None, account_type: str = "standard") -> int:
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
             "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, "
-            "buy_fx_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, buy_fx_rate),
+            "buy_fx_rate, account_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, buy_fx_rate, account_type),
         )
         conn.commit()
         return cur.lastrowid
@@ -485,13 +493,14 @@ def remove_position(position_id: int) -> bool:
 def update_position(position_id: int, ticker: str, shares: float, buy_price: float,
                      buy_date: str, notes: str = "",
                      custom_stop: float | None = None, custom_target: float | None = None,
-                     buy_fx_rate: float | None = None) -> bool:
+                     buy_fx_rate: float | None = None, account_type: str = "standard") -> bool:
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
             "UPDATE portfolio SET ticker = ?, shares = ?, buy_price = ?, buy_date = ?, notes = ?, "
-            "custom_stop = ?, custom_target = ?, buy_fx_rate = ? WHERE id = ?",
-            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, buy_fx_rate, position_id),
+            "custom_stop = ?, custom_target = ?, buy_fx_rate = ?, account_type = ? WHERE id = ?",
+            (ticker, shares, buy_price, buy_date, notes, custom_stop, custom_target, buy_fx_rate,
+             account_type, position_id),
         )
         conn.commit()
         return cur.rowcount > 0
@@ -819,6 +828,24 @@ def backfill_xtb_fx_rate(xtb_id: str, buy_fx_rate: float | None, sell_fx_rate: f
         return cur.rowcount > 0
 
 
+def backfill_xtb_account_type(xtb_id: str, account_type: str) -> bool:
+    """Uzupełnia account_type dla JUŻ zaimportowanej pozycji XTB (rozpoznany
+    z kolumny 'Product' raportu), TYLKO gdy raport mówi 'ike', a pozycja ma
+    dziś domyślne 'standard' - nigdy w drugą stronę (nie cofa raz ustawionego
+    IKE na standard). Ta sama ścieżka pominięcia duplikatów co
+    backfill_xtb_fx_rate - pozwala doniepełnić pozycje zaimportowane zanim
+    ta flaga w ogóle istniała."""
+    if account_type != "ike":
+        return False
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE portfolio SET account_type = 'ike' WHERE notes LIKE ? AND account_type = 'standard'",
+            (f"%[XTB:{xtb_id}]%",),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def close_previously_imported_xtb_position(xtb_id: str, sell_price: float, sell_date: str,
                                             buy_fx_rate: float | None = None,
                                             sell_fx_rate: float | None = None) -> bool:
@@ -886,19 +913,21 @@ def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: st
                        notes: str = "", status: str = "open",
                        sell_price: float | None = None, sell_date: str | None = None,
                        currency: str = "USD", buy_fx_rate: float | None = None,
-                       sell_fx_rate: float | None = None) -> int:
+                       sell_fx_rate: float | None = None, account_type: str = "standard") -> int:
     """Jak add_position(), ale pozwala od razu ustawić status/sprzedaż/walutę -
     używane przez import XTB, żeby zamknięte transakcje trafiały od razu
     jako zamknięte, a nie jako otwarte wymagające ręcznej sprzedaży.
     buy_fx_rate/sell_fx_rate - rzeczywisty kurs z raportu XTB, patrz komentarz
-    przy migracji kolumn w init_db()."""
+    przy migracji kolumn w init_db(). account_type - 'standard'/'ike',
+    rozpoznawane automatycznie z kolumny 'Product' raportu XTB."""
     ticker = ticker.strip().upper()
     with _connect() as conn:
         cur = conn.execute(
             "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, status, "
-            "sell_price, sell_date, currency, buy_fx_rate, sell_fx_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "sell_price, sell_date, currency, buy_fx_rate, sell_fx_rate, account_type) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, currency,
-             buy_fx_rate, sell_fx_rate),
+             buy_fx_rate, sell_fx_rate, account_type),
         )
         conn.commit()
         return cur.lastrowid
@@ -922,7 +951,8 @@ def export_backup() -> dict:
         ).fetchall()]
         portfolio = [dict(r) for r in conn.execute(
             "SELECT ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date, "
-            "currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate FROM portfolio ORDER BY id ASC"
+            "currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate, account_type "
+            "FROM portfolio ORDER BY id ASC"
         ).fetchall()]
         dividends = [dict(r) for r in conn.execute(
             "SELECT ticker, currency, pay_date, amount_gross, withholding_tax, source, notes "
@@ -1021,6 +1051,7 @@ def import_backup(data) -> dict:
             custom_target = _positive_number(p.get("custom_target"))
             buy_fx_rate = _positive_number(p.get("buy_fx_rate"))
             sell_fx_rate = _positive_number(p.get("sell_fx_rate"))
+            account_type = p.get("account_type") if p.get("account_type") in ("standard", "ike") else "standard"
             notes = _sanitize_text(p.get("notes", ""))
 
             duplicate = conn.execute(
@@ -1040,10 +1071,10 @@ def import_backup(data) -> dict:
             )
             conn.execute(
                 "INSERT INTO portfolio (ticker, shares, buy_price, buy_date, notes, status, sell_price, "
-                "sell_date, currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "sell_date, currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate, account_type) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (ticker, shares, buy_price, buy_date, notes, status, sell_price, sell_date,
-                 currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate),
+                 currency, custom_stop, custom_target, buy_fx_rate, sell_fx_rate, account_type),
             )
             result["positions_added"] += 1
 

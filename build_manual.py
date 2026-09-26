@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.10"
+VERSION = "3.11"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -779,6 +779,10 @@ def part2(s: Story) -> None:
               "To pole dotyczy tylko przeliczenia na walutę bazową do celów poglądowych. Podsumowanie "
               "podatkowe (rozdział 15.2) zawsze liczy oficjalnym kursem NBP z dnia transakcji, niezależnie od "
               "tego pola — tak wymaga art. 11a ustawy o PIT.")
+    s.p("Checkbox <b>„Konto IKE”</b> oznacza pozycję jako kupioną na polskim Indywidualnym Koncie Emerytalnym "
+        "— wpływa WYŁĄCZNIE na to, jak pozycja jest liczona w podsumowaniu podatkowym (rozdział 15.2, gdzie "
+        "jest pełne wyjaśnienie), nigdzie indziej. Przy imporcie z XTB (rozdział 12.4) ten checkbox jest "
+        "ustawiany automatycznie na podstawie raportu.")
     s.h2("12.2 Grupowanie pozycji")
     s.p("Kilka transakcji na tej samej spółce (np. dokupowanie w różnych momentach) jest automatycznie "
         "zwijane w jedną kartę zbiorczą — widoczna jest łączna liczba akcji, średnia cena zakupu, "
@@ -824,6 +828,11 @@ def part2(s: Story) -> None:
         "(np. nowszy eksport) i część pozycji była już wcześniej dodana ręcznie bez tego kursu, dashboard "
         "dopisuje im go retrospektywnie, nie ruszając żadnych innych danych — po imporcie licznik takich "
         "uzupełnień pokazuje się w komunikacie podsumowującym.",
+        "Konto IKE (rozdział 12.1) jest rozpoznawane automatycznie z kolumny „Product” w raporcie XTB — "
+        "jeśli Twoje konto to subkonto IKE, wszystkie zaimportowane pozycje dostają tę flagę bez potrzeby "
+        "ręcznego zaznaczania. Ponowny import starszego pliku (sprzed wprowadzenia tej funkcji) dopisuje "
+        "flagę retrospektywnie tym samym mechanizmem co kurs wymiany wyżej — tylko z 'standard' na 'IKE', "
+        "nigdy w drugą stronę.",
     ])
     s.h2("12.5 Rekomendacja „trzymaj / sprzedaj”")
     s.p("Każda karta (i grupa) otrzymuje jedną z etykiet:")
@@ -1030,11 +1039,25 @@ def part2(s: Story) -> None:
     s.callout("tip",
               "Rok podatkowy i kurs NBP zależą od daty sprzedaży. Przy przycisku „Sprzedaj” data to dzień "
               "kliknięcia — jeśli transakcję wykonałeś wcześniej, dokładniejsze daty da import z raportu XTB.")
+    s.h2("15.2.1 Pozycje na koncie IKE")
+    s.p("Zamknięte transakcje oznaczone jako konto IKE (rozdziały 12.1 i 12.4) dostają WŁASNY, osobny zestaw "
+        "kart pod tytułem „Konto IKE” — nie są wliczane do zwykłego podsumowania powyżej. Powód: polskie "
+        "Indywidualne Konto Emerytalne jest zwolnione z podatku Belki TYLKO wtedy, gdy wypłata następuje po "
+        "osiągnięciu wieku emerytalnego (lub przy spełnieniu innych warunków z ustawy o IKE) — wcześniejsza "
+        "wypłata (tzw. zwrot) jest opodatkowana DOKŁADNIE tak samo jak konto standardowe. Dashboard nie zna "
+        "Twojego wieku ani okoliczności wypłaty, więc w kolumnie „Podatek” każdej karty IKE pokazuje OBA "
+        "scenariusze: 0 (jeśli wypłata kwalifikuje się do zwolnienia) lub kwotę 19% (jeśli nie) — wybór, "
+        "który dotyczy Ciebie, zostaje po Twojej stronie.")
+    s.callout("important",
+              "To NIE jest porada, który scenariusz IKE Cię dotyczy — warunki zwolnienia (wiek, minimalny "
+              "okres oszczędzania, sposób wypłaty) są zapisane w ustawie o IKE i warto je zweryfikować "
+              "samodzielnie albo z doradcą podatkowym przed złożeniem deklaracji.")
     s.h2("15.3 Eksport CSV")
     s.p("Przycisk „Eksportuj CSV” przy nagłówku „Historia transakcji” pobiera WSZYSTKIE zamknięte "
-        "transakcje jako plik CSV gotowy do wklejenia we własny arkusz rozliczeniowy — ticker, liczbę "
-        "akcji, daty i ceny kupna/sprzedaży, walutę, zysk/stratę w walucie notowania, liczbę dni w "
-        "portfelu, notatkę, a dodatkowo kurs i przeliczony zysk/stratę w walucie bazowej (tym samym kursem "
+        "transakcje jako plik CSV gotowy do wklejenia we własny arkusz rozliczeniowy — ticker, typ konta "
+        "(standardowe/IKE), liczbę akcji, daty i ceny kupna/sprzedaży, walutę, zysk/stratę w walucie "
+        "notowania, liczbę dni w portfelu, notatkę, a dodatkowo kurs i przeliczony zysk/stratę w walucie "
+        "bazowej (tym samym kursem "
         "NBP co podsumowanie podatkowe z rozdziału 15.2 — obie liczby zawsze się zgadzają, bo liczy je "
         "dokładnie ten sam kod). Plik używa średnika jako separatora (domyślny w polskich ustawieniach "
         "Excela) i ma dopisany znacznik kodowania, żeby polskie znaki wyświetliły się poprawnie po "
@@ -1404,6 +1427,11 @@ def part3(s: Story) -> None:
                                   "poszczególnych lat w podsumowaniu podatkowym (15.2) i dywidendach (12.6) "
                                   "też stoją obok siebie, gdy jest ich kilka. Poprawiono też odstępy między "
                                   "sąsiadującymi blokami szczegółów w kilku panelach."],
+        ["3.11", "Wrzesień 2026", "Flaga „konto IKE” per pozycja (12.1) — rozpoznawana automatycznie przy "
+                                  "imporcie XTB (12.4) albo ustawiana ręcznym checkboxem. Nowy rozdział "
+                                  "15.2.1: pozycje IKE liczone są w podsumowaniu podatkowym osobno, z dwoma "
+                                  "scenariuszami podatku (0 lub 19%), bo zależą od wieku przy wypłacie, "
+                                  "którego narzędzie nie zna. Eksport CSV (15.3) ma nową kolumnę „Konto”."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
