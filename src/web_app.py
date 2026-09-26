@@ -596,6 +596,7 @@ class AddPositionRequest(BaseModel):
 class ClosePositionRequest(BaseModel):
     sell_price: float
     sell_date: str  # "YYYY-MM-DD"
+    sell_fx_rate: float | None = None
 
 
 class ChatRequest(BaseModel):
@@ -937,7 +938,7 @@ async def api_export_closed_trades_csv():
 async def api_close_position(position_id: int, req: ClosePositionRequest):
     if req.sell_price <= 0:
         raise HTTPException(status_code=400, detail="Nieprawidłowa cena sprzedaży.")
-    ok = db.close_position(position_id, req.sell_price, req.sell_date)
+    ok = db.close_position(position_id, req.sell_price, req.sell_date, req.sell_fx_rate)
     if not ok:
         raise HTTPException(status_code=404, detail="Nie znaleziono pozycji.")
     return {"status": "ok"}

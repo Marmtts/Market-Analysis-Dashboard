@@ -481,13 +481,18 @@ def update_position(position_id: int, ticker: str, shares: float, buy_price: flo
         return cur.rowcount > 0
 
 
-def close_position(position_id: int, sell_price: float, sell_date: str) -> bool:
+def close_position(position_id: int, sell_price: float, sell_date: str,
+                    sell_fx_rate: float | None = None) -> bool:
     """Oznacza pozycję jako sprzedaną - NIE usuwa jej, zachowuje w historii
-    zamkniętych transakcji do rozliczenia zrealizowanego zysku/straty."""
+    zamkniętych transakcji do rozliczenia zrealizowanego zysku/straty.
+    sell_fx_rate - opcjonalny, rzeczywisty kurs wymiany brokera przy tej
+    transakcji (np. z marżą XTB); używany tylko do przeliczeń poglądowych
+    (podsumowanie łączne, TWR), nigdy do podsumowania podatkowego (NBP)."""
     with _connect() as conn:
         cur = conn.execute(
-            "UPDATE portfolio SET status = 'closed', sell_price = ?, sell_date = ? WHERE id = ?",
-            (sell_price, sell_date, position_id),
+            "UPDATE portfolio SET status = 'closed', sell_price = ?, sell_date = ?, "
+            "sell_fx_rate = COALESCE(?, sell_fx_rate) WHERE id = ?",
+            (sell_price, sell_date, sell_fx_rate, position_id),
         )
         conn.commit()
         return cur.rowcount > 0

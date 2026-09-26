@@ -304,7 +304,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.4)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.5)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -344,7 +344,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.4). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.5). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -353,13 +353,16 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Cztery pomysły z tej sekcji zostały już zrealizowane: TWR na tle
+Pięć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
-zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje) i
+zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
 sprawdzenie okna przedwynikowego (`python -m src.backtest
 --check-earnings-window` — wynik: brak sygnału, scoring bez zmian, patrz
-komentarz w kodzie `backtest.py`). Szczegóły wszystkich czterech w
+komentarz w kodzie `backtest.py`) i uwzględnienie rzeczywistego kursu
+wymiany brokera (`buy_fx_rate`/`sell_fx_rate`) także przy ręcznym
+zamykaniu pozycji (przycisk 💰 pyta teraz opcjonalnie o kurs sprzedaży,
+analogicznie do pola przy dodawaniu). Szczegóły w
 `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
 
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
@@ -367,7 +370,7 @@ komentarz w kodzie `backtest.py`). Szczegóły wszystkich czterech w
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.
 - Testy automatyczne (Playwright) pokrywające najnowsze funkcje UI
   (przeciąganie paneli, przełącznik TWR, odznaka alertów).
-- Wykorzystanie rzeczywistego kursu wymiany brokera (`buy_fx_rate`/
-  `sell_fx_rate`, importowane automatycznie z raportu XTB albo wpisywane
-  ręcznie przy dodawaniu pozycji) także przy ręcznym zamykaniu pozycji
-  (dziś dotyczy tylko dodawania) — ewentualnie też przy eksporcie CSV.
+- Dodatkowa, informacyjna kolumna z rzeczywistym kursem brokera obok
+  kolumny NBP w eksporcie CSV zamkniętych transakcji — świadomie NIE
+  zastępuje kursu NBP (art. 11a ustawy o PIT wymaga go do rozliczenia
+  podatkowego), byłaby to tylko dodatkowa informacja poglądowa.

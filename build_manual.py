@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.4"
+VERSION = "3.5"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -754,8 +754,10 @@ def part2(s: Story) -> None:
         "własnymi poziomami stop/cel.")
     s.h2("12.3 Przyciski przy pojedynczej transakcji")
     s.bullets([
-        "<b>Sprzedaj</b> (ikona worka pieniędzy) — pytanie o cenę sprzedaży; pozycja przenosi się do "
-        "zakładki „Zamknięte transakcje”. Data sprzedaży ustawiana jest na dzień kliknięcia.",
+        "<b>Sprzedaj</b> (ikona worka pieniędzy) — pytanie o cenę sprzedaży, a potem opcjonalnie o rzeczywisty "
+        "kurs wymiany brokera przy tej sprzedaży (analogicznie do pola z rozdziału 12.1 przy dodawaniu — "
+        "puste pole = użyj bieżącego kursu rynkowego); pozycja przenosi się do zakładki „Zamknięte "
+        "transakcje”. Data sprzedaży ustawiana jest na dzień kliknięcia.",
         "<b>✎ Edytuj</b> — wypełnia formularz danymi tej transakcji; po zapisaniu zmian transakcja jest "
         "aktualizowana (nie tworzy nowej). Przycisk „Anuluj edycję” wraca do trybu dodawania.",
         "<b>Kopiuj</b> (ikona dwóch kartek) — wypełnia formularz danymi tej transakcji z dzisiejszą datą, "
@@ -1315,6 +1317,9 @@ def part3(s: Story) -> None:
                                  "łącznego (13.1). Alternatywne źródło sentymentu dla spółek z GPW: filtrowany "
                                  "kanał RSS (news.gpw_rss_url) budujący własny trend 12-miesięczny w czasie, "
                                  "zamiast trwałego braku danych przez 403 z Finnhuba (rozdziały 21, 22)."],
+        ["3.5", "Wrzesień 2026", "Przycisk „Sprzedaj” pyta teraz opcjonalnie także o rzeczywisty kurs wymiany "
+                                 "brokera przy sprzedaży (12.3), analogicznie do pola przy dodawaniu pozycji "
+                                 "(12.1) — domyka rzeczywisty kurs brokera po obu stronach transakcji."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

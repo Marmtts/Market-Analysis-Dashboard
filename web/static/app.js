@@ -1254,11 +1254,24 @@ function renderLotCard(p) {
       alert("Nieprawidłowa cena.");
       return;
     }
+    const fxInput = prompt(
+      `Własny kurs wymiany przy sprzedaży (opcjonalnie, np. rzeczywisty kurs XTB z marżą)?\n` +
+      `Zostaw puste, żeby użyć bieżącego kursu rynkowego.`
+    );
+    let sellFxRate = null;
+    if (fxInput !== null && fxInput.trim() !== "") {
+      const parsedFx = parseFloat(fxInput);
+      if (isNaN(parsedFx) || parsedFx <= 0) {
+        alert("Nieprawidłowy kurs wymiany - zignorowano, użyty zostanie bieżący kurs rynkowy.");
+      } else {
+        sellFxRate = parsedFx;
+      }
+    }
     const sellDate = new Date().toISOString().slice(0, 10);
     const res = await fetch(`/api/portfolio/${p.id}/close`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sell_price: parsed, sell_date: sellDate }),
+      body: JSON.stringify({ sell_price: parsed, sell_date: sellDate, sell_fx_rate: sellFxRate }),
     });
     if (res.ok) {
       await loadPortfolio();
