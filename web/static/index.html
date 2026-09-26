@@ -154,6 +154,7 @@
       <p class="daily-brief__text" id="dailyBriefText"></p>
     </div>
 
+    <div class="dash-section" data-section-id="watchlist-results">
     <div class="section-header">
       <h2>Stała watchlista</h2>
       <span class="section-header__meta" id="mainGeneratedAt">brak danych</span>
@@ -182,7 +183,9 @@
       <p class="empty-state">Czekam na pierwszy cykl analizy…</p>
     </div>
     <div class="heatmap-grid" id="watchlistHeatmap" style="display:none"></div>
+    </div>
 
+    <div class="dash-section" data-section-id="discovery">
     <div class="section-header section-header--discovery">
       <h2>Propozycje AI <span class="tag-warn">wymaga weryfikacji</span></h2>
     </div>
@@ -197,14 +200,24 @@
     <div class="results-grid" id="discoveredGrid">
       <p class="empty-state">Brak propozycji w tym cyklu.</p>
     </div>
+    </div>
 
   </section>
 </main>
 
 <main class="layout" id="tab-portfolio" style="display:none">
   <aside class="sidebar">
-    <section class="panel">
-      <h2 class="panel__title">Dodaj pozycję</h2>
+    <section class="panel panel--collapsible" id="addPositionPanel" data-panel-id="add-position">
+      <div class="panel__header">
+        <h2 class="panel__title">Dodaj pozycję</h2>
+        <div class="panel__controls">
+          <span class="panel__drag-handle" title="Przeciągnij, aby zmienić kolejność" aria-hidden="true">⠿</span>
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body">
       <form class="add-form" id="portfolioForm">
         <input type="hidden" id="posEditId" value="">
         <input type="text" id="posTicker" placeholder="Ticker (np. MSFT)" required autocomplete="off">
@@ -226,20 +239,40 @@
         </div>
         <p class="detail-disclaimer">Wpisz cenę zakupu w walucie notowania spółki (np. USD dla spółek amerykańskich, PLN dla polskich jak XTB.WA). To nie jest porada inwestycyjna ani podatkowa. Dane portfela są przechowywane lokalnie w bazie tego dashboardu.</p>
       </form>
+      </div>
     </section>
 
-    <section class="panel sidebar-subpanel">
-      <h3 class="panel__subtitle"><span class="panel__subtitle-icon">⇩</span>Import z raportu XTB</h3>
+    <section class="panel panel--collapsible sidebar-subpanel" id="xtbImportPanel" data-panel-id="xtb-import">
+      <div class="panel__header">
+        <h3 class="panel__subtitle"><span class="panel__subtitle-icon">⇩</span>Import z raportu XTB</h3>
+        <div class="panel__controls">
+          <span class="panel__drag-handle" title="Przeciągnij, aby zmienić kolejność" aria-hidden="true">⠿</span>
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body">
       <label class="file-input-label" for="xtbImportFile">
         <span id="xtbFileNameLabel">📂 Wybierz plik .xlsx z eksportu XTB</span>
       </label>
       <input type="file" id="xtbImportFile" accept=".xlsx,.xls" class="file-input-hidden">
       <button class="btn btn--secondary" id="xtbImportBtn">📥 Importuj pozycje</button>
       <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte. Ten sam import wczytuje też otrzymane dywidendy (sekcja „Dywidendy” niżej).</p>
+      </div>
     </section>
 
-    <section class="panel sidebar-subpanel">
-      <h3 class="panel__subtitle"><span class="panel__subtitle-icon">💵</span>Dodaj dywidendę ręcznie</h3>
+    <section class="panel panel--collapsible sidebar-subpanel" id="addDividendPanel" data-panel-id="add-dividend">
+      <div class="panel__header">
+        <h3 class="panel__subtitle"><span class="panel__subtitle-icon">💵</span>Dodaj dywidendę ręcznie</h3>
+        <div class="panel__controls">
+          <span class="panel__drag-handle" title="Przeciągnij, aby zmienić kolejność" aria-hidden="true">⠿</span>
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body">
       <form class="add-form" id="dividendForm">
         <input type="text" id="divTicker" placeholder="Ticker (np. MSFT)" required autocomplete="off">
         <div class="add-form__row">
@@ -255,10 +288,20 @@
           <button type="submit" class="btn btn--primary">+ Dodaj dywidendę</button>
         </div>
       </form>
+      </div>
     </section>
 
-    <section class="panel sidebar-subpanel">
-      <h3 class="panel__subtitle"><span class="panel__subtitle-icon">⇅</span>Kopia zapasowa</h3>
+    <section class="panel panel--collapsible sidebar-subpanel" id="backupPanel" data-panel-id="backup">
+      <div class="panel__header">
+        <h3 class="panel__subtitle"><span class="panel__subtitle-icon">⇅</span>Kopia zapasowa</h3>
+        <div class="panel__controls">
+          <span class="panel__drag-handle" title="Przeciągnij, aby zmienić kolejność" aria-hidden="true">⠿</span>
+          <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
+          <button type="button" class="panel__ctrl-btn panel__move-down" title="Przesuń panel niżej" aria-label="Przesuń panel niżej">▼</button>
+          <button type="button" class="panel__ctrl-btn panel__collapse-toggle" title="Zwiń lub rozwiń panel" aria-label="Zwiń lub rozwiń panel">▾</button>
+        </div>
+      </div>
+      <div class="panel__body">
       <a class="btn btn--secondary backup-download-link" href="/api/backup/export" download>⬇ Pobierz kopię (JSON)</a>
       <label class="file-input-label" for="backupImportFile">
         <span id="backupFileNameLabel">📂 Wybierz plik kopii (.json)</span>
@@ -266,6 +309,7 @@
       <input type="file" id="backupImportFile" accept=".json,application/json" class="file-input-hidden">
       <button class="btn btn--secondary" id="backupImportBtn">📤 Wczytaj kopię</button>
       <p class="detail-disclaimer">Kopia zawiera watchlistę, cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel) oraz dywidendy. Wczytanie jest bezpieczne do powtarzania — identyczne pozycje, spółki i dywidendy są pomijane. Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
+      </div>
     </section>
   </aside>
   <section class="main">
@@ -275,19 +319,24 @@
     <div id="combinedSummaryBar"></div>
     <div id="portfolioSummaryBar"></div>
 
+    <div class="dash-section" data-section-id="portfolio-risk">
     <div class="section-header">
       <h2><span class="section-header__icon">⚠</span>Ryzyko i ekspozycja</h2>
       <button type="button" class="section-header__action" id="testDiscordBtn" title="Wyślij testową wiadomość na skonfigurowany webhook Discorda (notifications w config.yaml)">🧪 Testuj Discord</button>
       <button type="button" class="section-header__action" id="checkAlertsNowBtn">🔔 Sprawdź alerty teraz</button>
     </div>
     <div class="section-card" id="portfolioRiskPanel"></div>
+    </div>
 
+    <div class="dash-section" data-section-id="portfolio-correlation">
     <div class="section-header">
       <h2><span class="section-header__icon">∿</span>Korelacja i zmienność</h2>
       <span class="section-header__meta" id="portfolioStatsMeta"></span>
     </div>
     <div class="section-card" id="portfolioStatsPanel"></div>
+    </div>
 
+    <div class="dash-section" data-section-id="portfolio-equity">
     <div class="section-header">
       <h2><span class="section-header__icon">⟶</span>Krzywa kapitału</h2>
       <span class="section-header__meta" id="equityDrawdownLabel"></span>
@@ -303,7 +352,9 @@
         <p class="empty-state" id="equityEmptyState" style="display:none">📉 Za mało danych historycznych — krzywa pojawi się po kilku cyklach analizy.</p>
       </div>
     </div>
+    </div>
 
+    <div class="dash-section" data-section-id="portfolio-positions">
     <div class="section-header">
       <h2><span class="section-header__icon">☰</span>Pozycje</h2>
     </div>
@@ -318,24 +369,30 @@
     <div class="results-grid" id="portfolioGrid">
       <p class="empty-state">📭 Brak pozycji — dodaj pierwszą po lewej stronie.</p>
     </div>
+    </div>
 
+    <div class="dash-section" data-section-id="portfolio-dividends">
     <div class="section-header">
       <h2><span class="section-header__icon">💵</span>Dywidendy</h2>
     </div>
     <div class="section-card" id="dividendSummaryPanel"></div>
     <div class="dividend-table-wrap" id="dividendTableWrap"></div>
+    </div>
   </section>
 </main>
 
 <main class="layout layout--single" id="tab-closed" style="display:none">
   <section class="main">
+    <div class="dash-section" data-section-id="closed-summary">
     <div class="section-header">
       <h2><span class="section-header__icon">◇</span>Zamknięte transakcje</h2>
     </div>
     <div id="closedSummaryBar"></div>
 
     <div class="section-card" id="taxSummaryPanel"></div>
+    </div>
 
+    <div class="dash-section" data-section-id="closed-history">
     <div class="section-header">
       <h2><span class="section-header__icon">☰</span>Historia transakcji</h2>
       <a class="section-header__action" href="/api/portfolio/closed/export" download>⬇ Eksportuj CSV</a>
@@ -350,6 +407,7 @@
     </div>
     <div class="results-grid" id="closedGrid">
       <p class="empty-state">🗂 Brak zamkniętych transakcji.</p>
+    </div>
     </div>
   </section>
 </main>

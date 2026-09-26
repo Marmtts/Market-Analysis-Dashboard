@@ -2665,8 +2665,16 @@ function setupColumnSettings() {
 }
 
 // ---------------- Personalizacja panelu bocznego (zwijanie, kolejność) ----------------
-const SIDEBAR_ORDER_KEY = "sidebarPanelOrder";
+// Działa na KAŻDYM panelu bocznym osobno (dziś: Analiza i Portfel) - kolejność
+// jest per-zakładka (klucz z ID rodzica .layout), zwinięcie per-panel (globalny
+// klucz wg data-panel-id - ID paneli nie powtarzają się między zakładkami, więc
+// nie ma potrzeby dodatkowego prefiksu).
 const PANEL_COLLAPSE_PREFIX = "panelCollapsed:";
+
+function sidebarOrderKey(sidebar) {
+  const tabId = sidebar.closest(".layout")?.id || "default";
+  return `sidebarPanelOrder:${tabId}`;
+}
 
 function updatePanelMoveButtons(sidebar) {
   const panels = Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]"));
@@ -2682,22 +2690,19 @@ function saveSidebarOrder(sidebar) {
   const order = Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]"))
     .map((p) => p.dataset.panelId);
   try {
-    localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(order));
+    localStorage.setItem(sidebarOrderKey(sidebar), JSON.stringify(order));
   } catch {
     // jw. - brak trwałości nie jest błędem krytycznym
   }
 }
 
-function initPanelCustomization() {
-  const sidebar = document.querySelector("#tab-analysis .sidebar");
-  if (!sidebar) return;
-
+function initPanelCustomizationForSidebar(sidebar) {
   // 1) Kolejność - zapisana lista ID paneli, z zabezpieczeniem na wypadek
   // przyszłych zmian w zestawie paneli (nieznane ID pomijamy, nowe panele,
   // których nie było w zapisanej kolejności, lądują na końcu w kolejności z HTML).
   let savedOrder = [];
   try {
-    savedOrder = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_KEY) || "[]");
+    savedOrder = JSON.parse(localStorage.getItem(sidebarOrderKey(sidebar)) || "[]");
   } catch {
     savedOrder = [];
   }
@@ -2761,6 +2766,10 @@ function initPanelCustomization() {
   updatePanelMoveButtons(sidebar);
 }
 
+function initPanelCustomization() {
+  document.querySelectorAll(".layout .sidebar").forEach(initPanelCustomizationForSidebar);
+}
+
 // ---------------- Przeciąganie paneli (drag & drop) ----------------
 // Alternatywa dla przycisków ▲/▼ (initPanelCustomization) - te zostają
 // nietknięte jako dostępny, precyzyjny fallback. Technika "FLIP": przy
@@ -2768,9 +2777,7 @@ function initPanelCustomization() {
 // pozostałych paneli, wykonujemy reorder w DOM, po czym animujemy PANELE
 // (nie placeholder) z ich starej pozycji do nowej - bez tego reorder
 // flexboksa po prostu "przeskakiwałby" bez animacji.
-function initPanelDragReorder() {
-  const sidebar = document.querySelector("#tab-analysis .sidebar");
-  if (!sidebar) return;
+function initPanelDragReorderForSidebar(sidebar) {
   const getPanels = () => Array.from(sidebar.querySelectorAll(":scope > section[data-panel-id]"));
 
   getPanels().forEach((panel) => {
@@ -2860,6 +2867,54 @@ function initPanelDragReorder() {
   });
 }
 
+function initPanelDragReorder() {
+  document.querySelectorAll(".layout .sidebar").forEach(initPanelDragReorderForSidebar);
+}
+
+// ---------------- Zwijalne sekcje głównej kolumny (wszystkie zakładki) ----------------
+// Prostszy wariant personalizacji niż panele boczne (bez przeciągania/kolejności) -
+// tu chodzi głównie o odzyskanie miejsca na ekranie ("zajmuje za dużo miejsca"),
+// nie o przestawianie. Przycisk zwijania jest dopisywany do .section-header przez
+// JS (nie na sztywno w HTML), żeby nie duplikować identycznego znacznika w kilku
+// miejscach index.html.
+const DASH_SECTION_COLLAPSE_PREFIX = "dashSectionCollapsed:";
+
+function initDashSections() {
+  document.querySelectorAll(".dash-section[data-section-id]").forEach((section) => {
+    const header = section.querySelector(":scope > .section-header");
+    if (!header) return;
+    const id = section.dataset.sectionId;
+    const key = DASH_SECTION_COLLAPSE_PREFIX + id;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "dash-section__toggle";
+    btn.title = "Zwiń lub rozwiń sekcję";
+    btn.setAttribute("aria-label", "Zwiń lub rozwiń sekcję");
+    btn.textContent = "▾";
+    header.appendChild(btn);
+
+    if (localStorage.getItem(key) === "1") section.classList.add("is-collapsed");
+
+    btn.addEventListener("click", () => {
+      const collapsed = section.classList.toggle("is-collapsed");
+      try {
+        localStorage.setItem(key, collapsed ? "1" : "0");
+      } catch {
+        // brak trwałości - dashboard nadal działa, tylko nie zapamięta stanu
+      }
+      if (!collapsed) {
+        // Sekcja mogła zawierać wykres (Lightweight Charts), który przy
+        // tworzeniu/aktualizacji liczy szerokość z clientWidth kontenera -
+        // gdy sekcja była zwinięta (display:none), ten kontener miał 0px.
+        // Odpalenie tego samego handlera co przy zmianie rozmiaru okna każe
+        // istniejącym wykresom przeliczyć się na nowo, teraz gdy są widoczne.
+        requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+      }
+    });
+  });
+}
+
 // ---------------- Start ----------------
 (async function init() {
   // Zabezpieczenie: modal, szufladka logu i widget czatu MUSZĄ być
@@ -2874,6 +2929,7 @@ function initPanelDragReorder() {
   setupColumnSettings();
   initPanelCustomization();
   initPanelDragReorder();
+  initDashSections();
 
   setupSparklineHeaders();
   setupSortableHeaders();

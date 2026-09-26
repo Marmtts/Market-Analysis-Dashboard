@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.8"
+VERSION = "3.9"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -440,6 +440,27 @@ def part1(s: Story) -> None:
         "„Odśwież teraz”, który wymusza natychmiastowy pełny cykl analizy (niezależnie od harmonogramu).")
     s.p("Na dole ekranu znajduje się zwijana szufladka „Log na żywo” (rozdział 16), a nad nią, w prawym "
         "dolnym rogu, okrągły przycisk czatu z asystentem (rozdział 18).")
+
+    s.h2("3.1 Personalizacja układu")
+    s.p("Dashboard bywa gęsty — każda zakładka ma sporo sekcji, z których nie wszystkie są dla Ciebie "
+        "jednakowo ważne. Dwa niezależne mechanizmy pozwalają dopasować, co widać na ekranie; oba "
+        "zapamiętywane są LOKALNIE w przeglądarce (osobno dla każdej przeglądarki/urządzenia) i działają "
+        "bez połączenia z serwerem:")
+    s.bullets([
+        "<b>Panele boczne</b> (lewa kolumna zakładek Analiza i Portfel) — każdy panel ma w nagłówku uchwyt "
+        "(ikona kropek, przeciągnij żeby zmienić kolejność), strzałki ▲/▼ (to samo bez przeciągania) i "
+        "przycisk ▾ (zwiń/rozwiń). Kolejność i stan zwinięcia są pamiętane osobno dla panelu bocznego "
+        "Analizy i osobno dla Portfela.",
+        "<b>Sekcje głównej kolumny</b> (na wszystkich trzech zakładkach — np. „Ryzyko i ekspozycja”, "
+        "„Krzywa kapitału”, „Historia transakcji”) — każdy nagłówek sekcji ma z prawej strony mały "
+        "przycisk ▾, który zwija całą sekcję do samego nagłówka. Przydatne, gdy jakaś sekcja (np. "
+        "macierz korelacji przy dużej watchliście) zajmuje dużo miejsca, a nie sprawdzasz jej za każdym "
+        "razem.",
+    ])
+    s.callout("note",
+              "Zwinięcie NIE wyłącza obliczeń ani danych w tle — to czysto wizualne ukrycie. Wykresy "
+              "wewnątrz zwiniętej sekcji (np. krzywa kapitału) poprawnie doskalowują się z powrotem po "
+              "jej rozwinięciu.")
 
     # ------------------------------------------------------------ 4
     s.h1("4. Panel boczny (zakładka Analiza)")
@@ -1372,6 +1393,11 @@ def part3(s: Story) -> None:
                                  "„Kontekst makro” (4.1), konfigurowalny w config.yaml. Heatmapa całej "
                                  "watchlisty jako alternatywa dla widoku kart (5), kolorowana wg zmiany "
                                  "ceny w ostatniej sesji."],
+        ["3.9", "Wrzesień 2026", "Nowy rozdział 3.1: zwijalne sekcje głównej kolumny na WSZYSTKICH "
+                                 "zakładkach (nie tylko panele boczne jak dotąd) - każda większa sekcja "
+                                 "(Ryzyko, Korelacja, Krzywa kapitału, Historia transakcji itd.) ma teraz "
+                                 "własny przycisk zwijania. Personalizacja panelu bocznego (przeciąganie, "
+                                 "zwijanie) działa też w zakładce Portfel, nie tylko w Analizie."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

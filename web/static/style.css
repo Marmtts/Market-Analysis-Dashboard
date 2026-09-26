@@ -1488,7 +1488,7 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   gap: 0.5rem;
   margin-bottom: 0.8rem;
 }
-.panel__header .panel__title { margin-bottom: 0; }
+.panel__header .panel__title, .panel__header .panel__subtitle { margin-bottom: 0; }
 .panel__controls { display: flex; align-items: center; gap: 0.2rem; flex-shrink: 0; }
 .panel__ctrl-btn {
   background: none;
@@ -1574,6 +1574,25 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 }
 .section-header__action:hover { border-color: var(--accent-gold); color: var(--accent-gold-bright); }
 .section-header__action.is-active { border-color: var(--accent-gold-bright); color: var(--accent-gold-bright); background: rgba(212, 175, 55, 0.12); }
+
+/* ---------------- Zwijalne sekcje głównej kolumny (Analiza/Portfel/Zamknięte) ---------------- */
+.dash-section__toggle {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.3rem 0.35rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: auto;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.2s ease;
+}
+.dash-section__toggle:hover { color: var(--accent-gold-bright); background: var(--bg-elevated-2); }
+.dash-section.is-collapsed .dash-section__toggle { transform: rotate(-90deg); }
+.dash-section.is-collapsed > *:not(.section-header) { display: none !important; }
 /* Gdy dwa przyciski-pigułki siedzą w jednym nagłówku (Ryzyko i ekspozycja:
    test Discorda + sprawdź alerty) - tylko PIERWSZY dostaje auto-margines
    (odpycha całą parę do prawej), drugi zwykły odstęp, inaczej oba auto-
