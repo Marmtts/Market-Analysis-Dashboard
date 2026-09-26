@@ -2154,6 +2154,7 @@ el("xtbImportBtn").addEventListener("click", async () => {
     let msg = `Zaimportowano: ${data.imported_open} otwartych, ${data.imported_closed} zamkniętych pozycji.`;
     if (data.skipped_duplicates) msg += ` Pominięto ${data.skipped_duplicates} już zaimportowanych wcześniej.`;
     if (data.fx_rates_backfilled) msg += ` Uzupełniono rzeczywisty kurs wymiany dla ${data.fx_rates_backfilled} wcześniej zaimportowanych pozycji.`;
+    if (data.closed_from_reimport) msg += ` Zamknięto ${data.closed_from_reimport} pozycji sprzedanych u brokera od poprzedniego importu.`;
     appendLog({ level: "success", message: `📥 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📥 ${w}` }));
     alert(msg + (data.warnings?.length ? `\n\nUwagi (patrz też log na żywo):\n${data.warnings.slice(0, 5).join("\n")}` : ""));

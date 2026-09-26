@@ -652,7 +652,7 @@ async def api_import_xtb(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Nie udało się odczytać pliku: {exc}")
 
     already_imported = db.get_imported_xtb_ids()
-    imported_open = imported_closed = skipped_duplicates = fx_rates_backfilled = 0
+    imported_open = imported_closed = skipped_duplicates = fx_rates_backfilled = closed_from_reimport = 0
     needs_review: list[str] = []
 
     for row in parsed["open"]:
@@ -677,6 +677,16 @@ async def api_import_xtb(file: UploadFile = File(...)):
 
     for row in parsed["closed"]:
         if row["xtb_id"] in already_imported:
+            # Pozycja mogła być zaimportowana wcześniej jako OTWARTA i od tego
+            # czasu zostać sprzedana u brokera - jeśli tak, ten sam xtb_id
+            # trafia teraz do arkusza Closed Positions i trzeba faktycznie
+            # zamknąć ją w dashboardzie, a nie tylko dograć kurs.
+            if db.close_previously_imported_xtb_position(
+                row["xtb_id"], row["sell_price"], row["sell_date"],
+                row.get("buy_fx_rate"), row.get("sell_fx_rate"),
+            ):
+                closed_from_reimport += 1
+                continue
             skipped_duplicates += 1
             if db.backfill_xtb_fx_rate(row["xtb_id"], row.get("buy_fx_rate"), row.get("sell_fx_rate")):
                 fx_rates_backfilled += 1
@@ -698,6 +708,7 @@ async def api_import_xtb(file: UploadFile = File(...)):
         "imported_closed": imported_closed,
         "skipped_duplicates": skipped_duplicates,
         "fx_rates_backfilled": fx_rates_backfilled,
+        "closed_from_reimport": closed_from_reimport,
         "warnings": parsed["warnings"],
     }
 

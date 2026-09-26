@@ -803,6 +803,27 @@ def backfill_xtb_fx_rate(xtb_id: str, buy_fx_rate: float | None, sell_fx_rate: f
         return cur.rowcount > 0
 
 
+def close_previously_imported_xtb_position(xtb_id: str, sell_price: float, sell_date: str,
+                                            buy_fx_rate: float | None = None,
+                                            sell_fx_rate: float | None = None) -> bool:
+    """Zamyka pozycję zaimportowaną WCZEŚNIEJ z XTB jako otwartą (dopasowaną po
+    znaczniku [XTB:<id>] w notatce), gdy TA SAMA pozycja pojawia się jako
+    zamknięta w nowszym eksporcie - bez tego ponowny import po sprzedaży u
+    brokera zostawiałby pozycję wiecznie otwartą w dashboardzie, bo import
+    traktuje znany xtb_id jako już zaimportowany i tylko dogrywa kurs
+    (patrz backfill_xtb_fx_rate). Działa tylko na pozycjach status='open' -
+    już zamknięte tym samym mechanizmem obsługuje backfill_xtb_fx_rate."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE portfolio SET status = 'closed', sell_price = ?, sell_date = ?, "
+            "buy_fx_rate = COALESCE(buy_fx_rate, ?), sell_fx_rate = COALESCE(sell_fx_rate, ?) "
+            "WHERE notes LIKE ? AND status = 'open'",
+            (sell_price, sell_date, buy_fx_rate, sell_fx_rate, f"%[XTB:{xtb_id}]%"),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: str,
                        notes: str = "", status: str = "open",
                        sell_price: float | None = None, sell_date: str | None = None,

@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.5"
+VERSION = "3.6"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -776,7 +776,9 @@ def part2(s: Story) -> None:
         "sposób na wprowadzenie historii pod rozliczenie podatkowe).",
         "Import jest bezpieczny do wielokrotnego uruchamiania: każda pozycja dostaje znacznik z numerem XTB "
         "w notatce, więc ponowny import tego samego lub nowszego pliku nie tworzy duplikatów, a pozycje "
-        "wpisane ręcznie nie są ruszane.",
+        "wpisane ręcznie nie są ruszane. Jeśli pozycja była zaimportowana jako OTWARTA, a od tego czasu "
+        "sprzedałeś ją u brokera, ponowny import nowszego raportu automatycznie zamknie ją w dashboardzie "
+        "(cena, data i kurs sprzedaży z raportu) — nie trzeba jej zamykać ręcznie.",
         "Symbole XTB są mapowane na Yahoo Finance według sufiksu giełdy, m.in.: .US → bez sufiksu, "
         ".PL → .WA, .DE → .DE, .UK → .L, .FR → .PA, .NL → .AS, .ES → .MC, .IT → .MI. Waluta jest wstępnie "
         "zgadywana z sufiksu, a potem korygowana danymi z Yahoo przy pierwszym cyklu analizy.",
@@ -1320,6 +1322,11 @@ def part3(s: Story) -> None:
         ["3.5", "Wrzesień 2026", "Przycisk „Sprzedaj” pyta teraz opcjonalnie także o rzeczywisty kurs wymiany "
                                  "brokera przy sprzedaży (12.3), analogicznie do pola przy dodawaniu pozycji "
                                  "(12.1) — domyka rzeczywisty kurs brokera po obu stronach transakcji."],
+        ["3.6", "Wrzesień 2026", "Naprawiono import z XTB (12.4): pozycja zaimportowana wcześniej jako "
+                                 "otwarta, a od tego czasu sprzedana u brokera, jest teraz przy ponownym "
+                                 "imporcie automatycznie zamykana w dashboardzie zamiast zostawać otwartą na "
+                                 "zawsze (import rozpoznawał ten sam numer pozycji jako duplikat i tylko "
+                                 "dogrywał kurs, nigdy nie zmieniając statusu)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
