@@ -40,12 +40,33 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.2"
+VERSION = "3.3"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
 # ---------------------------------------------------------------- czcionki ---
-FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
+def _find_font_dir() -> Path:
+    """Szuka DejaVu Sans w typowych miejscach na Linuksie/Windows - skrypt był
+    pierwotnie pisany na Linuksie (ścieżka na sztywno), więc na Windows (gdzie
+    DejaVu bywa po prostu zainstalowane systemowo w C:\\Windows\\Fonts, tak jak
+    inne czcionki TrueType) w ogóle się nie uruchamiał."""
+    candidates = [
+        Path("/usr/share/fonts/truetype/dejavu"),          # Debian/Ubuntu
+        Path("/usr/share/fonts/dejavu-sans-fonts"),          # Fedora/RHEL
+        Path.home() / ".fonts",
+        Path(r"C:\Windows\Fonts"),
+    ]
+    for c in candidates:
+        if (c / "DejaVuSans.ttf").exists():
+            return c
+    raise FileNotFoundError(
+        "Nie znaleziono czcionek DejaVu Sans. Zainstaluj pakiet fonts-dejavu-core "
+        "(Linux) albo pobierz i zainstaluj DejaVu Sans z https://dejavu-fonts.github.io "
+        "(Windows/macOS)."
+    )
+
+
+FONT_DIR = _find_font_dir()
 _FONTS = {
     "DejaVu": "DejaVuSans.ttf",
     "DejaVu-Bold": "DejaVuSans-Bold.ttf",
@@ -563,13 +584,23 @@ def part1(s: Story) -> None:
     s.h2("8.1 Wykres")
     s.bullets([
         "Złota linia — SMA 50 (średnia z 50 sesji, trend krótkoterminowy).",
-        "Czerwona linia — SMA 200 (średnia z 200 sesji, trend długoterminowy). Pojawia się dopiero, gdy "
+        "Fioletowa linia — SMA 200 (średnia z 200 sesji, trend długoterminowy). Pojawia się dopiero, gdy "
         "dostępna jest wystarczająca historia cen.",
         "Znaczniki na świecach — historia werdyktów narzędzia dla tej spółki: zielony trójkąt „KUP” "
         "(WARTO OBSERWOWAĆ), czerwony trójkąt „SZCZYT” lub „SPADEK” (odpowiednie kategorie UNIKAJ), "
         "pomarańczowe kółko „N” (NEUTRALNIE). Kategoria „BRAK SYGNAŁU” celowo nie ma znacznika — "
         "zaśmiecałaby wykres.",
     ])
+    s.p("<b>Jeśli spółka jest w Twoim portfelu</b>, wykres dorysowuje dodatkowo poziome linie referencyjne: "
+        "czerwoną przerywaną — aktualny stop-loss (własny albo z ATR, opisany w tytule linii), cyjanową "
+        "przerywaną — Twój własny cel cenowy (jeśli go ustawiłeś), oraz szarą kropkowaną — średnią cenę "
+        "zakupu. Pod wykresem pojawia się wtedy druga linijka legendy z dokładnymi wartościami i skrótem "
+        "powodów bieżącej rekomendacji pozycji. Dzięki temu widać od razu, DLACZEGO poleciał dany alert "
+        "cenowy (rozdział 16) — świeca leżąca poniżej czerwonej linii to właśnie przebity stop-loss.")
+    s.callout("tip",
+              "Każdy z tych trzech poziomów (stop, cel, świece wzrostowe/„KUP”) ma celowo INNY kolor niż "
+              "reszta wykresu — stop-loss dzielił wcześniej barwę z SMA 200, a cel z wykupionymi świecami "
+              "i znacznikiem „KUP”, przez co linie zlewały się ze sobą.")
     s.h2("8.2 Panel analizy (pod wykresem)")
     s.table(["Sekcja", "Zawartość"], [
         ["Przycisk odświeżania", "„Odśwież tę spółkę (ceny, sentyment, newsy)” — pobiera świeże dane tylko dla "
@@ -752,7 +783,13 @@ def part2(s: Story) -> None:
         ["BRAK DANYCH", "Spółka nie została jeszcze przeanalizowana (np. dopiero co dodana)."],
     ], [30, 70])
     s.p("Pod etykietą wypisane są powody rekomendacji, w tym uwaga o zbliżających się wynikach kwartalnych "
-        "(rozdział 11), jeśli dotyczy.")
+        "(rozdział 11), jeśli dotyczy. Najechanie na kolorową pieczątkę rekomendacji pokazuje te same powody "
+        "w podpowiedzi (tooltip), bez rozwijania karty.")
+    s.p("Każda karta pokazuje też <b>aktywny stop-loss i cel</b> — nie tylko wtedy, gdy ustawiłeś własny, ale "
+        "zawsze: własny, jeśli go podałeś, w przeciwnym razie sugerowany z ATR (z etykietą, które to źródło). "
+        "To ta sama wartość, której pilnują alerty cenowe (rozdział 16) i która jest rysowana jako linia na "
+        "wykresie (rozdział 8.1) — dzięki temu nie trzeba zgadywać, przy jakiej cenie dokładnie coś się "
+        "wydarzy.")
     s.callout("important",
               "Rekomendacje portfelowe to proste, przejrzyste reguły łączące cenę zakupu, bieżącą cenę i "
               "sygnał techniczny — nie uwzględniają Twojej sytuacji podatkowej, kosztów transakcyjnych ani "
@@ -848,24 +885,43 @@ def part2(s: Story) -> None:
         f"{c('portfolio.benchmark')}.")
     s.callout("note",
               "Porównanie dotyczy HIPOTETYCZNEGO portfela o obecnych, stałych wagach na wspólnej historii "
-              "notowań — nie Twojej faktycznej krzywej kapitału. Krzywa z zakładki Portfel zawiera Twoje wpłaty "
-              "i sprzedaże (kupno kolejnej akcji podnosi jej wartość bez żadnego zysku), a dashboard nie zapisuje "
-              "przepływów gotówki, więc nie da się z niej uczciwie policzyć stopy zwrotu do porównania z "
-              "indeksem. Alfa i beta z jednego roku mają duży błąd statystyczny i niekoniecznie utrzymają się "
-              "w przyszłości.")
+              "notowań — nie Twojej faktycznej krzywej kapitału (surowy widok „Wartość” w rozdziale 14.4; "
+              "widok „Zwrot (TWR)” tam obok już JEST Twoją faktyczną historią, ale to osobna, nowsza "
+              "funkcja — nie ta sama liczba co tutaj). Alfa i beta z jednego roku mają duży błąd "
+              "statystyczny i niekoniecznie utrzymają się w przyszłości.")
     s.h2("14.4 Krzywa kapitału")
+    s.p("Przełącznik nad wykresem ma dwa wymiary: którą walutę pokazać („Łącznie” — wszystkie waluty "
+        "przeliczone na walutę bazową kursem z momentu danego cyklu, albo osobno każdą natywną walutę) "
+        "oraz który WIDOK narysować — „Wartość” albo „Zwrot (TWR)”.")
+    s.h2("14.4.1 Widok „Wartość”")
     s.p("Wykres liniowy pokazujący, jak zmieniała się wartość Twojego portfela w czasie (linia złota) na "
         "tle zainwestowanego kosztu (linia przerywana szara). Punkt zapisywany jest przy każdym pełnym "
-        "cyklu analizy, a na wykresie widać jeden punkt na dzień. Przełącznik nad wykresem pozwala wybrać "
-        "widok „Łącznie” (wszystkie waluty przeliczone na walutę bazową kursem z momentu danego cyklu) "
-        "albo osobno każdą natywną walutę.")
+        "cyklu analizy, a na wykresie widać jeden punkt na dzień.")
     s.p("Etykieta nad wykresem pokazuje maksymalne historyczne obsunięcie kapitału (drawdown) — o ile "
         "procent portfel spadł od swojego dotychczasowego szczytu, wraz z datami szczytu i dołka, oraz "
         "bieżące obsunięcie, jeśli portfel akurat jest poniżej swojego historycznego maksimum.")
+    s.callout("warn",
+              "Dokupienie akcji PODBIJA tę linię bez żadnego realnego zysku, a sprzedaż ją ZANIŻA — to "
+              "surowa wartość i koszt, nie stopa zwrotu. Do uczciwej oceny „czy zarabiam”, przełącz się na "
+              "widok „Zwrot (TWR)” obok.")
+    s.h2("14.4.2 Widok „Zwrot (TWR)”")
+    s.p("Prawdziwy, skumulowany zwrot z inwestycji (jedna złota linia, start = 100) — w przeciwieństwie do "
+        "widoku „Wartość”, dokupienie lub sprzedaż pozycji NIE podbija ani nie zaniża tej liczby. Etykieta "
+        "nad wykresem pokazuje łączny zwrot procentowy za cały widoczny okres.")
+    s.p("Liczone metodą Modified Dietz: między każdą parą kolejnych zdjęć krzywej narzędzie sprawdza, ile "
+        "dokupiłeś lub sprzedałeś w tym okresie (na bazie dokładnych dat i kwot transakcji, które i tak już "
+        "są zapisane w portfelu), waży ten przepływ liczbą dni, przez którą „pracował” w danym oknie, i "
+        "liczy stąd realny zwrot okresu. Zwroty kolejnych okresów są następnie składane geometrycznie w "
+        "jeden skumulowany wskaźnik.")
+    s.callout("note",
+              "Dla widoku „Łącznie” przepływy w walutach obcych są przeliczane przybliżonym kursem "
+              "rynkowym z dnia transakcji (nie oficjalnym kursem NBP — to ocena wydajności portfela, nie "
+              "rozliczenie podatkowe, więc precyzja NBP nie jest tu potrzebna). Transakcja bez dostępnego "
+              "kursu jest pomijana w wyliczeniu tego jednego okresu, zamiast psuć cały wynik.")
     s.callout("tip",
-              "Krzywa kapitału potrzebuje punktów z co najmniej dwóch RÓŻNYCH dni, żeby narysować linię — "
-              "kilka cykli tego samego dnia to na wykresie jeden punkt. Jeśli dashboard działa od "
-              "niedawna, wykres będzie pusty do następnego dnia — to nie błąd.")
+              "Oba widoki („Wartość” i „Zwrot”) potrzebują punktów z co najmniej dwóch RÓŻNYCH dni, żeby "
+              "narysować linię — kilka cykli tego samego dnia to na wykresie jeden punkt. Jeśli dashboard "
+              "działa od niedawna, wykres będzie pusty do następnego dnia — to nie błąd.")
 
     # ------------------------------------------------------------ 15
     s.h1("15. Zamknięte transakcje i podsumowanie podatkowe")
@@ -893,6 +949,15 @@ def part2(s: Story) -> None:
     s.callout("tip",
               "Rok podatkowy i kurs NBP zależą od daty sprzedaży. Przy przycisku „Sprzedaj” data to dzień "
               "kliknięcia — jeśli transakcję wykonałeś wcześniej, dokładniejsze daty da import z raportu XTB.")
+    s.h2("15.3 Eksport CSV")
+    s.p("Przycisk „Eksportuj CSV” przy nagłówku „Historia transakcji” pobiera WSZYSTKIE zamknięte "
+        "transakcje jako plik CSV gotowy do wklejenia we własny arkusz rozliczeniowy — ticker, liczbę "
+        "akcji, daty i ceny kupna/sprzedaży, walutę, zysk/stratę w walucie notowania, liczbę dni w "
+        "portfelu, notatkę, a dodatkowo kurs i przeliczony zysk/stratę w walucie bazowej (tym samym kursem "
+        "NBP co podsumowanie podatkowe z rozdziału 15.2 — obie liczby zawsze się zgadzają, bo liczy je "
+        "dokładnie ten sam kod). Plik używa średnika jako separatora (domyślny w polskich ustawieniach "
+        "Excela) i ma dopisany znacznik kodowania, żeby polskie znaki wyświetliły się poprawnie po "
+        "otwarciu.")
 
     # ------------------------------------------------------------ 16
     s.h1("16. Alerty cenowe i log na żywo")
@@ -911,6 +976,11 @@ def part2(s: Story) -> None:
     ], [30, 70])
     s.p("Ten sam alert nie jest powtarzany w kółko: po zgłoszeniu milczy, dopóki sytuacja się nie zmieni "
         "(np. cena wróci nad stop-loss), po czym ponowne przekroczenie wyśle go znowu.")
+    s.p("Pętla sprawdzająca ceny czeka pełen interwał PRZED pierwszym sprawdzeniem po starcie serwera (a "
+        "potem między kolejnymi), więc zaraz po zmianie stop-lossu/celu albo po restarcie dashboardu na "
+        "wynik trzeba by czekać do 3 minut. Przycisk „Sprawdź alerty teraz” (z ikoną dzwonka; zakładka "
+        "Portfel, „Ryzyko i ekspozycja”) uruchamia dokładnie tę samą logikę natychmiast, bez czekania na "
+        "najbliższy tick pętli.")
     s.h2("16.2 Log na żywo")
     s.p("To zwijana szufladka na dole ekranu — kliknij jej nagłówek, żeby ją rozwinąć lub zwinąć; stan "
         "jest zapamiętywany między sesjami. Widać w niej strumień zdarzeń z bieżącej i poprzednich analiz "
@@ -919,10 +989,34 @@ def part2(s: Story) -> None:
         "AT_TOP/SHARP_DECLINE dla spółek z Twojego portfela. Kolory linii: biały — informacja, "
         "bursztynowy — ostrzeżenie, czerwony — błąd, zielony — sukces. Log jest pierwszym miejscem, do "
         "którego warto zajrzeć, gdy coś nie działa (np. nieprawidłowy ticker).")
+    s.bullets([
+        "Gdy szufladka jest ZWINIĘTA, każdy alert (rozpoznawany po symbolu dzwonka) podbija czerwoną, "
+        "pulsującą odznakę z licznikiem na przycisku szufladki — inaczej alert mógłby przejść zupełnie "
+        "niezauważony. Odznaka znika po rozwinięciu szufladki.",
+        "Linie alertów DOTYCZĄCE konkretnej spółki są klikalne — klik otwiera od razu wykres tej spółki "
+        "(rozdział 8), z narysowanymi liniami stop-lossu i celu (rozdział 8.1), więc widać dosłownie, "
+        "DLACZEGO alert poleciał.",
+    ])
+    s.h2("16.3 Powiadomienia Discord (opcjonalnie)")
+    s.p("Dashboard NIE wysyła natywnych powiadomień systemowych przeglądarki (funkcja ta została usunięta "
+        "po tym, jak okazała się niedziałająca w niektórych przeglądarkach) — ale odznaka na szufladce "
+        "(rozdział 16.2) działa tylko wtedy, gdy karta z dashboardem jest w ogóle otwarta. Żeby dostać "
+        "alert także wtedy, gdy dashboard jest zamknięty, można podpiąć webhook Discorda.")
+    s.steps([
+        "Na serwerze Discord: Ustawienia serwera → Integracje → Webhooki → Nowy webhook, skopiuj URL "
+        "(nie trzeba zakładać bota ani niczego autoryzować z poziomu tej aplikacji).",
+        f"W {c('config.yaml')} ustaw {c('notifications.enabled: true')} i wklej URL do "
+        f"{c('notifications.discord_webhook_url')}.",
+        "Zrestartuj serwer dashboardu.",
+    ])
+    s.p("Przycisk „Testuj Discord” (z ikoną probówki), obok „Sprawdź alerty teraz” w zakładce Portfel, "
+        "wysyła jedną testową wiadomość — pozwala od razu sprawdzić, czy webhook działa, bez czekania na "
+        "prawdziwy alert. Wiadomości na Discordzie są kolorowane tak samo jak w aplikacji (czerwony "
+        "stop-loss, zielony/cyjan cel).")
     s.callout("note",
-              "Dashboard NIE wysyła natywnych powiadomień systemowych przeglądarki (funkcja ta została "
-              "usunięta po tym, jak okazała się niedziałająca w niektórych przeglądarkach) — wszystkie "
-              "alerty trafiają wyłącznie do logu na żywo, który warto mieć rozwinięty w tle.")
+              "Wyłączone domyślnie ({}). Zła konfiguracja (pusty albo nieprawidłowy URL) nigdy nie "
+              "przerywa działania samych alertów w aplikacji — najwyżej powiadomienie na Discordzie się "
+              "nie wyśle, o czym poinformuje log serwera.".format(c("notifications.enabled: false")))
 
 
 def part3(s: Story) -> None:
@@ -1104,6 +1198,8 @@ def part3(s: Story) -> None:
                                                       "samej spółki."],
         ["web.price_alert_interval_seconds", "180", "Co ile sekund sprawdzać samą cenę pozycji "
                                                     "(0 = alerty wyłączone)."],
+        ["notifications.enabled / discord_webhook_url", "false / brak", "Powiadomienia o alertach cenowych "
+                                                                        "na Discordzie (rozdział 16.3)."],
         ["portfolio.base_currency", "PLN", "Waluta bazowa podsumowania łącznego, krzywej kapitału i "
                                            "statystyk portfela."],
         ["portfolio.risk_free_rate_pct", "0.0", "Stopa wolna od ryzyka (% rocznie) we współczynniku Sharpe’a i w alfie."],
@@ -1179,6 +1275,13 @@ def part3(s: Story) -> None:
         ["3.2", "Wrzesień 2026", "Automatyczne zastępcze źródło benchmarku (np. Stooq dla ^WIG20), gdy główne "
                                  "źródło jest niedostępne w Yahoo Finance — opisane w rozdziałach 6.3, 21 i 22 "
                                  "(nowy parametr technical.benchmark_fallbacks)."],
+        ["3.3", "Wrzesień 2026", "Eksport CSV zamkniętych transakcji (15.3). Prawdziwa (TWR) krzywa kapitału "
+                                 "jako drugi widok obok surowej wartości (14.4.2, metoda Modified Dietz). "
+                                 "Stop-loss/cel zawsze widoczne na kartach portfela (12.5) i narysowane jako "
+                                 "linie na wykresie spółki (8.1, z nowymi, nienakładającymi się kolorami: SMA "
+                                 "200 fioletowa, cel cyjanowy). Przycisk ręcznego sprawdzenia alertów i odznaka "
+                                 "z licznikiem na szufladce logu, klikalne linie alertów (16.1–16.2). Nowy "
+                                 "rozdział 16.3: opcjonalne powiadomienia o alertach na Discordzie (webhook)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
