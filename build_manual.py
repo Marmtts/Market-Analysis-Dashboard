@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.11"
+VERSION = "3.12"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -949,6 +949,23 @@ def part2(s: Story) -> None:
               "wpływu zmian kursów walut. Bardzo świeże spółki (mniej niż ok. 60 wspólnych sesji z resztą "
               "portfela) uniemożliwiają policzenie statystyk — panel poinformuje wtedy o powodzie. "
               "Przeszłość nie gwarantuje przyszłości.")
+
+    s.h2("14.2.1 Rebalancing")
+    s.p("Osobna sekcja „Rebalancing” pozwala ustawić DOCELOWĄ wagę (%) dla dowolnego tickera — również "
+        "takiego, którego jeszcze nie masz w portfelu (np. „chcę żeby ta spółka stanowiła 10% portfela”). "
+        "Formularz na górze sekcji przyjmuje ticker i cel w procentach; przycisk ✕ przy wierszu usuwa cel.")
+    s.p("Dla każdego tickera z ustawionym celem (i każdej dzisiejszej pozycji bez celu — wtedy cel to "
+        "domyślnie 0%) tabela pokazuje: aktualną wagę w portfelu (wg wartości rynkowej w walucie bazowej), "
+        "cel, odchylenie w punktach procentowych oraz sugestię — ile akcji dokupić albo sprzedać, żeby "
+        "wrócić w okolice celu. Wiersze z odchyleniem powyżej progu (domyślnie 3 pkt%, "
+        f"{c('portfolio.rebalance_tolerance_pct')} w config.yaml) są wyróżnione kolorem jako wymagające "
+        "uwagi; mniejsze odchylenia są normalne i nie wymagają działania.")
+    s.callout("note",
+              "Sugestia to proste przeliczenie (wartość docelowa − wartość bieżąca) / bieżąca cena — NIE "
+              "uwzględnia kosztów transakcyjnych, podatku należnego przy sprzedaży (rozdział 15.2) ani "
+              "minimalnych wielkości zleceń u brokera. To punkt wyjścia do własnej decyzji, nie gotowe "
+              "zlecenie. Dla tickera bez dzisiejszej pozycji cena pochodzi z ostatniego cyklu analizy — jeśli "
+              "spółka nie jest jeszcze na watchliście, sugestia liczby akcji nie pojawi się (brak ceny).")
     s.h2("14.3 Portfel a benchmark")
     s.p("Pod miarami ryzyka w panelu „Korelacja i zmienność” znajduje się sekcja „Portfel a benchmark”. "
         "Odpowiada na pytanie, które trudno ocenić na oko: <b>czy portfel bije rynek dzięki trafnemu wyborowi "
@@ -1210,8 +1227,8 @@ def part3(s: Story) -> None:
     ])
     s.h2("20.2 Eksport i import kopii zapasowej")
     s.p("W zakładce Portfel, w sekcji „Kopia zapasowa”, przycisk „Pobierz kopię (JSON)” zapisuje plik "
-        "z watchlistą, całym portfelem i dywidendami. Aby wczytać kopię (np. po przeniesieniu na nowy "
-        "komputer), wybierz plik i kliknij „Wczytaj kopię”.")
+        "z watchlistą, całym portfelem, dywidendami i celami alokacji. Aby wczytać kopię (np. po "
+        "przeniesieniu na nowy komputer), wybierz plik i kliknij „Wczytaj kopię”.")
     s.table(["Wchodzi do kopii", "NIE wchodzi do kopii"], [
         ["Watchlista (ticker, nazwa, symbol XTB).", "Konfiguracja config.yaml (przenieś osobno)."],
         ["Otwarte i zamknięte pozycje portfela wraz z notatkami i walutą.", "Historia werdyktów i wykresy "
@@ -1220,9 +1237,11 @@ def part3(s: Story) -> None:
         ["Notatki do pozycji (razem ze znacznikami importu XTB).",
          "Wyniki analizy i pamięć podręczna newsów/kursów (odbudują się automatycznie)."],
         ["Dywidendy (rozdział 12.6) — kwota, waluta, data, podatek u źródła.", ""],
+        ["Cele alokacji do rebalancingu (rozdział 14.2.1).", ""],
     ], [50, 50])
     s.bullets([
-        "Wczytanie jest bezpieczne do powtarzania: identyczne pozycje, spółki i dywidendy są pomijane, więc "
+        "Wczytanie jest bezpieczne do powtarzania: identyczne pozycje, spółki i dywidendy są pomijane (cele "
+        "alokacji się nadpisują — to jeden cel na ticker, więc nowsza wartość zawsze wygrywa), więc "
         "ponowny import tego samego pliku nie tworzy duplikatów.",
         "Niepoprawne wiersze są pomijane z ostrzeżeniem (widocznym w komunikacie i w logu), a reszta pliku "
         "jest wczytywana. Plik, który nie jest kopią XTB Trend Watch, zostanie odrzucony w całości. "
@@ -1315,6 +1334,9 @@ def part3(s: Story) -> None:
         ["portfolio.base_currency", "PLN", "Waluta bazowa podsumowania łącznego, krzywej kapitału i "
                                            "statystyk portfela."],
         ["portfolio.risk_free_rate_pct", "0.0", "Stopa wolna od ryzyka (% rocznie) we współczynniku Sharpe’a i w alfie."],
+        ["portfolio.rebalance_tolerance_pct", "3.0", "Próg odchylenia (pkt%) od celu alokacji, powyżej którego "
+                                                     "panel „Rebalancing” (14.2.1) oznacza pozycję jako "
+                                                     "wymagającą uwagi."],
         ["portfolio.benchmark", "brak (auto)", "Własny benchmark do porównania z portfelem (np. QQQ). Bez wartości "
                                               "wybierany wg dominującej waluty portfela."],
         ["effectiveness.min_signal_age_days", "14", "Ile dni musi minąć od werdyktu, by wliczyć go do "
@@ -1432,6 +1454,10 @@ def part3(s: Story) -> None:
                                   "15.2.1: pozycje IKE liczone są w podsumowaniu podatkowym osobno, z dwoma "
                                   "scenariuszami podatku (0 lub 19%), bo zależą od wieku przy wypłacie, "
                                   "którego narzędzie nie zna. Eksport CSV (15.3) ma nową kolumnę „Konto”."],
+        ["3.12", "Wrzesień 2026", "Nowy rozdział 14.2.1: rebalancing wg docelowych wag (%) per ticker — "
+                                  "ustawiasz cel dla dowolnej spółki (także jeszcze nieposiadanej), panel "
+                                  "pokazuje odchylenie od celu i sugestię kup/sprzedaj ile akcji. Kopia "
+                                  "zapasowa (20.2) obejmuje teraz też cele alokacji."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

@@ -271,6 +271,7 @@ portfolio:
   benchmark: null           # opcjonalnie: ticker benchmarku do porównania z portfelem (np. "SPY", "QQQ", "^WIG20");
                             # domyślnie wybierany wg dominującej waluty portfela z technical.benchmark_by_currency
   risk_free_rate_pct: 0.0   # stopa wolna od ryzyka (% rocznie) używana we współczynniku Sharpe'a w panelu "Korelacja i zmienność"
+  rebalance_tolerance_pct: 3.0   # odchylenie od celu (w pkt. proc.) powyżej którego panel "Rebalancing" oznacza pozycję jako wymagającą działania
 
 # -------------------------------------------------------------
 # Panel skuteczności narzędzia (na podstawie historii werdyktów)

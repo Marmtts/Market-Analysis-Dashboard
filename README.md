@@ -72,6 +72,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Panel „Korelacja i zmienność”: roczna zmienność, Sharpe, maks. obsunięcie,
   macierz korelacji i współczynnik dywersyfikacji dla obecnych wag pozycji —
   pokazuje, czy kilka spółek to w praktyce jeden zakład (np. sektor AI/tech).
+- Rebalancing: opcjonalny cel wagi (%) per ticker (także dla spółki, której
+  jeszcze nie masz w portfelu), panel pokazuje odchylenie od celu i sugestię
+  kup/sprzedaj ile akcji, żeby wrócić w okolice celu — czysto orientacyjne
+  wyliczenie, bez kosztów transakcyjnych i podatku przy sprzedaży.
 - Porównanie portfela z benchmarkiem (SPY / WIG20 / własny): zwrot, beta,
   alfa, wychwyt wzrostów i spadków oraz wykres — odpowiada na pytanie, czy
   wynik to selekcja spółek, czy po prostu ekspozycja na rynek.
@@ -328,7 +332,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.11)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.12)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -358,7 +362,7 @@ xtb_trend_watch/
     ├── calibration_report.py          # (badawcze) kalibracja sentymentu LLM
     ├── daily_aggregate_calibration.py # (badawcze) jw., sentyment zagregowany dziennie
     ├── backfill_history.py     # symulacja przeszłych cykli technicznych na historii cen
-    ├── report.py                # scoring, kategorie, ryzyko i statystyki portfela (korelacje, Sharpe), podatki, dywidendy, koncentracja sektorowa
+    ├── report.py                # scoring, kategorie, ryzyko i statystyki portfela (korelacje, Sharpe), podatki, dywidendy, rebalancing, koncentracja sektorowa
     ├── xtb_import.py            # import pozycji z raportu XTB (.xlsx)
     ├── json_utils.py            # sanityzacja NaN/Infinity przed serializacją JSON
     ├── db.py                    # SQLite: watchlist, portfolio, cache, historia, skuteczność, kopia zapasowa
@@ -369,7 +373,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.11). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.12). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -378,7 +382,7 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Dziewięć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
+Dziesięć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
 zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
@@ -391,12 +395,19 @@ analogicznie do pola przy dodawaniu), śledzenie dywidend (sekcja 1
 powyżej — przychód brutto/netto per wypłata, import z raportu XTB albo
 ręczne dodawanie), kalendarz makro (sekcja 1 powyżej — FOMC/RPP/CPI,
 `config.yaml` → `macro_calendar`), heatmapa watchlisty (przycisk „🔥
-Heatmapa” obok listy) i flaga „konto IKE” per pozycja (sekcja 1 powyżej —
+Heatmapa” obok listy), flaga „konto IKE” per pozycja (sekcja 1 powyżej —
 rozpoznawana automatycznie z importu XTB albo ustawiana ręcznie; podatek
 liczony jako dwa scenariusze, bo zależy od wieku przy wypłacie, którego
-narzędzie nie zna). Szczegóły w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
+narzędzie nie zna) i rebalancing wg docelowych wag per ticker (sekcja 1
+powyżej). Szczegóły w `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`.
+Aktualna lista:
 
+- Pomocnik „tax-loss harvesting” — polskie prawo pozwala odliczyć straty
+  kapitałowe od zysków w tym samym roku podatkowym (i przenosić straty do
+  5 lat wstecz); dashboard dziś tego nie liczy, mimo że ma już wszystkie
+  potrzebne dane (pozycje na niezrealizowanej stracie, panel podatkowy).
+- Prosty kalkulator FIRE / projekcja wartości IKE do wieku emerytalnego —
+  naturalne dopełnienie flagi konta IKE (sekcja 1).
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
   stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.

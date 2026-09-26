@@ -312,6 +312,10 @@ html, body {
 
 /* ---------------- Add company form ---------------- */
 .add-form { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.9rem; }
+.add-form--inline { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.add-form--inline input { width: auto; flex: 1 1 160px; }
+.add-form--inline input#targetPct { flex: 0 1 90px; }
+.add-form--inline .btn { width: auto; margin-top: 0; }
 .add-form input {
   background: var(--bg);
   border: 1px solid var(--border-bright);

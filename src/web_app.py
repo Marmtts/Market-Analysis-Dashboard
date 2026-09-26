@@ -63,6 +63,7 @@ from src.report import (
     build_closed_trades_export_rows,
     compute_twr_curve, prepare_cash_flows_for_currency,
     compute_dividend_summary,
+    compute_rebalancing_suggestions, DEFAULT_REBALANCE_TOLERANCE_PCT,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -788,6 +789,69 @@ async def api_get_portfolio_risk():
             "skipped_currencies": sorted(skipped),
         },
     })
+
+
+class TargetAllocationRequest(BaseModel):
+    ticker: str
+    target_weight_pct: float
+
+
+@app.get("/api/portfolio/rebalancing")
+async def api_get_rebalancing():
+    enriched = _get_enriched_open_positions()
+    base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
+    combined_positions, _ = _build_combined_portfolio_view(enriched, base_currency)
+    targets = db.get_target_allocations()
+
+    # Dla tickerów z ustawionym celem, ale bez dzisiejszej pozycji, potrzebny
+    # jest jakiś punkt odniesienia ceny - bierzemy ostatnią znaną cenę z cache'u
+    # wyników i przeliczamy na walutę bazową dzisiejszym kursem (ten sam
+    # kompromis co reszta widoków łącznych portfela - orientacyjny podgląd,
+    # nie kurs transakcyjny).
+    cached = db.load_results_cache() or {}
+    results_by_ticker = {
+        r["ticker"]: r for r in (cached.get("results") or []) + (cached.get("discovered_results") or [])
+    }
+    price_lookup: dict[str, dict] = {}
+    held_tickers = {p["ticker"] for p in combined_positions}
+    for ticker in targets:
+        if ticker in held_tickers:
+            continue
+        r = results_by_ticker.get(ticker)
+        if not r:
+            continue
+        metrics = r.get("technical", {}).get("metrics", {})
+        price, currency = metrics.get("last_price"), metrics.get("currency") or "USD"
+        if price is None:
+            continue
+        rate = get_fx_rate(currency, base_currency)
+        if rate is None:
+            continue
+        price_lookup[ticker] = {"price": price * rate, "currency": base_currency}
+
+    tolerance_pct = _cfg.get("portfolio", {}).get("rebalance_tolerance_pct", DEFAULT_REBALANCE_TOLERANCE_PCT)
+    result = compute_rebalancing_suggestions(combined_positions, targets, price_lookup, tolerance_pct)
+    result["base_currency"] = base_currency
+    return sanitize_for_json(result)
+
+
+@app.post("/api/portfolio/targets")
+async def api_set_target_allocation(req: TargetAllocationRequest):
+    ticker = req.ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Podaj ticker.")
+    if req.target_weight_pct < 0 or req.target_weight_pct > 100:
+        raise HTTPException(status_code=400, detail="Docelowa waga musi być w przedziale 0-100%.")
+    db.set_target_allocation(ticker, req.target_weight_pct)
+    return {"status": "ok"}
+
+
+@app.delete("/api/portfolio/targets/{ticker}")
+async def api_delete_target_allocation(ticker: str):
+    ok = db.delete_target_allocation(ticker)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Nie znaleziono celu alokacji dla tego tickera.")
+    return {"status": "ok"}
 
 
 def _pick_portfolio_benchmark(combined_positions: list[dict]) -> str:

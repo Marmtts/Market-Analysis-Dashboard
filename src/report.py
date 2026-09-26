@@ -610,6 +610,73 @@ def compute_portfolio_sector_exposure(open_positions_evaluated: list[dict],
     exposure.sort(key=lambda x: -x["pct_of_portfolio"])
     return exposure
 
+
+DEFAULT_REBALANCE_TOLERANCE_PCT = 3.0
+
+
+def compute_rebalancing_suggestions(open_positions_evaluated: list[dict], targets: dict[str, float],
+                                     price_lookup: dict[str, dict] | None = None,
+                                     tolerance_pct: float = DEFAULT_REBALANCE_TOLERANCE_PCT) -> dict:
+    """Porównuje BIEŻĄCE wagi pozycji (wg wartości rynkowej w walucie bazowej,
+    tak jak w panelu ryzyka/ekspozycji sektorowej) z docelowymi wagami
+    ustawionymi ręcznie per ticker i sugeruje, ile akcji dokupić/sprzedać,
+    żeby wrócić w okolice celu.
+
+    price_lookup - opcjonalny słownik {ticker: {"price": ..., "currency": ...}}
+    W WALUCIE BAZOWEJ, używany TYLKO dla tickerów z ustawionym celem, ale bez
+    aktualnej pozycji (open_positions_evaluated ich nie ma) - inaczej nie da
+    się policzyć sugerowanej liczby akcji dla "chcę zacząć nową pozycję".
+
+    To proste, matematyczne przybliżenie (wartość_docelowa − wartość_bieżąca)
+    / cena - NIE uwzględnia kosztów transakcyjnych, podatku od zysków przy
+    sprzedaży ani minimalnych wielkości zleceń brokera. Czysto informacyjne."""
+    by_ticker: dict[str, dict] = {}
+    total_value = 0.0
+    for p in open_positions_evaluated:
+        ticker = p["ticker"]
+        value = p.get("market_value") or 0.0
+        total_value += value
+        bucket = by_ticker.setdefault(ticker, {"value": 0.0, "current_price": None})
+        bucket["value"] += value
+        if p.get("current_price") is not None:
+            bucket["current_price"] = p.get("current_price")
+
+    price_lookup = price_lookup or {}
+    all_tickers = set(by_ticker) | set(targets)
+    suggestions = []
+    for ticker in sorted(all_tickers):
+        b = by_ticker.get(ticker, {"value": 0.0, "current_price": None})
+        current_price = b["current_price"] or (price_lookup.get(ticker) or {}).get("price")
+
+        current_pct = (b["value"] / total_value * 100) if total_value > 0 else 0.0
+        target_pct = targets.get(ticker, 0.0)
+        drift_pct = current_pct - target_pct
+        target_value = total_value * target_pct / 100
+        diff_value = target_value - b["value"]  # dodatnia = dokup, ujemna = sprzedaj
+
+        suggestions.append({
+            "ticker": ticker,
+            "current_pct": round(current_pct, 1),
+            "target_pct": round(target_pct, 1),
+            "drift_pct": round(drift_pct, 1),
+            "current_value": round(b["value"], 2),
+            "target_value": round(target_value, 2),
+            "diff_value": round(diff_value, 2),
+            "suggested_shares": round(diff_value / current_price, 4) if current_price else None,
+            "needs_action": abs(drift_pct) >= tolerance_pct,
+            "has_position": ticker in by_ticker,
+        })
+
+    suggestions.sort(key=lambda s: -abs(s["drift_pct"]))
+    return {
+        "total_value": round(total_value, 2),
+        "target_sum_pct": round(sum(targets.values()), 1),
+        "tolerance_pct": tolerance_pct,
+        "suggestions": suggestions,
+        "has_targets": bool(targets),
+    }
+
+
 def _convert_trade_to_base_currency(p: dict, base_currency: str) -> dict:
     """Przelicza JEDNĄ zamkniętą transakcję na walutę bazową - dla PLN
     oficjalnym kursem NBP z dnia poprzedzającego transakcję (art. 11a ustawy

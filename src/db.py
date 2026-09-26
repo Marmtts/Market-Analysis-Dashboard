@@ -134,6 +134,12 @@ CREATE TABLE IF NOT EXISTS fx_rate_cache (
     stored_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS target_allocations (
+    ticker TEXT PRIMARY KEY,
+    target_weight_pct REAL NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS dividends (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticker TEXT NOT NULL,
@@ -909,6 +915,32 @@ def delete_dividend(dividend_id: int) -> bool:
         return cur.rowcount > 0
 
 
+def set_target_allocation(ticker: str, target_weight_pct: float) -> None:
+    ticker = ticker.strip().upper()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO target_allocations (ticker, target_weight_pct, updated_at) "
+            "VALUES (?, ?, datetime('now')) "
+            "ON CONFLICT(ticker) DO UPDATE SET target_weight_pct = excluded.target_weight_pct, "
+            "updated_at = excluded.updated_at",
+            (ticker, target_weight_pct),
+        )
+        conn.commit()
+
+
+def get_target_allocations() -> dict[str, float]:
+    with _connect() as conn:
+        rows = conn.execute("SELECT ticker, target_weight_pct FROM target_allocations").fetchall()
+    return {r["ticker"]: r["target_weight_pct"] for r in rows}
+
+
+def delete_target_allocation(ticker: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM target_allocations WHERE ticker = ?", (ticker.strip().upper(),))
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def add_position_full(ticker: str, shares: float, buy_price: float, buy_date: str,
                        notes: str = "", status: str = "open",
                        sell_price: float | None = None, sell_date: str | None = None,
@@ -958,6 +990,9 @@ def export_backup() -> dict:
             "SELECT ticker, currency, pay_date, amount_gross, withholding_tax, source, notes "
             "FROM dividends ORDER BY id ASC"
         ).fetchall()]
+        targets = [dict(r) for r in conn.execute(
+            "SELECT ticker, target_weight_pct FROM target_allocations ORDER BY ticker ASC"
+        ).fetchall()]
     return {
         "app": BACKUP_APP_ID,
         "version": BACKUP_VERSION,
@@ -965,6 +1000,7 @@ def export_backup() -> dict:
         "watchlist": watchlist,
         "portfolio": portfolio,
         "dividends": dividends,
+        "target_allocations": targets,
     }
 
 
@@ -998,14 +1034,17 @@ def import_backup(data) -> dict:
     watchlist = data.get("watchlist") or []
     portfolio = data.get("portfolio") or []
     dividends = data.get("dividends") or []  # opcjonalne - brak w kopiach sprzed tej funkcji
-    if not isinstance(watchlist, list) or not isinstance(portfolio, list) or not isinstance(dividends, list):
+    targets = data.get("target_allocations") or []  # jw.
+    if not isinstance(watchlist, list) or not isinstance(portfolio, list) or not isinstance(dividends, list) \
+            or not isinstance(targets, list):
         raise ValueError("Uszkodzona struktura pliku kopii zapasowej.")
-    if len(watchlist) + len(portfolio) + len(dividends) > MAX_BACKUP_ROWS:
+    if len(watchlist) + len(portfolio) + len(dividends) + len(targets) > MAX_BACKUP_ROWS:
         raise ValueError(f"Zbyt duży plik kopii (limit {MAX_BACKUP_ROWS} wierszy).")
 
     result = {"watchlist_added": 0, "watchlist_skipped": 0,
               "positions_added": 0, "positions_skipped": 0,
-              "dividends_added": 0, "dividends_skipped": 0, "warnings": []}
+              "dividends_added": 0, "dividends_skipped": 0,
+              "targets_set": 0, "warnings": []}
 
     def warn(msg: str) -> None:
         if len(result["warnings"]) < 20:
@@ -1108,6 +1147,28 @@ def import_backup(data) -> dict:
                 (ticker, currency, pay_date, amount_gross, withholding_tax, source, notes),
             )
             result["dividends_added"] += 1
+
+        for i, t in enumerate(targets, 1):
+            if not isinstance(t, dict):
+                warn(f"Cele alokacji, wiersz {i}: nieprawidłowy format - pominięto.")
+                continue
+            ticker = str(t.get("ticker", "")).strip().upper()
+            pct = t.get("target_weight_pct")
+            try:
+                pct = float(pct)
+            except (TypeError, ValueError):
+                pct = None
+            if not ticker or pct is None or pct < 0:
+                warn(f"Cele alokacji, wiersz {i} ({ticker or '?'}): niepoprawne dane - pominięto.")
+                continue
+            conn.execute(
+                "INSERT INTO target_allocations (ticker, target_weight_pct, updated_at) "
+                "VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(ticker) DO UPDATE SET target_weight_pct = excluded.target_weight_pct, "
+                "updated_at = excluded.updated_at",
+                (ticker, pct),
+            )
+            result["targets_set"] += 1
 
         conn.commit()
     return result

@@ -1006,6 +1006,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
       loadPortfolio();
       loadPortfolioEquitySection();
       loadDividends();
+      loadRebalancing();
     }
     if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
   });
@@ -1139,6 +1140,86 @@ el("dividendForm").addEventListener("submit", async (e) => {
   } else {
     const b = await res.json().catch(() => ({}));
     alert(b.detail || "Nie udało się dodać dywidendy.");
+  }
+});
+
+// ---------------- Rebalancing (docelowe wagi per ticker) ----------------
+async function loadRebalancing() {
+  try {
+    const res = await fetch("/api/portfolio/rebalancing");
+    const data = await res.json();
+    renderRebalancing(data);
+  } catch (err) {
+    console.warn("Nie udało się pobrać danych rebalancingu:", err);
+  }
+}
+
+function renderRebalancing(data) {
+  const panel = el("rebalancingPanel");
+  if (!data || !data.has_targets) {
+    panel.innerHTML = `<p class="empty-state">⚖ Brak ustawionych celów alokacji — dodaj pierwszy w formularzu wyżej (np. „AAPL” → 15%), żeby zobaczyć odchylenie od celu i sugestie kup/sprzedaj.</p>`;
+    return;
+  }
+
+  const sumWarning = Math.abs(data.target_sum_pct - 100) > 0.5
+    ? `<p class="detail-disclaimer">⚠️ Suma celów to ${data.target_sum_pct}%, nie 100% — odchylenia poniżej wciąż są liczone poprawnie względem KAŻDEGO celu z osobna, ale całość nie sumuje się do pełnego portfela.</p>`
+    : "";
+
+  let html = `<div class="dividend-table-wrap"><table class="data-table">
+    <thead><tr>
+      <th>Spółka</th><th>Aktualnie</th><th>Cel</th><th>Odchylenie</th><th>Sugestia</th><th></th>
+    </tr></thead><tbody>`;
+
+  data.suggestions.forEach((s) => {
+    const driftCls = s.needs_action ? (s.drift_pct > 0 ? "negative" : "positive") : "";
+    let action = "—";
+    if (s.needs_action && s.suggested_shares != null) {
+      action = s.suggested_shares > 0
+        ? `kup ~${Math.abs(s.suggested_shares).toFixed(2)} szt. (${fmtMoney(Math.abs(s.diff_value), data.base_currency)})`
+        : `sprzedaj ~${Math.abs(s.suggested_shares).toFixed(2)} szt. (${fmtMoney(Math.abs(s.diff_value), data.base_currency)})`;
+    } else if (s.needs_action) {
+      action = `${s.diff_value >= 0 ? "dokup" : "sprzedaj"} ${fmtMoney(Math.abs(s.diff_value), data.base_currency)} (brak ceny)`;
+    }
+    html += `<tr>
+      <td>${escapeHtml(s.ticker)}${!s.has_position ? ` <span class="ike-badge" title="Brak dziś pozycji w portfelu">brak</span>` : ""}</td>
+      <td>${s.current_pct}%</td>
+      <td>${s.target_pct}%</td>
+      <td class="${driftCls}">${s.drift_pct >= 0 ? "+" : ""}${s.drift_pct} pkt%</td>
+      <td>${escapeHtml(action)}</td>
+      <td><button class="watchlist__remove" title="Usuń cel" data-ticker="${escapeHtml(s.ticker)}">✕</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>${sumWarning}
+    <p class="detail-disclaimer">⚖ Sugestie to proste przeliczenie (wartość docelowa − wartość bieżąca) / cena — nie uwzględniają kosztów transakcyjnych, podatku przy sprzedaży ani minimalnych wielkości zleceń brokera. Próg odchylenia: ${data.tolerance_pct} pkt% (portfolio.rebalance_tolerance_pct w config.yaml).</p>`;
+
+  panel.innerHTML = html;
+  panel.querySelectorAll(".watchlist__remove").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await fetch(`/api/portfolio/targets/${encodeURIComponent(btn.dataset.ticker)}`, { method: "DELETE" });
+      await loadRebalancing();
+    });
+  });
+}
+
+el("targetForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ticker = el("targetTicker").value.trim();
+  const pct = parseFloat(el("targetPct").value);
+  if (!ticker || isNaN(pct) || pct < 0 || pct > 100) {
+    alert("Podaj ticker i cel w przedziale 0-100%.");
+    return;
+  }
+  const res = await fetch("/api/portfolio/targets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticker, target_weight_pct: pct }),
+  });
+  if (res.ok) {
+    e.target.reset();
+    await loadRebalancing();
+  } else {
+    const b = await res.json().catch(() => ({}));
+    alert(b.detail || "Nie udało się ustawić celu.");
   }
 });
 
@@ -2563,7 +2644,7 @@ el("backupImportBtn").addEventListener("click", async () => {
       alert(data.detail || "Nie udało się wczytać kopii.");
       return;
     }
-    const msg = `Wczytano: ${data.positions_added} pozycji, ${data.watchlist_added} spółek i ${data.dividends_added ?? 0} dywidend. ` +
+    const msg = `Wczytano: ${data.positions_added} pozycji, ${data.watchlist_added} spółek, ${data.dividends_added ?? 0} dywidend i ${data.targets_set ?? 0} celów alokacji. ` +
       `Pominięto duplikaty: ${data.positions_skipped} pozycji, ${data.watchlist_skipped} spółek, ${data.dividends_skipped ?? 0} dywidend.`;
     appendLog({ level: "success", message: `📤 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📤 ${w}` }));
@@ -2573,6 +2654,7 @@ el("backupImportBtn").addEventListener("click", async () => {
     await loadPortfolio();
     await loadClosedPortfolio();
     await loadDividends();
+    await loadRebalancing();
   } catch (err) {
     alert("Błąd połączenia podczas wczytywania kopii.");
   } finally {

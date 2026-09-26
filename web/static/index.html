@@ -311,7 +311,7 @@
       </label>
       <input type="file" id="backupImportFile" accept=".json,application/json" class="file-input-hidden">
       <button class="btn btn--secondary" id="backupImportBtn">📤 Wczytaj kopię</button>
-      <p class="detail-disclaimer">Kopia zawiera watchlistę, cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel) oraz dywidendy. Wczytanie jest bezpieczne do powtarzania — identyczne pozycje, spółki i dywidendy są pomijane. Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
+      <p class="detail-disclaimer">Kopia zawiera watchlistę, cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel), dywidendy oraz cele alokacji (rebalancing). Wczytanie jest bezpieczne do powtarzania — identyczne pozycje, spółki i dywidendy są pomijane (cele alokacji się nadpisują). Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
       </div>
     </section>
   </aside>
@@ -337,6 +337,20 @@
       <span class="section-header__meta" id="portfolioStatsMeta"></span>
     </div>
     <div class="section-card" id="portfolioStatsPanel"></div>
+    </div>
+
+    <div class="dash-section" data-section-id="portfolio-rebalancing">
+    <div class="section-header">
+      <h2><span class="section-header__icon">⚖</span>Rebalancing</h2>
+    </div>
+    <div class="section-card">
+      <form class="add-form add-form--inline" id="targetForm">
+        <input type="text" id="targetTicker" placeholder="Ticker (np. AAPL)" required autocomplete="off">
+        <input type="number" id="targetPct" placeholder="Cel %" step="0.1" min="0" max="100" required>
+        <button type="submit" class="btn btn--secondary">+ Ustaw cel</button>
+      </form>
+      <div id="rebalancingPanel"></div>
+    </div>
     </div>
 
     <div class="dash-section" data-section-id="portfolio-equity">
