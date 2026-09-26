@@ -67,8 +67,8 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Alerty cenowe niezależne od pełnego cyklu (sprawdzanie samej ceny co
   kilka minut, bez angażowania LLM/newsów): poniżej stop-lossu (własnego
   albo z ATR), osiągnięcie ceny docelowej analityków i własnego celu.
-  Opcjonalnie wysyłane też na Discorda (webhook, `notifications` w
-  config.yaml) — niezależnie od tego, czy dashboard jest akurat otwarty.
+  Opcjonalnie wysyłane też na Discorda (webhook, sekcja 6) — niezależnie
+  od tego, czy dashboard jest akurat otwarty.
 
 **Dashboard i asystent:**
 - Pełny dashboard webowy (FastAPI + WebSocket) z trzema zakładkami
@@ -203,7 +203,32 @@ z prostego analizatora słownikowego.
 
 ---
 
-## 6. Mapowanie spółek na symbole brokera
+## 6. Powiadomienia Discord o alertach cenowych (opcjonalnie)
+
+Alerty cenowe (przebicie stop-lossu, osiągnięcie celu) zawsze trafiają do
+logu na żywo w dashboardzie — ale to działa tylko wtedy, gdy masz otwartą
+kartę przeglądarki. Żeby dostać powiadomienie także wtedy, gdy dashboard
+jest zamknięty, można podpiąć webhook Discorda:
+
+1. Na serwerze Discord: **Ustawienia serwera → Integracje → Webhooki →
+   Nowy webhook**, skopiuj URL (nie trzeba zakładać bota ani niczego
+   autoryzować z poziomu tej aplikacji).
+2. W `config.yaml`:
+   ```yaml
+   notifications:
+     enabled: true
+     discord_webhook_url: "wklejony-url-webhooka"
+   ```
+3. Zrestartuj serwer dashboardu.
+
+W zakładce Portfel → "Ryzyko i ekspozycja" jest przycisk **"🧪 Testuj
+Discord"** — wysyła jedną testową wiadomość, żeby od razu sprawdzić, czy
+webhook działa, bez czekania na prawdziwy alert. Domyślnie (`enabled: false`)
+funkcja jest wyłączona i nic się nie wysyła.
+
+---
+
+## 7. Mapowanie spółek na symbole brokera
 
 W `config.yaml` każda spółka ma dwa pola:
 ```yaml
@@ -216,7 +241,7 @@ Typowe sufiksy giełd dla tickerów spoza USA: `.WA` (Warszawa), `.DE`
 
 ---
 
-## 7. Ograniczenia (przeczytaj, zanim zaufasz wynikom)
+## 8. Ograniczenia (przeczytaj, zanim zaufasz wynikom)
 
 - To narzędzie analityczne, nie doradztwo inwestycyjne ani podatkowe —
   wszystkie decyzje i związane z nimi ryzyko leżą po stronie użytkownika.
@@ -246,7 +271,7 @@ Typowe sufiksy giełd dla tickerów spoza USA: `.WA` (Warszawa), `.DE`
 
 ---
 
-## 8. Struktura projektu
+## 9. Struktura projektu
 
 ```
 xtb_trend_watch/
@@ -271,6 +296,7 @@ xtb_trend_watch/
     ├── fundamentals.py         # P/E, wzrost, marże, cena docelowa, typ instrumentu (ETF/akcja), termin wyników
     ├── macro_context.py        # VIX, rentowność obligacji - filtr ryzyka
     ├── fx_rates.py             # kursy walut: bieżące, historyczne, oficjalne NBP
+    ├── notifications.py        # powiadomienia zewnętrzne o alertach cenowych (Discord webhook)
     ├── news_sources.py         # newsy bieżące (yfinance) + RSS makro
     ├── news_history.py         # newsy historyczne (Finnhub) - cache przyrostowy
     ├── llm_sentiment.py        # sentyment przez Ollama + fallback słownikowy
@@ -300,7 +326,7 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ---
 
-## 9. Możliwe dalsze rozszerzenia
+## 10. Możliwe dalsze rozszerzenia
 
 - Prawdziwa (ważona czasem, TWR) krzywa kapitału na tle benchmarku —
   wymaga zapisywania przepływów gotówki (wpłat i wypłat), których snapshoty
