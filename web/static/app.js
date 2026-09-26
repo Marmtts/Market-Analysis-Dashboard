@@ -589,6 +589,28 @@ if (checkAlertsNowBtn) {
   });
 }
 
+// Testowa wiadomość na Discorda - weryfikuje webhook_url z config.yaml bez
+// czekania na prawdziwy alert cenowy (osobny endpoint, patrz web_app.py).
+const testDiscordBtn = el("testDiscordBtn");
+if (testDiscordBtn) {
+  testDiscordBtn.addEventListener("click", async () => {
+    testDiscordBtn.disabled = true;
+    const originalLabel = testDiscordBtn.textContent;
+    testDiscordBtn.textContent = "Wysyłam…";
+    try {
+      const res = await fetch("/api/notifications/test", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      appendLog({ level: "success", message: "🧪 Testowa wiadomość wysłana na Discorda - sprawdź kanał." });
+    } catch (err) {
+      appendLog({ level: "error", message: `🧪 Test Discorda nie powiódł się: ${String(err)}` });
+    } finally {
+      testDiscordBtn.disabled = false;
+      testDiscordBtn.textContent = originalLabel;
+    }
+  });
+}
+
 // ---------------- WebSocket ----------------
 function connectWebSocket() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";

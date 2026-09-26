@@ -67,6 +67,8 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Alerty cenowe niezależne od pełnego cyklu (sprawdzanie samej ceny co
   kilka minut, bez angażowania LLM/newsów): poniżej stop-lossu (własnego
   albo z ATR), osiągnięcie ceny docelowej analityków i własnego celu.
+  Opcjonalnie wysyłane też na Discorda (webhook, `notifications` w
+  config.yaml) — niezależnie od tego, czy dashboard jest akurat otwarty.
 
 **Dashboard i asystent:**
 - Pełny dashboard webowy (FastAPI + WebSocket) z trzema zakładkami

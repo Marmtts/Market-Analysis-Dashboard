@@ -202,6 +202,17 @@ web:
   price_alert_interval_seconds: 180     # co ile sekund sprawdzać TYLKO ceny pozycji portfela (0 = wyłączone)
 
 # -------------------------------------------------------------
+# Powiadomienia zewnętrzne o alertach cenowych (stop-loss/cel) - Discord.
+# Uzupełnienie dashboardu, nie zamiennik: alert nadal trafia do logu na
+# żywo i na WebSocket, niezależnie od tego ustawienia. Wyłączone domyślnie.
+# -------------------------------------------------------------
+notifications:
+  enabled: false
+  # Ustawienia serwera Discord -> Integracje -> Webhooki -> Nowy webhook -> kopiuj URL.
+  # Nie wymaga bota ani logowania z poziomu tej aplikacji.
+  discord_webhook_url: ""
+
+# -------------------------------------------------------------
 # Portfel - waluta bazowa do widoku łącznego (sumowanie wszystkich walut)
 # -------------------------------------------------------------
 portfolio:

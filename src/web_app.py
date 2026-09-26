@@ -67,6 +67,7 @@ from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
 from src.xtb_import import parse_xtb_report
 from src.fx_rates import get_fx_rate
+from src.notifications import notify_price_alerts, send_discord_alert
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("xtb_trend_watch.web_app")
@@ -482,6 +483,11 @@ def _check_price_alerts_blocking() -> list[dict]:
     _sent_price_alerts.difference_update(stale)
     _sent_price_alerts.update(active_alert_keys)
 
+    # Powiadomienia zewnętrzne (Discord) - ta sama, już zdeduplikowana lista
+    # co log/WebSocket, więc nie ma ryzyka zalania Discorda powtórkami tego
+    # samego alertu. Cicho nic nie robi, jeśli notifications.enabled=false.
+    notify_price_alerts(new_alerts, _cfg.get("notifications", {}))
+
     return new_alerts
 
 
@@ -520,6 +526,31 @@ async def api_check_alerts_now():
     for alert in alerts:
         await manager.broadcast({**alert, "type": "price_alert", "alert_type": alert["type"]})
     return {"alerts_sent": len(alerts)}
+
+
+@app.post("/api/notifications/test")
+async def api_test_notification():
+    """Wysyła JEDNĄ testową wiadomość na skonfigurowany kanał zewnętrzny
+    (Discord), żeby zweryfikować webhook_url bez czekania na prawdziwy
+    alert cenowy. Nie przechodzi przez _check_price_alerts_blocking - to
+    celowo osobna, prostsza ścieżka."""
+    notif_cfg = _cfg.get("notifications", {})
+    webhook_url = notif_cfg.get("discord_webhook_url")
+    if not notif_cfg.get("enabled"):
+        raise HTTPException(status_code=400, detail="Powiadomienia są wyłączone (notifications.enabled: false w config.yaml).")
+    if not webhook_url:
+        raise HTTPException(status_code=400, detail="Brak discord_webhook_url w config.yaml.")
+
+    ok = await asyncio.to_thread(
+        send_discord_alert,
+        "XTB Trend Watch: test powiadomień",
+        "Jeśli to widzisz, webhook Discorda jest poprawnie skonfigurowany.",
+        "test",
+        webhook_url,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="Discord odrzucił wiadomość - sprawdź webhook_url i logi serwera.")
+    return {"sent": True}
 
 
 class AddCompanyRequest(BaseModel):

@@ -1521,6 +1521,12 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 .section-header__action:hover { border-color: var(--accent-gold); color: var(--accent-gold-bright); }
+/* Gdy dwa przyciski-pigułki siedzą w jednym nagłówku (Ryzyko i ekspozycja:
+   test Discorda + sprawdź alerty) - tylko PIERWSZY dostaje auto-margines
+   (odpycha całą parę do prawej), drugi zwykły odstęp, inaczej oba auto-
+   marginesy dzieliłyby między siebie wolną przestrzeń i rozjeżdżały się
+   nierówno zamiast trzymać się razem. */
+.section-header__action + .section-header__action { margin-left: 0.5rem; }
 .col-settings-btn:hover, .col-settings-btn[aria-expanded="true"] {
   border-color: var(--accent-gold);
   color: var(--accent-gold-bright);
