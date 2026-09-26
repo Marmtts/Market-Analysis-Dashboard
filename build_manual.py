@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.3"
+VERSION = "3.4"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -734,6 +734,17 @@ def part2(s: Story) -> None:
         "(rozdział 14) i na alerty cenowe (rozdział 16). Własny cel uruchamia ocenę „ROZWAŻ REALIZACJĘ "
         "ZYSKU” i osobny alert po jego osiągnięciu. Oba pola możesz w każdej chwili zmienić lub wyczyścić "
         "przez edycję pozycji.")
+    s.p("Formularz ma też opcjonalne pole <b>„Własny kurs wymiany”</b> — przydatne, jeśli kupujesz akcje "
+        "zagraniczne przez brokera, który dolicza własną marżę do kursu wymiany (np. XTB, ok. 0,5%), przez co "
+        "realny koszt zakupu w Twojej walucie bazowej jest inny niż wynikałoby z bieżącego kursu rynkowego. "
+        "Jeśli podasz tu rzeczywisty kurs zastosowany przez brokera, dashboard użyje go zamiast bieżącego "
+        "kursu rynkowego do przeliczenia kosztu TEJ pozycji na walutę bazową — w podsumowaniu łącznym "
+        "portfela (rozdział 13.1) i w krzywej kapitału TWR (rozdział 14.4.2). Puste pole nie zmienia "
+        "niczego — dashboard po prostu użyje bieżącego kursu, tak jak dotąd.")
+    s.callout("note",
+              "To pole dotyczy tylko przeliczenia na walutę bazową do celów poglądowych. Podsumowanie "
+              "podatkowe (rozdział 15.2) zawsze liczy oficjalnym kursem NBP z dnia transakcji, niezależnie od "
+              "tego pola — tak wymaga art. 11a ustawy o PIT.")
     s.h2("12.2 Grupowanie pozycji")
     s.p("Kilka transakcji na tej samej spółce (np. dokupowanie w różnych momentach) jest automatycznie "
         "zwijane w jedną kartę zbiorczą — widoczna jest łączna liczba akcji, średnia cena zakupu, "
@@ -769,6 +780,12 @@ def part2(s: Story) -> None:
         "zgadywana z sufiksu, a potem korygowana danymi z Yahoo przy pierwszym cyklu analizy.",
         "Przy nierozpoznanym sufiksie narzędzie zgłasza ostrzeżenie (także w logu na żywo) — zweryfikuj taki "
         "ticker i w razie potrzeby popraw go przyciskiem ✎.",
+        "Rzeczywisty kurs wymiany zastosowany przez brokera (razem z jego marżą) jest wyliczany automatycznie "
+        "z wartości w raporcie XTB i zapisywany przy każdej zaimportowanej pozycji — nie trzeba wpisywać go "
+        "ręcznie (pole z rozdziału 12.1 służy do pozycji dodawanych ręcznie). Jeśli plik importujesz ponownie "
+        "(np. nowszy eksport) i część pozycji była już wcześniej dodana ręcznie bez tego kursu, dashboard "
+        "dopisuje im go retrospektywnie, nie ruszając żadnych innych danych — po imporcie licznik takich "
+        "uzupełnień pokazuje się w komunikacie podsumowującym.",
     ])
     s.h2("12.5 Rekomendacja „trzymaj / sprzedaj”")
     s.p("Każda karta (i grupa) otrzymuje jedną z etykiet:")
@@ -813,10 +830,14 @@ def part2(s: Story) -> None:
         "zainwestowałeś.",
     ])
     s.callout("note",
-              "Przeliczenie na walutę bazową używa BIEŻĄCEGO kursu rynkowego (yfinance) w momencie każdego "
-              "cyklu analizy — to wystarczające do orientacyjnego podglądu portfela. Do rozliczeń "
-              "podatkowych używany jest osobno oficjalny kurs NBP (rozdział 15). Jeśli kursu jakiejś waluty "
-              "chwilowo nie da się pobrać, karta łączna pokazuje adnotację, że ta waluta została pominięta.")
+              "Bieżąca wartość pozycji jest zawsze przeliczana BIEŻĄCYM kursem rynkowym (yfinance) w momencie "
+              "każdego cyklu analizy. Koszt zakupu (i tym samym wynik) natomiast używa rzeczywistego kursu "
+              "brokera, jeśli go znasz i podałeś (import z XTB — automatycznie, rozdział 12.4; pozycja dodana "
+              "ręcznie — opcjonalne pole z rozdziału 12.1) — w przeciwnym razie też bieżącego kursu "
+              "rynkowego, tak jak dotąd. To wystarczające do orientacyjnego podglądu portfela; do rozliczeń "
+              "podatkowych używany jest zawsze i wyłącznie oficjalny kurs NBP (rozdział 15). Jeśli kursu "
+              "jakiejś waluty chwilowo nie da się pobrać, karta łączna pokazuje adnotację, że ta waluta "
+              "została pominięta.")
 
     # ------------------------------------------------------------ 14
     s.h1("14. Ryzyko, korelacje, benchmark i krzywa kapitału")
@@ -1137,8 +1158,11 @@ def part3(s: Story) -> None:
         "sentymentu pojedynczego nagłówka (także uśredniona dziennie) nie wykazała związku z późniejszą "
         "zmianą ceny — traktuj ją jako kontekst do przeczytania, nie jako sygnał predykcyjny.",
         "<b>Dane spółek spoza głównych giełd USA bywają niepełne.</b> Newsy historyczne z Finnhub w darmowym "
-        "planie zwykle nie obejmują np. spółek z GPW — brak trendu 12-miesięcznego dla takich spółek jest "
-        "normalny, nie błędem.",
+        "planie zwykle nie obejmują np. spółek z GPW. Dla tickerów z sufiksem .WA narzędzie zamiast tego "
+        "buduje własny trend, dopisując przy każdym cyklu trafienia z ogólnego kanału RSS o GPW "
+        "(news.gpw_rss_url) do lokalnego cache'u — trend zacznie się jednak pojawiać dopiero od momentu "
+        "włączenia tej funkcji, nie wstecz, więc brak trendu przy świeżo dodanej spółce z GPW jest normalny, "
+        "nie błędem.",
         "<b>Cena docelowa analityków to zewnętrzna opinia rynkowa</b>, nie własna wycena narzędzia — "
         "analitycy też się mylą i bywają opóźnieni względem najnowszych wydarzeń. Analiza fundamentalna to "
         "szybki zestaw wskaźników, nie pełna wycena spółki (DCF).",
@@ -1189,6 +1213,8 @@ def part3(s: Story) -> None:
         ["news.use_historical_news / finnhub_api_key", "true / —",
          "Newsy historyczne z Finnhub. Bez prawidłowego klucza ustaw false, inaczej cykl marnuje czas na "
          "nieudane zapytania."],
+        ["news.gpw_rss_url", "Bankier.pl — Giełda", "Kanał RSS uzupełniający sentyment spółek z GPW "
+                                                    "(rozdział 21). Pusty string wyłącza to źródło."],
         ["llm.enabled / llm.model", "true / llama3.1:8b", "Włączenie lokalnego modelu i wybór modelu."],
         ["llm.chat_num_ctx", "8192", "Rozmiar kontekstu czatu (tokeny)."],
         ["discovery.enabled / cooldown_days / max_candidates", "true / 14 / 5",
@@ -1282,6 +1308,13 @@ def part3(s: Story) -> None:
                                  "200 fioletowa, cel cyjanowy). Przycisk ręcznego sprawdzenia alertów i odznaka "
                                  "z licznikiem na szufladce logu, klikalne linie alertów (16.1–16.2). Nowy "
                                  "rozdział 16.3: opcjonalne powiadomienia o alertach na Discordzie (webhook)."],
+        ["3.4", "Wrzesień 2026", "Uwzględnienie rzeczywistego kursu wymiany brokera (np. marża XTB) w "
+                                 "podsumowaniu łącznym portfela i krzywej TWR: opcjonalne pole przy ręcznym "
+                                 "dodawaniu pozycji (12.1) oraz automatyczne wyliczenie i retrospektywny "
+                                 "backfill przy imporcie z XTB (12.4); zaktualizowano opis podsumowania "
+                                 "łącznego (13.1). Alternatywne źródło sentymentu dla spółek z GPW: filtrowany "
+                                 "kanał RSS (news.gpw_rss_url) budujący własny trend 12-miesięczny w czasie, "
+                                 "zamiast trwałego braku danych przez 403 z Finnhuba (rozdziały 21, 22)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
