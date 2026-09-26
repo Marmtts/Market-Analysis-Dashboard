@@ -324,7 +324,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.9)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.10)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -365,7 +365,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.9). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.10). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).

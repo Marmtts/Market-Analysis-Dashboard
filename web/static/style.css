@@ -892,6 +892,22 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   transition: border-color 0.18s ease;
 }
 .detail-section:hover { border-color: var(--border-bright); }
+/* Bez tego kolejne .detail-section (częste - panel szczegółów spółki,
+   podsumowanie podatkowe, ten panel korelacji) stykały się krawędziami,
+   bo sam .detail-section nie ma marginesu, a nic go do tej pory nie dawało. */
+.detail-section + .detail-section { margin-top: 0.75rem; }
+
+/* Dwie węższe "kafelki" obok siebie zamiast pełnej szerokości - dziś używane
+   dla pary (Najsilniej skorelowane pary / Macierz korelacji) w panelu
+   Korelacja i zmienność, gdzie oba elementy są za wąskie treścią, żeby
+   uzasadniać zajmowanie całej szerokości karty. */
+.stats-tile-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+.stats-tile-row .detail-section { margin-top: 0; }
 .detail-summary {
   display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
   background: var(--bg-elevated-2);
@@ -1223,6 +1239,16 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   border-radius: var(--radius-lg); padding: 0.75rem 1rem; margin-bottom: 0.6rem;
   transition: border-color 0.18s ease, transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
+/* Wiele lat obok siebie zamiast w kolumnie (podsumowanie podatkowe, dywidendy) -
+   każda karta ma sporo pustego miejsca, więc na szerszym ekranie 2-3 obok
+   siebie czytają się dużo lepiej niż wieża jednokolumnowych kart. */
+.tax-year-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.tax-year-grid .tax-year-card { margin-bottom: 0; }
 .tax-year-card__header {
   display: flex; justify-content: space-between; align-items: baseline;
   margin-bottom: 0.5rem; font-family: var(--font-display); font-size: 1rem;

@@ -1052,7 +1052,8 @@ function renderDividendSummary(summary) {
       <div><span>Łącznie brutto</span><strong class="positive">+${summary.total_gross.toFixed(2)}</strong></div>
       <div><span>Podatek u źródła</span><strong class="negative">-${summary.total_wht.toFixed(2)}</strong></div>
       <div><span>Łącznie netto</span><strong class="positive">+${summary.total_net.toFixed(2)}</strong></div>
-    </div>`;
+    </div>
+    <div class="tax-year-grid">`;
 
   years.forEach((year) => {
     const y = summary.by_year[year];
@@ -1066,6 +1067,7 @@ function renderDividendSummary(summary) {
         </div>
       </div>`;
   });
+  html += `</div>`;
 
   if (summary.conversion_notes && summary.conversion_notes.length) {
     html += `<ul class="detail-list">${summary.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
@@ -2227,7 +2229,8 @@ function renderTaxSummary(data) {
   }
 
   let html = `<div class="detail-section">
-    <h4 class="detail-section__title">📊 Orientacyjne podsumowanie podatkowe (${escapeHtml(data.base_currency)})</h4>`;
+    <h4 class="detail-section__title">📊 Orientacyjne podsumowanie podatkowe (${escapeHtml(data.base_currency)})</h4>
+    <div class="tax-year-grid">`;
 
   years.forEach((year) => {
     const y = data.by_year[year];
@@ -2242,6 +2245,7 @@ function renderTaxSummary(data) {
         </div>
       </div>`;
   });
+  html += `</div>`;
 
   if (data.conversion_notes && data.conversion_notes.length) {
     html += `<ul class="detail-list">${data.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
@@ -2474,29 +2478,35 @@ function renderPortfolioStatistics(data) {
 
   html += benchmarkSectionHtml(data.benchmark_comparison);
 
-  if (data.top_pairs && data.top_pairs.length) {
-    html += `<div class="detail-section"><h4 class="detail-section__title">Najsilniej skorelowane pary</h4>`;
-    html += data.top_pairs.map((p) => `
-      <div class="eff-row">
-        <span class="eff-row__cat">${escapeHtml(p.a)} / ${escapeHtml(p.b)}</span>
-        <span class="eff-row__stat">${p.correlation}</span>
-      </div>`).join("");
-    html += `</div>`;
-  }
-
+  const hasPairs = data.top_pairs && data.top_pairs.length;
   const m = data.matrix;
-  if (m && m.tickers.length >= 2 && m.tickers.length <= 12) {
-    html += `<div class="detail-section"><h4 class="detail-section__title">Macierz korelacji</h4><div class="corr-wrap"><table class="corr-table"><thead><tr><th></th>`;
-    html += m.tickers.map((t) => `<th>${escapeHtml(t)}</th>`).join("");
-    html += `</tr></thead><tbody>`;
-    m.tickers.forEach((rowT, i) => {
-      html += `<tr><th>${escapeHtml(rowT)}</th>`;
-      m.values[i].forEach((v, j) => {
-        html += `<td style="${i === j ? "" : corrCellStyle(v)}">${i === j ? "—" : (v ?? "—")}</td>`;
+  const hasMatrix = m && m.tickers.length >= 2 && m.tickers.length <= 12;
+
+  if (hasPairs || hasMatrix) {
+    html += `<div class="stats-tile-row">`;
+    if (hasPairs) {
+      html += `<div class="detail-section"><h4 class="detail-section__title">Najsilniej skorelowane pary</h4>`;
+      html += data.top_pairs.map((p) => `
+        <div class="eff-row">
+          <span class="eff-row__cat">${escapeHtml(p.a)} / ${escapeHtml(p.b)}</span>
+          <span class="eff-row__stat">${p.correlation}</span>
+        </div>`).join("");
+      html += `</div>`;
+    }
+    if (hasMatrix) {
+      html += `<div class="detail-section"><h4 class="detail-section__title">Macierz korelacji</h4><div class="corr-wrap"><table class="corr-table"><thead><tr><th></th>`;
+      html += m.tickers.map((t) => `<th>${escapeHtml(t)}</th>`).join("");
+      html += `</tr></thead><tbody>`;
+      m.tickers.forEach((rowT, i) => {
+        html += `<tr><th>${escapeHtml(rowT)}</th>`;
+        m.values[i].forEach((v, j) => {
+          html += `<td style="${i === j ? "" : corrCellStyle(v)}">${i === j ? "—" : (v ?? "—")}</td>`;
+        });
+        html += `</tr>`;
       });
-      html += `</tr>`;
-    });
-    html += `</tbody></table></div></div>`;
+      html += `</tbody></table></div></div>`;
+    }
+    html += `</div>`;
   }
 
   const missing = (data.tickers_without_data || []);

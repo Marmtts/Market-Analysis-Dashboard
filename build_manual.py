@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.9"
+VERSION = "3.10"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -930,9 +930,10 @@ def part2(s: Story) -> None:
                                 "portfela. 1,0 = brak korzyści z dywersyfikacji; im wyżej, tym lepiej."],
         ["Zwrot hist. (roczny)", "Zwrot hipotetycznego portfela o obecnych wagach — NIE Twój faktyczny wynik."],
     ], [24, 76])
-    s.p("Poniżej miar widać listę najsilniej skorelowanych par (para o korelacji co najmniej 0,85 "
-        "również wywołuje ostrzeżenie) oraz — dla portfeli z 2–12 pozycjami — macierz korelacji w formie mapy cieplnej: im "
-        "ciemniejszy bursztyn, tym silniejsza dodatnia korelacja; zielony oznacza korelację ujemną.")
+    s.p("Poniżej miar widać, obok siebie (na węższym ekranie jedno pod drugim): listę najsilniej "
+        "skorelowanych par (para o korelacji co najmniej 0,85 również wywołuje ostrzeżenie) oraz — dla "
+        "portfeli z 2–12 pozycjami — macierz korelacji w formie mapy cieplnej: im ciemniejszy bursztyn, "
+        "tym silniejsza dodatnia korelacja; zielony oznacza korelację ujemną.")
     s.callout("note",
               "To hipotetyczny portfel o stałych, dzisiejszych wagach liczony na jednorocznej historii — nie "
               "Twoja faktyczna historia. Zwroty są liczone w walutach notowania, więc nie uwzględniają "
@@ -1398,6 +1399,11 @@ def part3(s: Story) -> None:
                                  "(Ryzyko, Korelacja, Krzywa kapitału, Historia transakcji itd.) ma teraz "
                                  "własny przycisk zwijania. Personalizacja panelu bocznego (przeciąganie, "
                                  "zwijanie) działa też w zakładce Portfel, nie tylko w Analizie."],
+        ["3.10", "Wrzesień 2026", "Poprawki układu: „Najsilniej skorelowane pary” i „Macierz korelacji” "
+                                  "(14.2) stoją teraz obok siebie zamiast na pełną szerokość; karty "
+                                  "poszczególnych lat w podsumowaniu podatkowym (15.2) i dywidendach (12.6) "
+                                  "też stoją obok siebie, gdy jest ich kilka. Poprawiono też odstępy między "
+                                  "sąsiadującymi blokami szczegółów w kilku panelach."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
