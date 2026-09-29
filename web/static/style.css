@@ -377,6 +377,15 @@ html, body {
 .health-score-component__row { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
 .health-score-component__bar-track { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
 .health-score-component__bar-fill { height: 100%; border-radius: 2px; }
+.health-score-tips {
+  margin: 0.8rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.health-score-tips li { margin-bottom: 0.3rem; }
+.health-score-tips li::marker { color: var(--accent-gold-bright); }
 .add-form input:hover { border-color: var(--text-faint); }
 .add-form input:focus { outline: none; border-color: var(--accent-gold); background: var(--bg-elevated); }
 .add-form input::placeholder { color: var(--text-faint); }

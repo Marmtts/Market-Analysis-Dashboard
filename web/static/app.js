@@ -998,23 +998,23 @@ el("chartModalBackdrop").addEventListener("click", closeChart);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChart(); });
 
 // Dynamiczne skalowanie wykresów przy zmianie rozmiaru okna/panelu.
+// Po applyOptions({width}) doczytujemy timeScale().fitContent() - bez tego
+// wykres stworzony (albo ostatnio przeliczony) przy szerokości 0px (np. gdy
+// jego sekcja/panel był akurat zwinięty - patrz initDashSections) zostawał
+// z wewnętrzną skalą dopasowaną do tej starej, zerowej szerokości, więc po
+// rozwinięciu dane wyglądały na "ściśnięte"/przybliżone zamiast wypełniać
+// nowo dostępną szerokość.
+function resizeChart(chart, container) {
+  if (!chart || !container) return;
+  chart.applyOptions({ width: container.clientWidth });
+  chart.timeScale().fitContent();
+}
+
 window.addEventListener("resize", () => {
-  const container = el("chartContainer");
-  if (state.chart && container) {
-    state.chart.applyOptions({ width: container.clientWidth });
-  }
-  const equityContainer = el("equityChartContainer");
-  if (equityChart && equityContainer) {
-    equityChart.applyOptions({ width: equityContainer.clientWidth });
-  }
-  const benchContainer = el("benchChartContainer");
-  if (benchChart && benchContainer) {
-    benchChart.applyOptions({ width: benchContainer.clientWidth });
-  }
-  const fireContainer = el("fireChartContainer");
-  if (fireChart && fireContainer) {
-    fireChart.applyOptions({ width: fireContainer.clientWidth });
-  }
+  resizeChart(state.chart, el("chartContainer"));
+  resizeChart(equityChart, el("equityChartContainer"));
+  resizeChart(benchChart, el("benchChartContainer"));
+  resizeChart(fireChart, el("fireChartContainer"));
 });
 
 // ---------------- Zakładki ----------------
@@ -2279,6 +2279,35 @@ function healthScoreTier(score) {
   return { cls: "poor", label: "Słabo" };
 }
 
+// Spersonalizowane podpowiedzi - do 3 składniki, które NAJBARDZIEJ ciągną
+// wynik w dół (waga × brakujące punkty, nie sam surowy wynik - słaby, ale
+// nisko ważony składnik nie zasługuje na podpowiedź przed mocniej ważonym).
+// Tylko składniki poniżej progu (< 60 pkt) w ogóle dostają podpowiedź -
+// "prawie idealny" komponent nie potrzebuje komentarza.
+function healthScoreAdvice(components, stats, sectorExposure) {
+  const weak = Object.entries(components)
+    .map(([key, c]) => ({ key, score: c.score, impact: HEALTH_SCORE_WEIGHTS[key] * (100 - c.score) }))
+    .filter((c) => c.score < 60)
+    .sort((a, b) => b.impact - a.impact);
+
+  const tips = [];
+  for (const { key } of weak.slice(0, 3)) {
+    if (key === "diversification" && stats) {
+      tips.push(`Współczynnik dywersyfikacji to ${stats.diversification_ratio}× — Twoje pozycje poruszają się niemal jak jedna. Dodanie spółek z innych branż lub regionów realnie obniżyłoby ryzyko.`);
+    } else if (key === "correlation" && stats) {
+      tips.push(`Średnia korelacja pozycji to ${stats.avg_correlation} — sprawdź listę „Najsilniej skorelowane pary” niżej i rozważ zmniejszenie udziału tych, które poruszają się niemal identycznie.`);
+    } else if (key === "sharpe" && stats) {
+      tips.push(`Sharpe wynosi ${stats.sharpe} — zwrot słabo rekompensuje ponoszone ryzyko. Przyjrzyj się pozycjom o wysokiej zmienności i słabym wyniku, które mogą ciągnąć ten wskaźnik w dół.`);
+    } else if (key === "drawdown" && stats) {
+      tips.push(`Maksymalne obsunięcie w badanym okresie to -${stats.max_drawdown_pct}% — rozważ ciaśniejsze stop-lossy albo mniejszą wielkość pozycji w najbardziej zmiennych spółkach.`);
+    } else if (key === "sectorConcentration" && sectorExposure && sectorExposure.length) {
+      const top = sectorExposure[0];
+      tips.push(`${top.pct_of_portfolio}% portfela siedzi w sektorze „${top.sector}” (${top.tickers.join(", ")}) — rozważ dodanie pozycji z innych branż, żeby nie stawiać wszystkiego na jedną kartę.`);
+    }
+  }
+  return tips;
+}
+
 function updatePortfolioHealthScore() {
   const panel = el("portfolioHealthPanel");
   const result = computeHealthScore(state.healthInputs.stats, state.healthInputs.sectorExposure);
@@ -2297,6 +2326,11 @@ function updatePortfolioHealthScore() {
     </div>
   `).join("");
 
+  const tips = healthScoreAdvice(result.components, state.healthInputs.stats, state.healthInputs.sectorExposure);
+  const tipsHtml = tips.length
+    ? `<ul class="health-score-tips">${tips.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`
+    : "";
+
   panel.innerHTML = `
     <div class="health-score-card">
       <div class="health-score-badge health-score-badge--${tier.cls}">
@@ -2306,6 +2340,7 @@ function updatePortfolioHealthScore() {
       <div class="health-score-body">
         <div class="health-score-title">Zdrowie portfela</div>
         <div class="health-score-components">${componentsHtml}</div>
+        ${tipsHtml}
         ${result.partial ? `<p class="detail-disclaimer">Liczone z dostępnych dziś składników — część danych (np. korelacje przy bardzo świeżych pozycjach) może jeszcze nie być gotowa.</p>` : ""}
       </div>
     </div>

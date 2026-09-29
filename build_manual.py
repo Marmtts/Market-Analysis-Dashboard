@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.19"
+VERSION = "3.20"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -956,12 +956,18 @@ def part2(s: Story) -> None:
         ["Koncentracja sektorowa", "15%", "% portfela w NAJWIĘKSZYM sektorze (rozdział 14.1) — 20% i mniej "
                                           "to 100 pkt, 80% i więcej to 0 pkt."],
     ], [26, 12, 62])
+    s.p("Pod rozpiską składników mogą pojawić się do trzech <b>spersonalizowanych podpowiedzi</b> — "
+        "dashboard bierze składniki poniżej 60 punktów, sortuje je wg tego, ile realnie ważą w wyniku "
+        "końcowym (waga × brakujące punkty, nie sam surowy wynik) i dla najważniejszych z nich pokazuje "
+        "krótkie, konkretne zdanie z Twoimi własnymi liczbami — np. który sektor jest przeważony (z nazwami "
+        "spółek) albo jaka jest dokładna wartość współczynnika dywersyfikacji. Składnik z wynikiem 60+ nie "
+        "dostaje podpowiedzi — nie ma czego poprawiać.")
     s.callout("note",
               "Gdy część danych jeszcze nie jest gotowa (np. świeżo dodana pozycja bez wystarczającej "
               "wspólnej historii do liczenia korelacji), wskaźnik liczy się z tego, co akurat dostępne, "
               "rozkładając wagi proporcjonalnie na resztę składników — pod odznaką pojawia się wtedy "
-              "adnotacja o częściowych danych. To orientacyjny skrót, nie rekomendacja — te same liczby, "
-              "tylko osobno i z pełnym kontekstem, widać w panelach niżej.")
+              "adnotacja o częściowych danych. To orientacyjny skrót i podpowiedzi, NIE porada inwestycyjna "
+              "— te same liczby, tylko osobno i z pełnym kontekstem, widać w panelach niżej.")
 
     # ------------------------------------------------------------ 14
     s.h1("14. Ryzyko, korelacje, benchmark i krzywa kapitału")
@@ -1561,6 +1567,10 @@ def part3(s: Story) -> None:
                                   "bocznych i sekcji głównej kolumny — całe nagłówki są teraz klikalne, nie "
                                   "tylko strzałka ▾, z zachowaniem osobnego działania innych przycisków w "
                                   "nagłówku (uchwyt przeciągania, ▲/▼, „Testuj Discord”, „Eksportuj CSV” itd.)."],
+        ["3.20", "Wrzesień 2026", "Wskaźnik „Zdrowie portfela” (13.2) dostał do 3 spersonalizowanych "
+                                  "podpowiedzi z konkretnymi liczbami, co poprawić. Naprawiono wykresy "
+                                  "wyglądające na „ściśnięte” po rozwinięciu wcześniej zwiniętej sekcji "
+                                  "(brakowało ponownego dopasowania skali czasu po zmianie szerokości)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
