@@ -3352,12 +3352,29 @@ function initDashSections() {
 
     if (localStorage.getItem(key) === "1") section.classList.add("is-collapsed");
 
+    // Sekcja może siedzieć wewnątrz kafelka Gridstack (na razie tylko
+    // zakładka Portfel, patrz initPortfolioGridOnce) - samo schowanie treści
+    // (CSS wyżej) nie zmienia WYSOKOŚCI KAFELKA, więc bez tego zwinięcie
+    // zostawiało pusty, "ucięty" nagłówek na górze dużego, pustego pola.
+    // Zwijamy więc kafelek do 1 wiersza, pamiętając poprzednią wysokość,
+    // żeby rozwinięcie oddało dokładnie tyle miejsca, ile było wcześniej.
+    const gridItemEl = section.closest(".grid-stack-item");
+    let expandedRows = null;
+
     const toggle = () => {
       const collapsed = section.classList.toggle("is-collapsed");
       try {
         localStorage.setItem(key, collapsed ? "1" : "0");
       } catch {
         // brak trwałości - dashboard nadal działa, tylko nie zapamięta stanu
+      }
+      if (portfolioGrid && gridItemEl) {
+        if (collapsed) {
+          expandedRows = gridItemEl.gridstackNode?.h || expandedRows;
+          portfolioGrid.update(gridItemEl, { h: 1 });
+        } else {
+          portfolioGrid.update(gridItemEl, { h: expandedRows || 4 });
+        }
       }
       if (!collapsed) {
         // Sekcja mogła zawierać wykres (Lightweight Charts), który przy
@@ -3435,7 +3452,11 @@ function initPortfolioGridOnce() {
     cellHeight: 70,
     margin: 8,
     handle: ".section-header",
-    float: true,
+    // float:false (domyślne) - sekcje "grawitują" w górę, wypełniając puste
+    // miejsce automatycznie. Ważne przy zwijaniu (initDashSections): bez
+    // tego skrócenie kafelka zostawiałoby pustą dziurę zamiast przysunąć
+    // kolejne sekcje wyżej.
+    float: false,
   }, "#portfolioGridStack");
   portfolioGrid.setStatic(true); // zablokowany domyślnie - "Edytuj układ" odblokowuje
 

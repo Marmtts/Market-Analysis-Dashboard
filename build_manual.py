@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.21"
+VERSION = "3.22"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -480,6 +480,10 @@ def part1(s: Story) -> None:
         "wraca do jednokolumnowego układu sprzed jakichkolwiek zmian.",
         "Ostatnio wybrany preset jest pamiętany — po ponownym otwarciu dashboardu (w tej samej "
         "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś.",
+        "Zwijanie sekcji (rozdział 3.1) działa też tutaj i jest z tym układem świadomie zsynchronizowane: "
+        "zwinięcie kurczy kafelek do samego nagłówka, a kolejne sekcje automatycznie przesuwają się w "
+        "górę, żeby nie zostawiać pustego miejsca. Rozwinięcie oddaje dokładnie tyle miejsca, ile kafelek "
+        "miał wcześniej — także po ręcznej zmianie jego rozmiaru w trybie edycji.",
     ])
     s.callout("note",
               "Układ (i presety) są zapisane LOKALNIE w przeglądarce, tak jak reszta personalizacji z "
@@ -1596,6 +1600,9 @@ def part3(s: Story) -> None:
         ["3.21", "Wrzesień 2026", "Nowy rozdział 3.2: dynamiczny, przestawialny układ sekcji w zakładce "
                                   "Portfel (pilotaż) — przeciąganie, zmiana rozmiaru i zapisywanie własnych "
                                   "presetów układu, oparte o bibliotekę Gridstack.js."],
+        ["3.22", "Wrzesień 2026", "Naprawiono kolizję zwijania sekcji (3.1) z dynamicznym układem (3.2) — "
+                                  "zwinięcie kafelka w siatce zostawiało pustą, „ucięta” przestrzeń zamiast "
+                                  "realnie kurczyć się do nagłówka i przesuwać kolejne sekcje w górę."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
