@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.15"
+VERSION = "3.16"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -882,6 +882,32 @@ def part2(s: Story) -> None:
               "przeliczane są, tak jak w podsumowaniu podatkowym (rozdział 15.2), oficjalnym kursem NBP z "
               "dnia poprzedzającego wypłatę.")
 
+    s.h2("12.7 Kalkulator IKE / FIRE")
+    s.p("Ostatnia sekcja zakładki Portfel to prosty kalkulator projekcji wartości portfela IKE w czasie — "
+        "odpowiada na pytanie „ile realnie może urosnąć to konto do mojej emerytury, przy założonym "
+        "zwrocie i regularnych wpłatach”. Pięć pól wejściowych:")
+    s.table(["Pole", "Znaczenie"], [
+        ["Bieżąca wartość IKE", "Wypełniana automatycznie sumą wartości rynkowej Twoich pozycji oznaczonych "
+                                "jako konto IKE (rozdział 12.1), przeliczoną na walutę bazową. Możesz ją "
+                                "nadpisać, żeby zasymulować inny punkt startowy — po ręcznej zmianie "
+                                "dashboard przestaje ją automatycznie odświeżać przy kolejnych cyklach."],
+        ["Wiek obecny / Wiek docelowy", "Liczba lat między nimi to horyzont projekcji."],
+        ["Roczna wpłata", "Stała kwota dopisywana na koniec każdego roku projekcji (w walucie bazowej)."],
+        ["Oczekiwany roczny zwrot (%)", "Stała, założona z góry stopa zwrotu — projekcja NIE symuluje "
+                                        "zmienności rok do roku, tylko gładki procent składany."],
+    ], [30, 70])
+    s.p("Wynik przelicza się na bieżąco przy każdej zmianie pola (bez odświeżania strony) i pokazuje: "
+        "projektowaną wartość w wieku docelowym, sumę wpłat (start + wpłaty roczne × liczba lat) oraz "
+        "różnicę między nimi — czyli ile z końcowej kwoty pochodzi z samego procentu składanego, a nie "
+        "z Twoich pieniędzy. Wykres pod podsumowaniem rysuje tę samą projekcję rok po roku.")
+    s.callout("important",
+              "To NIE jest prognoza ani porada inwestycyjna czy emerytalna — to gładka matematyka "
+              "procentu składanego przy jednej, stałej stopie zwrotu, którą sam wybierasz. Realne zwroty "
+              "rynkowe są zmienne z roku na rok (czasem mocno ujemne), projekcja nie uwzględnia inflacji "
+              "ani zmian rocznego limitu wpłat na IKE, a niska zmiana założonego zwrotu (np. 5% zamiast "
+              "7%) na horyzoncie kilkudziesięciu lat robi ogromną różnicę w wyniku — traktuj to jako "
+              "ilustrację działania procentu składanego, nie jako liczbę, na której warto planować budżet.")
+
     # ------------------------------------------------------------ 13
     s.h1("13. Waluty i podsumowanie łączne portfela")
     s.p("Każda spółka ma wykrytą walutę notowania (np. USD dla spółek amerykańskich, PLN dla polskich jak "
@@ -1489,6 +1515,10 @@ def part3(s: Story) -> None:
                                   "uruchamia się automatycznie, gdy główne źródło (yfinance/Yahoo) zwróci "
                                   "zero newsów dla spółki, np. przy awarii nieoficjalnego endpointu Yahoo "
                                   "(rozdział 21). Nowy parametr news.ticker_news_fallback_enabled."],
+        ["3.16", "Wrzesień 2026", "Nowy rozdział 12.7: kalkulator IKE / FIRE — prosta projekcja wartości "
+                                  "portfela IKE do wybranego wieku (procent składany, stała stopa zwrotu i "
+                                  "wpłata roczna), z wykresem, licząca się na bieżąco przy zmianie pól. "
+                                  "Startowa wartość wypełniana automatycznie z bieżących pozycji IKE."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

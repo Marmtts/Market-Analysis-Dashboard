@@ -775,6 +775,10 @@ async def api_get_portfolio_risk():
     combined_risk = compute_portfolio_risk_summary(combined_positions)
     combined_risk_bucket = combined_risk.get("by_currency", {}).get(base_currency, {})
     sector_exposure = compute_portfolio_sector_exposure(combined_positions, fundamentals_by_ticker)
+    # Bieżąca wartość TYLKO pozycji z konta IKE - punkt startowy dla kalkulatora
+    # FIRE/projekcji IKE (rozdział 14.2.2 instrukcji), żeby nie trzeba było
+    # wpisywać jej ręcznie za każdym razem.
+    ike_value = sum(p.get("market_value") or 0.0 for p in combined_positions if p.get("account_type") == "ike")
 
     return sanitize_for_json({
         "risk": risk,
@@ -787,6 +791,7 @@ async def api_get_portfolio_risk():
             "risk_amount": combined_risk_bucket.get("risk_amount"),
             "risk_pct": combined_risk_bucket.get("risk_pct"),
             "skipped_currencies": sorted(skipped),
+            "ike_value": round(ike_value, 2),
         },
     })
 

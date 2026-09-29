@@ -82,6 +82,11 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   celu i sugestię (kup/sprzedaj ile akcji dla tickera, kwotę dla sektora),
   żeby wrócić w okolice celu — czysto orientacyjne wyliczenie, bez kosztów
   transakcyjnych i podatku przy sprzedaży.
+- Kalkulator IKE / FIRE: prosta projekcja wartości portfela IKE do
+  wybranego wieku (wykres + podsumowanie) przy założonej stałej rocznej
+  stopie zwrotu i wpłacie — startowa wartość wypełnia się automatycznie
+  z Twoich pozycji IKE. Czysto orientacyjne, bez inflacji i zmiennych
+  zwrotów rok do roku.
 - Porównanie portfela z benchmarkiem (SPY / WIG20 / własny): zwrot, beta,
   alfa, wychwyt wzrostów i spadków oraz wykres — odpowiada na pytanie, czy
   wynik to selekcja spółek, czy po prostu ekspozycja na rynek.
@@ -338,7 +343,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.15)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.16)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -379,7 +384,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.15). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.16). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -388,7 +393,7 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Dziesięć pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
+Jedenaście pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
 zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
@@ -401,19 +406,18 @@ analogicznie do pola przy dodawaniu), śledzenie dywidend (sekcja 1
 powyżej — przychód brutto/netto per wypłata, import z raportu XTB albo
 ręczne dodawanie), kalendarz makro (sekcja 1 powyżej — FOMC/RPP/CPI,
 `config.yaml` → `macro_calendar`), heatmapa watchlisty (przycisk „🔥
-Heatmapa” obok listy), flaga „konto IKE” per pozycja (sekcja 1 powyżej —
-rozpoznawana automatycznie z importu XTB albo ustawiana ręcznie; podatek
-liczony jako dwa scenariusze, bo zależy od wieku przy wypłacie, którego
-narzędzie nie zna) i rebalancing wg docelowych wag per ticker (sekcja 1
-powyżej). Szczegóły w `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`.
-Aktualna lista:
+Heatmapa” obok listy, z filtrem „Tylko pozycje w portfelu”), flaga „konto
+IKE” per pozycja (sekcja 1 powyżej — rozpoznawana automatycznie z importu
+XTB albo ustawiana ręcznie; podatek liczony jako dwa scenariusze, bo
+zależy od wieku przy wypłacie, którego narzędzie nie zna), rebalancing wg
+docelowych wag per ticker/sektor (sekcja 1 powyżej) i kalkulator IKE /
+FIRE (sekcja 1 powyżej). Szczegóły w
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
 
 - Pomocnik „tax-loss harvesting” — polskie prawo pozwala odliczyć straty
   kapitałowe od zysków w tym samym roku podatkowym (i przenosić straty do
   5 lat wstecz); dashboard dziś tego nie liczy, mimo że ma już wszystkie
   potrzebne dane (pozycje na niezrealizowanej stracie, panel podatkowy).
-- Prosty kalkulator FIRE / projekcja wartości IKE do wieku emerytalnego —
-  naturalne dopełnienie flagi konta IKE (sekcja 1).
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
   stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.

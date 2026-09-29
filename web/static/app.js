@@ -1007,6 +1007,10 @@ window.addEventListener("resize", () => {
   if (benchChart && benchContainer) {
     benchChart.applyOptions({ width: benchContainer.clientWidth });
   }
+  const fireContainer = el("fireChartContainer");
+  if (fireChart && fireContainer) {
+    fireChart.applyOptions({ width: fireContainer.clientWidth });
+  }
 });
 
 // ---------------- Zakładki ----------------
@@ -2145,6 +2149,7 @@ async function loadPortfolioRisk() {
     const data = await res.json();
     renderCombinedSummary(data.combined);
     renderPortfolioRisk(data);
+    initFireCalculator(data.combined);
   } catch (err) {
     console.warn("Nie udało się pobrać ryzyka portfela:", err);
   }
@@ -2221,6 +2226,86 @@ function renderPortfolioRisk(data) {
 
   panel.innerHTML = html;
 }
+
+// ---------------- Kalkulator IKE / FIRE ----------------
+let fireChart = null;
+let fireStartValueTouched = false; // po ręcznej zmianie pola przez usera, kolejne odświeżenia portfela go nie nadpisują
+let fireBaseCurrency = "PLN";
+
+function initFireCalculator(combined) {
+  if (!combined) return;
+  fireBaseCurrency = combined.base_currency || "PLN";
+  if (!fireStartValueTouched) {
+    el("fireStartValue").value = (combined.ike_value ?? 0).toFixed(2);
+  }
+  computeFireProjection();
+}
+
+function computeFireProjection() {
+  const startValue = parseFloat(el("fireStartValue").value) || 0;
+  const currentAge = parseFloat(el("fireCurrentAge").value) || 0;
+  const targetAge = parseFloat(el("fireTargetAge").value) || 0;
+  const annualContribution = parseFloat(el("fireAnnualContribution").value) || 0;
+  const returnPct = parseFloat(el("fireReturnPct").value);
+  const returnRate = isNaN(returnPct) ? 0 : returnPct / 100;
+
+  const years = Math.max(0, Math.round(targetAge - currentAge));
+  const series = [{ year: 0, value: startValue }];
+  let value = startValue;
+  for (let y = 1; y <= years; y++) {
+    value = value * (1 + returnRate) + annualContribution;
+    series.push({ year: y, value });
+  }
+
+  const totalContributed = startValue + annualContribution * years;
+  const growth = value - totalContributed;
+
+  renderFireSummary(value, totalContributed, growth, years, targetAge);
+  drawFireChart(series, currentAge);
+}
+
+function renderFireSummary(finalValue, totalContributed, growth, years, targetAge) {
+  const panel = el("fireSummary");
+  if (years <= 0) {
+    panel.innerHTML = `<p class="empty-state">Wiek docelowy musi być wyższy niż obecny.</p>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="metric-grid">
+      <div title="Projekcja wartości portfela IKE w wieku ${targetAge} lat, przy założonym stałym zwrocie"><span>Wartość w wieku ${targetAge} lat</span><strong>${fmtMoney(finalValue.toFixed(2), fireBaseCurrency)}</strong></div>
+      <div title="Bieżąca wartość + suma założonych rocznych wpłat przez ${years} lat"><span>Łącznie wpłacone</span><strong>${fmtMoney(totalContributed.toFixed(2), fireBaseCurrency)}</strong></div>
+      <div title="Różnica między wartością końcową a wpłatami - to, co dopisał sam procent składany"><span>Zysk z procentu składanego</span><strong class="${growth >= 0 ? "positive" : "negative"}">${growth >= 0 ? "+" : ""}${fmtMoney(Math.abs(growth).toFixed(2), fireBaseCurrency)}</strong></div>
+    </div>
+  `;
+}
+
+function drawFireChart(series, currentAge) {
+  if (fireChart) { fireChart.remove(); fireChart = null; }
+  const container = el("fireChartContainer");
+  if (!container || typeof LightweightCharts === "undefined" || series.length < 2) return;
+
+  fireChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 220,
+    layout: { background: { color: "transparent" }, textColor: "#8A93A8", fontFamily: "IBM Plex Mono, monospace" },
+    grid: { vertLines: { color: "#2A3346" }, horzLines: { color: "#2A3346" } },
+    timeScale: { borderColor: "#2A3346" },
+    rightPriceScale: { borderColor: "#2A3346" },
+  });
+  const line = fireChart.addLineSeries({ color: "#E0BC4A", lineWidth: 2 });
+  // Lightweight Charts wymaga rosnących dat - "rok" projekcji mapujemy na
+  // kolejne lata kalendarzowe od dziś, wyłącznie jako oś X (etykieta to wiek).
+  const startYear = new Date().getFullYear();
+  line.setData(series.map((pt) => ({ time: `${startYear + pt.year}-01-01`, value: Math.round(pt.value) })));
+  fireChart.timeScale().fitContent();
+}
+
+["fireStartValue", "fireCurrentAge", "fireTargetAge", "fireAnnualContribution", "fireReturnPct"].forEach((id) => {
+  el(id).addEventListener("input", () => {
+    if (id === "fireStartValue") fireStartValueTouched = true;
+    computeFireProjection();
+  });
+});
 
 // ---------------- Krzywa kapitału portfela ----------------
 let equityChart = null;

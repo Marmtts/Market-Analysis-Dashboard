@@ -410,6 +410,36 @@
     <div class="section-card" id="dividendSummaryPanel"></div>
     <div class="dividend-table-wrap" id="dividendTableWrap"></div>
     </div>
+
+    <div class="dash-section" data-section-id="portfolio-fire">
+    <div class="section-header">
+      <h2><span class="section-header__icon">🔥</span>Kalkulator IKE / FIRE</h2>
+    </div>
+    <div class="section-card">
+      <div class="fire-inputs">
+        <label>Bieżąca wartość IKE
+          <input type="number" id="fireStartValue" step="0.01" min="0" value="0">
+        </label>
+        <label>Wiek obecny
+          <input type="number" id="fireCurrentAge" step="1" min="0" max="100" value="30">
+        </label>
+        <label>Wiek docelowy
+          <input type="number" id="fireTargetAge" step="1" min="0" max="100" value="60">
+        </label>
+        <label>Roczna wpłata
+          <input type="number" id="fireAnnualContribution" step="0.01" min="0" value="0">
+        </label>
+        <label>Oczekiwany roczny zwrot (%)
+          <input type="number" id="fireReturnPct" step="0.1" value="6">
+        </label>
+      </div>
+      <div id="fireSummary"></div>
+      <div class="chart-frame">
+        <div id="fireChartContainer" class="fire-chart-container"></div>
+      </div>
+      <p class="detail-disclaimer">🔥 Prosta projekcja składanego wzrostu przy STAŁEJ, założonej stopie zwrotu — nie prognoza ani porada inwestycyjna czy emerytalna. Realne zwroty rynkowe są zmienne z roku na rok, nie stałe; nie uwzględnia inflacji, zmian limitu rocznych wpłat na IKE ani ewentualnych opłat. Bieżąca wartość IKE jest wstępnie wypełniona z Twoich pozycji oznaczonych jako konto IKE (rozdział 12.1) — możesz ją zmienić, żeby zasymulować inny punkt startowy.</p>
+    </div>
+    </div>
   </section>
 </main>
 

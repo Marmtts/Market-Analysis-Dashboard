@@ -326,6 +326,26 @@ html, body {
   font-size: 0.8rem;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
+
+/* ---------------- Kalkulator IKE / FIRE ---------------- */
+.fire-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1rem; }
+.fire-inputs label {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em;
+}
+.fire-inputs input {
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.fire-inputs input:hover { border-color: var(--text-faint); }
+.fire-inputs input:focus { outline: none; border-color: var(--accent-gold); background: var(--bg-elevated); }
+.fire-chart-container { height: 220px; }
 .add-form input:hover { border-color: var(--text-faint); }
 .add-form input:focus { outline: none; border-color: var(--accent-gold); background: var(--bg-elevated); }
 .add-form input::placeholder { color: var(--text-faint); }
