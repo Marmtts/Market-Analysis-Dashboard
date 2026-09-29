@@ -486,6 +486,10 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   margin: 0.5rem 0 1rem;
 }
 .section-header--discovery { margin-top: 2.5rem; }
+/* Tylko nagłówki wewnątrz .dash-section są klikalne (mają wstrzyknięty
+   przycisk zwijania, patrz initDashSections) - reszta (np. "Twój portfel"
+   nad panelem ryzyka) to zwykły, niezwijalny nagłówek. */
+.dash-section > .section-header { cursor: pointer; }
 .section-header h2 {
   font-family: var(--font-display);
   font-weight: 600;
@@ -1591,12 +1595,13 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 }
 
 /* ---------------- Personalizacja panelu bocznego (zwijanie, kolejność) ---------------- */
-.panel__header {
+.panel--collapsible > .panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.8rem;
+  cursor: pointer;
 }
 .panel__header .panel__title, .panel__header .panel__subtitle { margin-bottom: 0; }
 .panel__controls { display: flex; align-items: center; gap: 0.2rem; flex-shrink: 0; }

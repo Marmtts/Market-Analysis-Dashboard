@@ -3137,15 +3137,26 @@ function initPanelCustomizationForSidebar(sidebar) {
 
   // 3) Obsługa przycisków.
   panelsById.forEach((panel, id) => {
+    const toggleCollapse = () => {
+      const collapsed = panel.classList.toggle("is-collapsed");
+      try {
+        localStorage.setItem(PANEL_COLLAPSE_PREFIX + id, collapsed ? "1" : "0");
+      } catch {
+        // brak trwałości - dashboard nadal działa, tylko nie zapamięta stanu
+      }
+    };
     const collapseBtn = panel.querySelector(".panel__collapse-toggle");
     if (collapseBtn) {
-      collapseBtn.addEventListener("click", () => {
-        const collapsed = panel.classList.toggle("is-collapsed");
-        try {
-          localStorage.setItem(PANEL_COLLAPSE_PREFIX + id, collapsed ? "1" : "0");
-        } catch {
-          // brak trwałości - dashboard nadal działa, tylko nie zapamięta stanu
-        }
+      collapseBtn.addEventListener("click", toggleCollapse);
+    }
+    // Cały nagłówek panelu jest klikalny (nie tylko strzałka) - z wyjątkiem
+    // pozostałych kontrolek (uchwyt przeciągania, ▲/▼), które mają własne
+    // działanie i nie powinny przy okazji zwijać/rozwijać panelu.
+    const panelHeader = panel.querySelector(":scope > .panel__header");
+    if (panelHeader) {
+      panelHeader.addEventListener("click", (e) => {
+        if (e.target.closest("button, a, input, label, .panel__drag-handle")) return;
+        toggleCollapse();
       });
     }
     const upBtn = panel.querySelector(".panel__move-up");
@@ -3305,7 +3316,7 @@ function initDashSections() {
 
     if (localStorage.getItem(key) === "1") section.classList.add("is-collapsed");
 
-    btn.addEventListener("click", () => {
+    const toggle = () => {
       const collapsed = section.classList.toggle("is-collapsed");
       try {
         localStorage.setItem(key, collapsed ? "1" : "0");
@@ -3320,6 +3331,16 @@ function initDashSections() {
         // istniejącym wykresom przeliczyć się na nowo, teraz gdy są widoczne.
         requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
       }
+    };
+    btn.addEventListener("click", toggle);
+
+    // Cały nagłówek sekcji jest klikalny (nie tylko strzałka) - z wyjątkiem
+    // innych kontrolek w nim (np. "Testuj Discord", "Eksportuj CSV", "⚙
+    // Kolumny", "🔥 Heatmapa"), które mają własne działanie i nie powinny
+    // przy okazji zwijać/rozwijać sekcji.
+    header.addEventListener("click", (e) => {
+      if (e.target.closest("button, a, input, label, .col-settings")) return;
+      toggle();
     });
   });
 }

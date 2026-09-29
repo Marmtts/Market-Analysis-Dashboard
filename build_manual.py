@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.18"
+VERSION = "3.19"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -449,13 +449,16 @@ def part1(s: Story) -> None:
     s.bullets([
         "<b>Panele boczne</b> (lewa kolumna zakładek Analiza i Portfel) — każdy panel ma w nagłówku uchwyt "
         "(ikona kropek, przeciągnij żeby zmienić kolejność), strzałki ▲/▼ (to samo bez przeciągania) i "
-        "przycisk ▾ (zwiń/rozwiń). Kolejność i stan zwinięcia są pamiętane osobno dla panelu bocznego "
-        "Analizy i osobno dla Portfela.",
+        "przycisk ▾ (zwiń/rozwiń). Kliknięcie GDZIEKOLWIEK w nagłówek panelu (nie tylko w strzałkę ▾) też "
+        "go zwija/rozwija — uchwyt przeciągania i strzałki ▲/▼ nadal działają osobno, bo mają inne, własne "
+        "działanie. Kolejność i stan zwinięcia są pamiętane osobno dla panelu bocznego Analizy i osobno "
+        "dla Portfela.",
         "<b>Sekcje głównej kolumny</b> (na wszystkich trzech zakładkach — np. „Ryzyko i ekspozycja”, "
         "„Krzywa kapitału”, „Historia transakcji”) — każdy nagłówek sekcji ma z prawej strony mały "
-        "przycisk ▾, który zwija całą sekcję do samego nagłówka. Przydatne, gdy jakaś sekcja (np. "
-        "macierz korelacji przy dużej watchliście) zajmuje dużo miejsca, a nie sprawdzasz jej za każdym "
-        "razem.",
+        "przycisk ▾, ale podobnie jak wyżej, kliknięcie CAŁEGO nagłówka (poza innymi przyciskami w nim, "
+        "np. „Testuj Discord” czy „Eksportuj CSV”) też zwija sekcję do samego nagłówka. Przydatne, gdy "
+        "jakaś sekcja (np. macierz korelacji przy dużej watchliście) zajmuje dużo miejsca, a nie "
+        "sprawdzasz jej za każdym razem.",
     ])
     s.callout("note",
               "Zwinięcie NIE wyłącza obliczeń ani danych w tle — to czysto wizualne ukrycie. Wykresy "
@@ -1554,6 +1557,10 @@ def part3(s: Story) -> None:
                                   "tylko wskazówka wizualna, nie osobny cel kliknięcia. Krótsze, ręcznie "
                                   "dobrane etykiety w pieczątkach rekomendacji (12.5), żeby dłuższe nazwy "
                                   "(np. „SPRAWDŹ PRZYCZYNĘ...”) nie ucinały się w małym kółku."],
+        ["3.19", "Wrzesień 2026", "Ta sama poprawka „klikaj gdziekolwiek” (3.1) zastosowana też do paneli "
+                                  "bocznych i sekcji głównej kolumny — całe nagłówki są teraz klikalne, nie "
+                                  "tylko strzałka ▾, z zachowaniem osobnego działania innych przycisków w "
+                                  "nagłówku (uchwyt przeciągania, ▲/▼, „Testuj Discord”, „Eksportuj CSV” itd.)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
