@@ -103,6 +103,10 @@ technical:
 # -------------------------------------------------------------
 news:
   use_ticker_news_from_yfinance: true   # yfinance.Ticker(x).news - newsy per spółka
+  # Zapasowe źródło (Google News RSS, bez klucza API) - używane TYLKO gdy
+  # powyższe źródło nic nie zwróci (np. gdy nieoficjalny endpoint newsów
+  # Yahoo akurat pada błędem 500 - zdarza się). Działa dla dowolnej spółki.
+  ticker_news_fallback_enabled: true
   macro_rss_feeds:
     - name: "CNBC Top News"
       url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"

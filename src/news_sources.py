@@ -13,6 +13,7 @@ które trafią później do modułu sentymentu (LLM lub słownikowego fallbacku)
 from __future__ import annotations
 
 import logging
+import urllib.parse
 from dataclasses import dataclass
 
 import feedparser
@@ -56,6 +57,42 @@ def get_ticker_news(ticker: str, max_headlines: int = 8) -> list[Headline]:
         if title:
             headlines.append(Headline(title=title, source=publisher or "yfinance",
                                        link=link or "", published=str(pub_date)))
+    return headlines
+
+
+def get_ticker_news_fallback(query: str, max_headlines: int = 8) -> list[Headline]:
+    """Zapasowe źródło newsów per-spółka przez RSS wyszukiwania Google News -
+    używane TYLKO gdy get_ticker_news (yfinance) nic nie zwróci (np. gdy
+    nieoficjalny endpoint newsów Yahoo pada błędem 500 - zdarza się, biblioteka
+    yfinance wtedy po cichu zwraca pustą listę zamiast wyjątku). Darmowe, bez
+    klucza API, działa dla dowolnej spółki na świecie (w przeciwieństwie do
+    GPW RSS, które jest specyficzne dla Warszawy) - ten sam prosty mechanizm
+    (feedparser + jeden URL) co reszta źródeł RSS w tym pliku."""
+    if not query:
+        return []
+    encoded = urllib.parse.quote(f"{query} stock")
+    url = f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en"
+    try:
+        parsed = feedparser.parse(url)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Błąd pobierania zapasowych newsów Google News dla '%s': %s", query, exc)
+        return []
+
+    headlines = []
+    for entry in parsed.entries[:max_headlines]:
+        title = entry.get("title", "")
+        if not title:
+            continue
+        source_name = (entry.get("source") or {}).get("title") or "Google News"
+        # Google News dokleja " - Źródło" na końcu tytułu (source jest już
+        # osobnym polem) - usuwamy duplikat, żeby tytuł został czysty.
+        suffix = f" - {source_name}"
+        if title.endswith(suffix):
+            title = title[: -len(suffix)]
+        headlines.append(Headline(
+            title=title, source=source_name,
+            link=entry.get("link", ""), published=entry.get("published", ""),
+        ))
     return headlines
 
 

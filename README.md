@@ -24,6 +24,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   `.WA`), gdzie Finnhub zwraca 403, uzupełniające źródło to ogólny kanał
   RSS o GPW filtrowany po nazwie spółki (sekcja 5) — bieżący sentyment od
   razu, trend 12-miesięczny budowany własnym, lokalnym archiwum w czasie.
+  Dodatkowo, gdy nieoficjalny endpoint newsów Yahoo (yfinance) akurat
+  zawiedzie (zdarza się — API bywa niestabilne), bieżący sentyment dla
+  DOWOLNEJ spółki spada na zapasowe źródło: RSS wyszukiwania Google News,
+  bez klucza API (`news.ticker_news_fallback_enabled`).
 - Podstawowa analiza fundamentalna: P/E, wzrost przychodów, marże,
   zadłużenie, cena docelowa i rekomendacja analityków Wall Street.
 - Szeroki kontekst makro (VIX, rentowność obligacji) jako filtr ryzyka, plus
@@ -334,7 +338,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.14)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.15)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -353,7 +357,7 @@ xtb_trend_watch/
     ├── macro_calendar.py        # kalendarz najbliższych wydarzeń makro (FOMC/RPP/CPI) z config.yaml
     ├── fx_rates.py             # kursy walut: bieżące, historyczne, oficjalne NBP
     ├── notifications.py        # powiadomienia zewnętrzne o alertach cenowych (Discord webhook)
-    ├── news_sources.py         # newsy bieżące (yfinance) + RSS makro
+    ├── news_sources.py         # newsy bieżące (yfinance, z zapasowym RSS Google News) + RSS makro/GPW
     ├── news_history.py         # newsy historyczne (Finnhub) - cache przyrostowy
     ├── llm_sentiment.py        # sentyment przez Ollama + fallback słownikowy
     ├── discovery.py            # LLM proponuje nowe spółki do obserwacji
@@ -375,7 +379,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.14). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.15). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).

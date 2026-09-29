@@ -23,7 +23,8 @@ from src.market_data import (
 )
 from src.technical_analysis import analyze_multi_timeframe, AT_TOP_DISTANCE_PENALTY, compute_relative_strength
 from src.news_sources import (
-    get_ticker_news, get_macro_headlines, get_gpw_market_headlines, filter_headlines_for_company, Headline,
+    get_ticker_news, get_ticker_news_fallback, get_macro_headlines, get_gpw_market_headlines,
+    filter_headlines_for_company, Headline,
 )
 from src.news_history import fetch_historical_news_by_month
 from src.llm_sentiment import analyze_sentiment, analyze_historical_trend
@@ -107,6 +108,15 @@ def analyze_company(company: dict, cfg: dict, threshold_adjustment: float = 0.0,
             if h.title not in seen_titles:
                 headlines.append(h)
                 seen_titles.add(h.title)
+
+    # Zapasowe źródło (Google News RSS) - TYLKO gdy powyższe źródła nic nie
+    # zwróciły, np. gdy nieoficjalny endpoint newsów Yahoo akurat pada (zdarza
+    # się - yfinance wtedy po cichu zwraca pustą listę, nie wyjątek, więc bez
+    # tego sentyment cichnie na "brak nagłówków" mimo że newsy realnie istnieją).
+    if not headlines and cfg["news"].get("ticker_news_fallback_enabled", True):
+        headlines = get_ticker_news_fallback(
+            f"{name} {ticker.split('.')[0]}", max_headlines=cfg["news"]["max_headlines_per_ticker"]
+        )
 
     sentiment = analyze_sentiment(ticker, name, headlines, cfg["llm"])
 

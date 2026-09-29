@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.14"
+VERSION = "3.15"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1276,6 +1276,11 @@ def part3(s: Story) -> None:
         "(news.gpw_rss_url) do lokalnego cache'u — trend zacznie się jednak pojawiać dopiero od momentu "
         "włączenia tej funkcji, nie wstecz, więc brak trendu przy świeżo dodanej spółce z GPW jest normalny, "
         "nie błędem.",
+        "<b>Bieżący sentyment ma zapasowe źródło newsów.</b> Główne źródło (yfinance/Yahoo Finance) to "
+        "nieoficjalne API i czasem po prostu przestaje zwracać newsy dla wszystkich spółek naraz (błąd po "
+        "stronie Yahoo) — objawia się jako „sentyment (none)” mimo braku błędu w logu. Gdy tak się stanie, "
+        "narzędzie automatycznie sięga po zapasowe źródło: RSS wyszukiwania Google News (bez klucza API, "
+        f"działa dla dowolnej spółki) — wyłączalne przez {c('news.ticker_news_fallback_enabled')}.",
         "<b>Cena docelowa analityków to zewnętrzna opinia rynkowa</b>, nie własna wycena narzędzia — "
         "analitycy też się mylą i bywają opóźnieni względem najnowszych wydarzeń. Analiza fundamentalna to "
         "szybki zestaw wskaźników, nie pełna wycena spółki (DCF).",
@@ -1330,6 +1335,9 @@ def part3(s: Story) -> None:
          "nieudane zapytania."],
         ["news.gpw_rss_url", "Bankier.pl — Giełda", "Kanał RSS uzupełniający sentyment spółek z GPW "
                                                     "(rozdział 21). Pusty string wyłącza to źródło."],
+        ["news.ticker_news_fallback_enabled", "true", "Zapasowe źródło bieżącego sentymentu (RSS Google "
+                                                       "News), używane tylko gdy główne źródło zwróci zero "
+                                                       "newsów (rozdział 21)."],
         ["llm.enabled / llm.model", "true / llama3.1:8b", "Włączenie lokalnego modelu i wybór modelu."],
         ["llm.chat_num_ctx", "8192", "Rozmiar kontekstu czatu (tokeny)."],
         ["discovery.enabled / cooldown_days / max_candidates", "true / 14 / 5",
@@ -1369,6 +1377,10 @@ def part3(s: Story) -> None:
                                                      "się dopiero po zakończeniu pełnego cyklu."],
         ["Brak trendu sentymentu 12-miesięcznego", "Newsy historyczne wymagają klucza Finnhub, a spółki z GPW "
                                                    "zwykle nie są objęte darmowym planem — to normalne."],
+        ["Sentyment (none) dla WSZYSTKICH spółek naraz", "Prawdopodobnie padł nieoficjalny endpoint newsów "
+                                                          "Yahoo (rozdział 21) — narzędzie samo przełącza się "
+                                                          "na zapasowe źródło (Google News), więc zwykle "
+                                                          "naprawia się samo przy kolejnym cyklu."],
         ["Komunikat „Poczekaj jeszcze N s”", "Działa ochrona przed zbyt częstym odświeżaniem tej samej "
                                              "spółki (domyślnie 45 s). Odczekaj podaną liczbę sekund."],
         ["Panel „Korelacja i zmienność” mówi o zbyt małej historii", "W portfelu jest bardzo świeża spółka "
@@ -1473,6 +1485,10 @@ def part3(s: Story) -> None:
                                   "sugestia kwotowa zamiast liczby akcji (sektor to zwykle kilka spółek)."],
         ["3.14", "Wrzesień 2026", "Heatmapa watchlisty (5) ma teraz checkbox „Tylko pozycje w portfelu” — "
                                   "zawęża kafelki do faktycznie posiadanych spółek."],
+        ["3.15", "Wrzesień 2026", "Zapasowe źródło bieżącego sentymentu (RSS Google News, bez klucza API) — "
+                                  "uruchamia się automatycznie, gdy główne źródło (yfinance/Yahoo) zwróci "
+                                  "zero newsów dla spółki, np. przy awarii nieoficjalnego endpointu Yahoo "
+                                  "(rozdział 21). Nowy parametr news.ticker_news_fallback_enabled."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
