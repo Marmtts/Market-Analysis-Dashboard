@@ -1331,6 +1331,22 @@ function actionClass(action) {
   return "buy";
 }
 
+// Krótkie, ręcznie dobrane etykiety do małej okrągłej "pieczątki" (analogicznie
+// do stampInfo() dla watchlisty) - naiwne obcinanie pierwszych dwóch słów pełnej
+// nazwy rekomendacji (np. "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE") nie
+// mieściło się w 58px kółku i się ucinało. Pełny, nieobcięty tekst rekomendacji
+// i tak jest zawsze widoczny obok (pigułka kategorii) i w tooltipie pieczątki.
+function actionStampLabel(action) {
+  const labels = {
+    "TRZYMAJ": "TRZYMAJ",
+    "ROZWAŻ SPRZEDAŻ": "ROZWAŻ\nSPRZEDAŻ",
+    "ROZWAŻ REALIZACJĘ ZYSKU": "REALIZUJ\nZYSK",
+    "SPRAWDŹ PRZYCZYNĘ - NIE DOKUPUJ AUTOMATYCZNIE": "SPRAWDŹ\nPRZYCZYNĘ",
+    "BRAK DANYCH": "BRAK\nDANYCH",
+  };
+  return escapeHtml(labels[action] || action || "—").replace(/\n/g, "<br>");
+}
+
 // Stop-loss AKTYWNY (własny > ATR) i cel, zawsze widoczne na karcie pozycji -
 // wcześniej pokazywało się TYLKO gdy użytkownik ręcznie ustawił własny stop,
 // więc domyślny (ATR) stop-loss, mimo że policzony i realnie używany przez
@@ -1475,13 +1491,14 @@ function renderPortfolioGroupCard(g) {
   const header = document.createElement("div");
   header.className = "result-card portfolio-card portfolio-group__header result-card--with-sparkline result-card--portfolio-group";
   header.innerHTML = `
-    <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(g.action, g.reasons))}">${escapeHtml(g.action).split(" ").slice(0, 2).join("<br>")}</div>
+    <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(g.action, g.reasons))}">${actionStampLabel(g.action)}</div>
     <div class="result-card__info">
       <div>
+        <span class="portfolio-group__chevron" aria-hidden="true">▾</span>
         <span class="result-card__ticker">${g.ticker}</span>${g.lots.every((l) => l.account_type === "ike") ? ` <span class="ike-badge" title="Konto IKE - podatek zależy od wieku przy wypłacie, patrz zakładka Zamknięte transakcje">IKE</span>` : ""}
         <span class="result-card__name">${g.lots.length} ${g.lots.length === 1 ? "pozycja" : "pozycje/i"} • śr. ${fmtMoney(g.avgBuyPrice.toFixed(2), g.currency)}</span>
       </div>
-      <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}<span class="portfolio-group__toggle">▾ rozwiń</span></div>
+      <div class="result-card__xtb">Łącznie ${g.totalShares} szt.${g.ageHtml || ""}</div>
       ${stopTargetLineHtml(g.stopLoss, g.stopSource, g.target, g.currency)}
     </div>
     <div class="result-card__metric">
@@ -1507,14 +1524,12 @@ function renderPortfolioGroupCard(g) {
 
     <div class="result-card__category category--${cls}">${escapeHtml(g.action)}</div>
   `;
-  header.querySelector(".portfolio-group__toggle").addEventListener("click", (e) => {
-    e.stopPropagation();
-    groupWrap.classList.toggle("is-expanded");
-  });
   header.querySelector(".portfolio-group__ai-btn").addEventListener("click", (e) => {
     e.stopPropagation();
     openChart(g.ticker, g.ticker);
   });
+  // Cały nagłówek jest klikalny (nie tylko strzałka) - żeby rozwinąć pozycje
+  // wystarczy kliknąć gdziekolwiek w wiersz, np. w sam tytuł/ticker.
   header.addEventListener("click", () => groupWrap.classList.toggle("is-expanded"));
 
   const lotsWrap = document.createElement("div");
@@ -1582,7 +1597,7 @@ function renderLotCard(p) {
   const card = document.createElement("div");
   card.className = "result-card portfolio-card lot-card";
   card.innerHTML = `
-    <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(p.action, p.reasons))}">${escapeHtml((p.action || "—")).split(" ")[0]}</div>
+    <div class="stamp stamp--${cls}" title="${escapeHtml(actionTooltip(p.action, p.reasons))}">${actionStampLabel(p.action)}</div>
     <div class="result-card__info">
       <div>
         <span class="result-card__ticker">${p.shares} szt.</span>

@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.17"
+VERSION = "3.18"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -788,10 +788,12 @@ def part2(s: Story) -> None:
     s.h2("12.2 Grupowanie pozycji")
     s.p("Kilka transakcji na tej samej spółce (np. dokupowanie w różnych momentach) jest automatycznie "
         "zwijane w jedną kartę zbiorczą — widoczna jest łączna liczba akcji, średnia cena zakupu, "
-        "sumaryczny wynik oraz znaczniki wieku danych i zbliżających się wyników. Kliknięcie strzałki "
-        "„rozwiń” pokazuje poszczególne transakcje z osobna, razem z horyzontem inwestycji "
-        "(krótkoterminowa &lt; 1 mies., średnioterminowa &lt; 1 rok, długoterminowa &gt; 1 rok) i ustawionymi "
-        "własnymi poziomami stop/cel.")
+        "sumaryczny wynik oraz znaczniki wieku danych i zbliżających się wyników. Kliknięcie GDZIEKOLWIEK "
+        "w kartę (nie tylko w strzałkę obok tickera — to tylko wizualna podpowiedź) pokazuje poszczególne "
+        "transakcje z osobna, razem z horyzontem inwestycji (krótkoterminowa &lt; 1 mies., średnioterminowa "
+        "&lt; 1 rok, długoterminowa &gt; 1 rok) i ustawionymi własnymi poziomami stop/cel. Wyjątek: przycisk "
+        "„Analiza AI” (ikona lupy) na tej samej karcie otwiera pełny widok szczegółów spółki zamiast "
+        "rozwijać listę.")
     s.h2("12.3 Przyciski przy pojedynczej transakcji")
     s.bullets([
         "<b>Sprzedaj</b> (ikona worka pieniędzy) — pytanie o cenę sprzedaży, a potem opcjonalnie o rzeczywisty "
@@ -1547,6 +1549,11 @@ def part3(s: Story) -> None:
         ["3.17", "Wrzesień 2026", "Nowy rozdział 13.2: wskaźnik „Zdrowie portfela” (0-100) łączący pięć już "
                                   "istniejących metryk ryzyka z jawnymi wagami. Asystent czatu (18) dostał "
                                   "w kontekście też dywidendy, odchylenia rebalancingu i kalendarz makro."],
+        ["3.18", "Wrzesień 2026", "Poprawki UX w zakładce Portfel: całą kartę grupy pozycji (nie tylko małą "
+                                  "strzałkę) można kliknąć, żeby ją rozwinąć — strzałka obok tickera to teraz "
+                                  "tylko wskazówka wizualna, nie osobny cel kliknięcia. Krótsze, ręcznie "
+                                  "dobrane etykiety w pieczątkach rekomendacji (12.5), żeby dłuższe nazwy "
+                                  "(np. „SPRAWDŹ PRZYCZYNĘ...”) nie ucinały się w małym kółku."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

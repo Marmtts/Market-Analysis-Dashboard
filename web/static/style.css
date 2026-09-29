@@ -1163,9 +1163,16 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   margin-left: 1.6rem;
 }
 .portfolio-group.is-expanded .portfolio-group__lots { display: flex; }
-.portfolio-group__toggle {
-  font-size: 0.7rem; color: var(--text-faint); margin-left: 0.4rem;
+/* Cały nagłówek (portfolio-group__header, wyżej) jest klikalny - ta strzałka
+   obok tickera to tylko wizualna podpowiedź, nie osobny cel kliknięcia. */
+.portfolio-group__chevron {
+  display: inline-block;
+  color: var(--accent-gold-bright);
+  font-size: 0.85rem;
+  margin-right: 0.3rem;
+  transition: transform 0.18s var(--ease);
 }
+.portfolio-group.is-expanded .portfolio-group__chevron { transform: rotate(-180deg); }
 .portfolio-group__ai-btn {
   background: var(--bg-elevated-2); border: 1px solid var(--border-bright);
   border-radius: var(--radius); color: var(--accent-gold-bright);
@@ -1175,7 +1182,10 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .portfolio-group__ai-btn:hover { border-color: var(--accent-gold); }
 .result-card__ai-btn-cell { display: flex; align-items: center; justify-content: center; }
 .lot-card { padding: 0.65rem 0.9rem; }
-.lot-card .stamp { width: 40px; height: 40px; font-size: 0.6rem; }
+/* font-size w clamp(), nie stały rozmiar - odkąd pieczątka pokazuje krótkie,
+   ale czasem dwuwierszowe etykiety (actionStampLabel w app.js), stały 0.6rem
+   w 40px kółku ucinał dłuższe z nich (np. "SPRAWDŹ / PRZYCZYNĘ"). */
+.lot-card .stamp { width: 40px; height: 40px; font-size: clamp(0.32rem, 1vw, 0.4rem); }
 .lot-actions { display: flex; gap: 0.4rem; align-items: center; }
 .lot-actions button {
   background: none; border: none; color: var(--text-faint); cursor: pointer;
