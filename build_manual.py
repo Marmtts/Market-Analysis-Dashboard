@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.20"
+VERSION = "3.21"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -464,6 +464,28 @@ def part1(s: Story) -> None:
               "Zwinięcie NIE wyłącza obliczeń ani danych w tle — to czysto wizualne ukrycie. Wykresy "
               "wewnątrz zwiniętej sekcji (np. krzywa kapitału) poprawnie doskalowują się z powrotem po "
               "jej rozwinięciu.")
+
+    s.h2("3.2 Dynamiczny układ (zakładka Portfel)")
+    s.p("Ponad opisanym wyżej zwijaniem, główna kolumna zakładki Portfel pozwala DOWOLNIE przestawiać i "
+        "skalować każdą sekcję (Ryzyko, Korelacja, Rebalancing, Krzywa kapitału, Pozycje, Dywidendy, "
+        "Kalkulator IKE/FIRE) — panel boczny po lewej zostaje bez zmian. To pilotaż: na razie działa tylko "
+        "w tej jednej zakładce.")
+    s.bullets([
+        "Przycisk <b>„✏ Edytuj układ”</b> nad sekcjami odblokowuje tryb edycji — dopiero wtedy da się "
+        "przeciągać sekcje (za nagłówek) i zmieniać ich rozmiar (za róg). Na co dzień (tryb zablokowany) "
+        "układ zachowuje się jak zwykła, statyczna strona — nic nie da się przypadkiem przesunąć.",
+        "<b>Presety</b> — po ułożeniu wszystkiego po swojemu przycisk „Zapisz jako preset” (ikona dyskietki) "
+        "zapisuje obecny układ pod własną nazwą (lokalnie w przeglądarce). Lista rozwijana nad sekcjami "
+        "przełącza między zapisanymi presetami, „Usuń preset” (ikona kosza) kasuje wybrany, a „↺ Domyślny” "
+        "wraca do jednokolumnowego układu sprzed jakichkolwiek zmian.",
+        "Ostatnio wybrany preset jest pamiętany — po ponownym otwarciu dashboardu (w tej samej "
+        "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś.",
+    ])
+    s.callout("note",
+              "Układ (i presety) są zapisane LOKALNIE w przeglądarce, tak jak reszta personalizacji z "
+              "rozdziału 3.1 — inna przeglądarka albo inne urządzenie zobaczy domyślny układ. Nie wchodzą "
+              "do kopii zapasowej (rozdział 20.2), która dotyczy Twoich danych (pozycji, watchlisty), nie "
+              "wyglądu interfejsu.")
 
     # ------------------------------------------------------------ 4
     s.h1("4. Panel boczny (zakładka Analiza)")
@@ -1571,6 +1593,9 @@ def part3(s: Story) -> None:
                                   "podpowiedzi z konkretnymi liczbami, co poprawić. Naprawiono wykresy "
                                   "wyglądające na „ściśnięte” po rozwinięciu wcześniej zwiniętej sekcji "
                                   "(brakowało ponownego dopasowania skali czasu po zmianie szerokości)."],
+        ["3.21", "Wrzesień 2026", "Nowy rozdział 3.2: dynamiczny, przestawialny układ sekcji w zakładce "
+                                  "Portfel (pilotaż) — przeciąganie, zmiana rozmiaru i zapisywanie własnych "
+                                  "presetów układu, oparte o bibliotekę Gridstack.js."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

@@ -6,6 +6,7 @@
 <title>XTB Trend Watch — Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@14/dist/gridstack.min.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -328,7 +329,20 @@
     <div id="portfolioSummaryBar"></div>
     <div id="portfolioHealthPanel"></div>
 
-    <div class="dash-section" data-section-id="portfolio-risk">
+    <div class="layout-toolbar">
+      <button type="button" class="btn btn--secondary" id="layoutEditToggle">✏ Edytuj układ</button>
+      <select id="layoutPresetSelect" class="layout-toolbar__select">
+        <option value="">— domyślny układ —</option>
+      </select>
+      <button type="button" class="btn btn--secondary" id="layoutPresetSave" title="Zapisz obecny układ (kolejność, rozmiary) jako nowy preset">💾 Zapisz jako preset</button>
+      <button type="button" class="btn btn--secondary" id="layoutPresetDelete" title="Usuń wybrany preset">🗑 Usuń preset</button>
+      <button type="button" class="btn btn--secondary" id="layoutReset" title="Wróć do domyślnego, jednokolumnowego układu">↺ Domyślny</button>
+    </div>
+
+    <div class="grid-stack" id="portfolioGridStack">
+
+    <div class="grid-stack-item" gs-id="portfolio-risk" gs-w="12" gs-h="4">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-risk">
     <div class="section-header">
       <h2><span class="section-header__icon">⚠</span>Ryzyko i ekspozycja</h2>
       <button type="button" class="section-header__action" id="testDiscordBtn" title="Wyślij testową wiadomość na skonfigurowany webhook Discorda (notifications w config.yaml)">🧪 Testuj Discord</button>
@@ -336,16 +350,20 @@
     </div>
     <div class="section-card" id="portfolioRiskPanel"></div>
     </div>
+    </div>
 
-    <div class="dash-section" data-section-id="portfolio-correlation">
+    <div class="grid-stack-item" gs-id="portfolio-correlation" gs-w="12" gs-h="4">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-correlation">
     <div class="section-header">
       <h2><span class="section-header__icon">∿</span>Korelacja i zmienność</h2>
       <span class="section-header__meta" id="portfolioStatsMeta"></span>
     </div>
     <div class="section-card" id="portfolioStatsPanel"></div>
     </div>
+    </div>
 
-    <div class="dash-section" data-section-id="portfolio-rebalancing">
+    <div class="grid-stack-item" gs-id="portfolio-rebalancing" gs-w="12" gs-h="5">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-rebalancing">
     <div class="section-header">
       <h2><span class="section-header__icon">⚖</span>Rebalancing</h2>
     </div>
@@ -368,8 +386,10 @@
       <div id="rebalancingSectorPanel"></div>
     </div>
     </div>
+    </div>
 
-    <div class="dash-section" data-section-id="portfolio-equity">
+    <div class="grid-stack-item" gs-id="portfolio-equity" gs-w="12" gs-h="6">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-equity">
     <div class="section-header">
       <h2><span class="section-header__icon">⟶</span>Krzywa kapitału</h2>
       <span class="section-header__meta" id="equityDrawdownLabel"></span>
@@ -386,8 +406,10 @@
       </div>
     </div>
     </div>
+    </div>
 
-    <div class="dash-section" data-section-id="portfolio-positions">
+    <div class="grid-stack-item" gs-id="portfolio-positions" gs-w="12" gs-h="5">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-positions">
     <div class="section-header">
       <h2><span class="section-header__icon">☰</span>Pozycje</h2>
     </div>
@@ -403,16 +425,20 @@
       <p class="empty-state">📭 Brak pozycji — dodaj pierwszą po lewej stronie.</p>
     </div>
     </div>
+    </div>
 
-    <div class="dash-section" data-section-id="portfolio-dividends">
+    <div class="grid-stack-item" gs-id="portfolio-dividends" gs-w="12" gs-h="4">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-dividends">
     <div class="section-header">
       <h2><span class="section-header__icon">💵</span>Dywidendy</h2>
     </div>
     <div class="section-card" id="dividendSummaryPanel"></div>
     <div class="dividend-table-wrap" id="dividendTableWrap"></div>
     </div>
+    </div>
 
-    <div class="dash-section" data-section-id="portfolio-fire">
+    <div class="grid-stack-item" gs-id="portfolio-fire" gs-w="12" gs-h="6">
+    <div class="grid-stack-item-content dash-section" data-section-id="portfolio-fire">
     <div class="section-header">
       <h2><span class="section-header__icon">🔥</span>Kalkulator IKE / FIRE</h2>
     </div>
@@ -440,6 +466,9 @@
       </div>
       <p class="detail-disclaimer">🔥 Prosta projekcja składanego wzrostu przy STAŁEJ, założonej stopie zwrotu — nie prognoza ani porada inwestycyjna czy emerytalna. Realne zwroty rynkowe są zmienne z roku na rok, nie stałe; nie uwzględnia inflacji, zmian limitu rocznych wpłat na IKE ani ewentualnych opłat. Bieżąca wartość IKE jest wstępnie wypełniona z Twoich pozycji oznaczonych jako konto IKE (rozdział 12.1) — możesz ją zmienić, żeby zasymulować inny punkt startowy.</p>
     </div>
+    </div>
+    </div>
+
     </div>
   </section>
 </main>
@@ -537,6 +566,7 @@
 </div>
 
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gridstack@14/dist/gridstack-all.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

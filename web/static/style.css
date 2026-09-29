@@ -1717,6 +1717,36 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 .dash-section__toggle:hover { color: var(--accent-gold-bright); background: var(--bg-elevated-2); }
 .dash-section.is-collapsed .dash-section__toggle { transform: rotate(-90deg); }
 .dash-section.is-collapsed > *:not(.section-header) { display: none !important; }
+
+/* ---------------- Dowolnie przestawiany/skalowany układ (Gridstack.js) ----------------
+   Na razie tylko zakładka Portfel (pilotaż) - panel boczny zostaje bez zmian.
+   .dash-section wewnątrz siatki to jednocześnie .grid-stack-item-content, więc
+   powyższe reguły (cursor, zwijanie) działają bez zmian - dochodzi tylko wygląd
+   "kafelka" i przewijanie treści, gdy nie mieści się w ręcznie ustawionej wysokości. */
+.layout-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.layout-toolbar .btn { width: auto; margin-top: 0; }
+.layout-toolbar__select {
+  background: var(--bg); border: 1px solid var(--border-bright); border-radius: var(--radius);
+  color: var(--text); padding: 0.5rem 0.7rem; font-family: var(--font-body); font-size: 0.78rem;
+}
+#layoutEditToggle.is-active { border-color: var(--accent-gold-bright); color: var(--accent-gold-bright); background: rgba(212, 175, 55, 0.12); }
+
+.grid-stack-item-content.dash-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  transition: border-color 0.18s ease;
+}
+.grid-stack-item-content.dash-section:hover { border-color: var(--border-bright); }
+/* Tryb edycji (przycisk "Edytuj układ") - obwódka i uchwyty resize widoczne
+   tylko wtedy, żeby na co dzień siatka nie kusiła przypadkowym przeciągnięciem. */
+body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--accent-gold); border-style: dashed; }
+.grid-stack-item.ui-draggable-disabled .ui-resizable-handle { display: none !important; }
 /* Gdy dwa przyciski-pigułki siedzą w jednym nagłówku (Ryzyko i ekspozycja:
    test Discorda + sprawdź alerty) - tylko PIERWSZY dostaje auto-margines
    (odpycha całą parę do prawej), drugi zwykły odstęp, inaczej oba auto-

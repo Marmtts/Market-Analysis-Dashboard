@@ -126,6 +126,14 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   co akurat interesuje. Widoczne kolumny watchlisty/propozycji AI (cena
   docelowa, sygnał, wynik, wykres) włącza się i wyłącza przyciskiem
   „⚙ Kolumny”.
+- Dynamiczny, przestawialny układ głównej kolumny w zakładce Portfel
+  (pilotaż — pozostałe zakładki mają na razie stały układ): przycisk
+  „✏ Edytuj układ” odblokowuje przeciąganie i zmianę rozmiaru każdej
+  sekcji (Ryzyko, Korelacja, Rebalancing, Krzywa kapitału, Pozycje,
+  Dywidendy, Kalkulator FIRE) — panel boczny zostaje bez zmian. Własne
+  układy można zapisać jako nazwane presety (lokalnie w przeglądarce) i
+  przełączać się między nimi, np. jeden „do przeglądu”, inny „do
+  wprowadzania transakcji”.
 - Codzienny brief AI — krótkie podsumowanie sytuacji generowane przez
   lokalny LLM na koniec każdego cyklu.
 - Interaktywny czat z lokalnym LLM, który odpowiada na pytania na
@@ -350,7 +358,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.20)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.21)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -391,7 +399,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.20). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.21). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).

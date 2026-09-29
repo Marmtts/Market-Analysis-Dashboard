@@ -1031,6 +1031,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
       loadPortfolioEquitySection();
       loadDividends();
       loadRebalancing();
+      initPortfolioGridOnce();
     }
     if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
   });
@@ -3378,6 +3379,149 @@ function initDashSections() {
       toggle();
     });
   });
+}
+
+// ---------------- Dynamiczny, przestawialny układ (Gridstack.js) ----------------
+// Na razie tylko zakładka Portfel (pilotaż) - panel boczny po lewej zostaje
+// bez zmian, jak było. Siatka czyta domyślne rozmiary (gs-w/gs-h) wprost z
+// atrybutów w index.html, więc "domyślny układ" nigdy nie trzeba osobno
+// utrzymywać w JS - to po prostu to, co jest w HTML przy starcie.
+let portfolioGrid = null;
+let portfolioGridDefaultLayout = null;
+const PORTFOLIO_LAYOUT_PRESETS_KEY = "portfolioLayoutPresets";
+const PORTFOLIO_ACTIVE_PRESET_KEY = "portfolioActiveLayoutPreset";
+
+function getLayoutPresets() {
+  try {
+    return JSON.parse(localStorage.getItem(PORTFOLIO_LAYOUT_PRESETS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveLayoutPresets(presets) {
+  try {
+    localStorage.setItem(PORTFOLIO_LAYOUT_PRESETS_KEY, JSON.stringify(presets));
+  } catch {
+    // brak trwałości - dashboard nadal działa, tylko nie zapamięta presetów
+  }
+}
+
+function refreshLayoutPresetOptions(selected) {
+  const select = el("layoutPresetSelect");
+  const presets = getLayoutPresets();
+  const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  select.innerHTML = `<option value="">— domyślny układ —</option>` +
+    names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  select.value = selected && names.includes(selected) ? selected : "";
+}
+
+function setLayoutEditing(enabled) {
+  if (!portfolioGrid) return;
+  portfolioGrid.setStatic(!enabled);
+  document.body.classList.toggle("layout-editing", enabled);
+  const btn = el("layoutEditToggle");
+  btn.classList.toggle("is-active", enabled);
+  btn.textContent = enabled ? "✓ Zakończ edycję" : "✏ Edytuj układ";
+}
+
+function initPortfolioGridOnce() {
+  if (portfolioGrid || typeof GridStack === "undefined") return;
+  const gridEl = document.getElementById("portfolioGridStack");
+  if (!gridEl) return;
+
+  portfolioGrid = GridStack.init({
+    column: 12,
+    cellHeight: 70,
+    margin: 8,
+    handle: ".section-header",
+    float: true,
+  }, "#portfolioGridStack");
+  portfolioGrid.setStatic(true); // zablokowany domyślnie - "Edytuj układ" odblokowuje
+
+  portfolioGridDefaultLayout = portfolioGrid.save();
+
+  // Wykresy (Lightweight Charts) wewnątrz kafelków liczą swoją szerokość z
+  // clientWidth kontenera w momencie tworzenia/ostatniego przeliczenia - po
+  // zmianie rozmiaru kafelka trzeba je jawnie odświeżyć (ta sama logika co
+  // resizeChart() w generycznym listenerze resize okna, patrz wyżej).
+  portfolioGrid.on("resizestop", () => {
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  });
+
+  el("layoutEditToggle").addEventListener("click", () => {
+    setLayoutEditing(!document.body.classList.contains("layout-editing"));
+  });
+
+  el("layoutPresetSelect").addEventListener("change", (e) => {
+    const name = e.target.value;
+    const presets = getLayoutPresets();
+    portfolioGrid.load(name && presets[name] ? presets[name] : portfolioGridDefaultLayout);
+    try {
+      localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, name || "");
+    } catch {
+      // jw.
+    }
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  });
+
+  el("layoutPresetSave").addEventListener("click", () => {
+    const name = (prompt("Nazwa presetu:") || "").trim();
+    if (!name) return;
+    const presets = getLayoutPresets();
+    presets[name] = portfolioGrid.save();
+    saveLayoutPresets(presets);
+    refreshLayoutPresetOptions(name);
+    try {
+      localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, name);
+    } catch {
+      // jw.
+    }
+  });
+
+  el("layoutPresetDelete").addEventListener("click", () => {
+    const name = el("layoutPresetSelect").value;
+    if (!name) {
+      alert("Wybierz najpierw preset do usunięcia.");
+      return;
+    }
+    if (!confirm(`Usunąć preset „${name}”?`)) return;
+    const presets = getLayoutPresets();
+    delete presets[name];
+    saveLayoutPresets(presets);
+    refreshLayoutPresetOptions();
+    portfolioGrid.load(portfolioGridDefaultLayout);
+    try {
+      localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
+    } catch {
+      // jw.
+    }
+  });
+
+  el("layoutReset").addEventListener("click", () => {
+    portfolioGrid.load(portfolioGridDefaultLayout);
+    refreshLayoutPresetOptions();
+    try {
+      localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
+    } catch {
+      // jw.
+    }
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  });
+
+  // Wczytaj ostatnio używany preset (jeśli jakiś zapisano) - inaczej zostaje
+  // domyślny, jednokolumnowy układ z HTML.
+  let activeName = null;
+  try {
+    activeName = localStorage.getItem(PORTFOLIO_ACTIVE_PRESET_KEY);
+  } catch {
+    activeName = null;
+  }
+  const presets = getLayoutPresets();
+  if (activeName && presets[activeName]) {
+    portfolioGrid.load(presets[activeName]);
+  }
+  refreshLayoutPresetOptions(activeName);
 }
 
 // ---------------- Start ----------------
