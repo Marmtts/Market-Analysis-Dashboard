@@ -346,6 +346,37 @@ html, body {
 .fire-inputs input:hover { border-color: var(--text-faint); }
 .fire-inputs input:focus { outline: none; border-color: var(--accent-gold); background: var(--bg-elevated); }
 .fire-chart-container { height: 220px; }
+
+/* ---------------- Wskaźnik zdrowia portfela ---------------- */
+.health-score-card {
+  display: flex; align-items: center; gap: 1.3rem;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 1rem 1.3rem; margin-bottom: 1.2rem;
+  background: var(--bg-elevated);
+  transition: border-color 0.18s ease;
+}
+.health-score-card:hover { border-color: var(--border-bright); }
+.health-score-badge {
+  flex: 0 0 auto; width: 76px; height: 76px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+  border: 3px solid currentColor;
+}
+.health-score-badge__number { font-family: var(--font-display); font-weight: 700; font-size: 1.55rem; line-height: 1; }
+.health-score-badge__label { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.2rem; }
+.health-score-badge--great { color: var(--accent-green-bright); }
+.health-score-badge--good { color: var(--accent-gold-bright); }
+.health-score-badge--fair { color: var(--accent-amber); }
+.health-score-badge--poor { color: var(--accent-red-bright); }
+.health-score-body { flex: 1 1 auto; min-width: 0; }
+.health-score-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 0.95rem;
+  margin-bottom: 0.6rem; color: var(--text);
+}
+.health-score-components { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem 1rem; }
+.health-score-component { font-size: 0.68rem; color: var(--text-dim); }
+.health-score-component__row { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+.health-score-component__bar-track { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.health-score-component__bar-fill { height: 100%; border-radius: 2px; }
 .add-form input:hover { border-color: var(--text-faint); }
 .add-form input:focus { outline: none; border-color: var(--accent-gold); background: var(--bg-elevated); }
 .add-form input::placeholder { color: var(--text-faint); }

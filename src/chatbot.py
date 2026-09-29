@@ -78,6 +78,12 @@ def _build_context_block(payload: dict, portfolio_summary: dict | None, extra_co
         lines.append("")
         lines.append(f"BRIEF DNIA (wygenerowany wcześniej): {payload['daily_brief']}")
 
+    if payload.get("macro_calendar"):
+        lines.append("")
+        lines.append("NADCHODZĄCE WYDARZENIA MAKRO (najbliższe dni):")
+        for e in payload["macro_calendar"]:
+            lines.append(f"- {e['date']} (za {e['days_away']} dni): {e['label']}")
+
     lines.append("")
     if portfolio_summary and portfolio_summary.get("by_currency"):
         lines.append("PORTFEL UŻYTKOWNIKA (podsumowanie per waluta):")
@@ -113,6 +119,27 @@ def _build_context_block(payload: dict, portfolio_summary: dict | None, extra_co
             lines.append("HISTORYCZNA SKUTECZNOŚĆ NARZĘDZIA (wg kategorii, min. 14 dni od werdyktu):")
             for cat, s in eff.items():
                 lines.append(f"- {cat}: {s['count']} sygnałów, win rate {s['win_rate_pct']}%, śr. zwrot {s['avg_return_pct']}%")
+
+        dividends = extra_context.get("dividend_summary")
+        if dividends and dividends.get("by_year"):
+            lines.append("")
+            lines.append(f"PRZYCHÓD Z DYWIDEND ({dividends['base_currency']}, wg roku):")
+            for year, y in sorted(dividends["by_year"].items(), reverse=True):
+                lines.append(f"- {year}: {y['count']} wypłat, brutto {y['gross']:.2f}, netto {y['net']:.2f}")
+
+        rebalancing = extra_context.get("rebalancing")
+        if rebalancing:
+            due = [s for s in rebalancing.get("by_ticker", []) if s["needs_action"]]
+            due_sectors = [s for s in rebalancing.get("by_sector", []) if s["needs_action"]]
+            if due or due_sectors:
+                lines.append("")
+                lines.append("REBALANCING - ODCHYLENIA OD USTAWIONYCH CELI ALOKACJI POWYŻEJ PROGU:")
+                for s in due:
+                    lines.append(f"- {s['ticker']}: aktualnie {s['current_pct']}%, cel {s['target_pct']}%, "
+                                  f"odchylenie {s['drift_pct']:+.1f} pkt%")
+                for s in due_sectors:
+                    lines.append(f"- sektor {s['sector']}: aktualnie {s['current_pct']}%, cel {s['target_pct']}%, "
+                                  f"odchylenie {s['drift_pct']:+.1f} pkt%")
 
     return "\n".join(lines)
 

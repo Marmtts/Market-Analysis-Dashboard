@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.16"
+VERSION = "3.17"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -935,6 +935,29 @@ def part2(s: Story) -> None:
               "jakiejś waluty chwilowo nie da się pobrać, karta łączna pokazuje adnotację, że ta waluta "
               "została pominięta.")
 
+    s.h2("13.2 Wskaźnik „Zdrowie portfela”")
+    s.p("Pod podsumowaniem łącznym widoczna jest odznaka 0–100 z etykietą (Słabo / Przeciętnie / Dobrze / "
+        "Świetnie) — jedna, syntetyczna liczba łącząca pięć metryk, z których każda osobno jest już "
+        "widoczna niżej w panelach „Ryzyko i ekspozycja” oraz „Korelacja i zmienność” (rozdział 14). "
+        "Rozpiska składników pod odznaką pokazuje wprost, ile punktów wniósł każdy z nich — nie jest to "
+        "czarna skrzynka.")
+    s.table(["Składnik", "Waga", "Jak liczony"], [
+        ["Dywersyfikacja", "30%", "Współczynnik dywersyfikacji (rozdział 14.2) — 1,0 lub niżej to 0 pkt, "
+                                  "2,0 i więcej to 100 pkt, liniowo pomiędzy."],
+        ["Korelacja pozycji", "20%", "Średnia korelacja (rozdział 14.2) — korelacja +1 to 0 pkt, −1 to "
+                                     "100 pkt."],
+        ["Sharpe", "20%", "Współczynnik Sharpe’a (rozdział 14.2) — od −1 (0 pkt) do +3 (100 pkt)."],
+        ["Maks. obsunięcie", "15%", "0% obsunięcia to 100 pkt, 50% i więcej to 0 pkt, liniowo pomiędzy."],
+        ["Koncentracja sektorowa", "15%", "% portfela w NAJWIĘKSZYM sektorze (rozdział 14.1) — 20% i mniej "
+                                          "to 100 pkt, 80% i więcej to 0 pkt."],
+    ], [26, 12, 62])
+    s.callout("note",
+              "Gdy część danych jeszcze nie jest gotowa (np. świeżo dodana pozycja bez wystarczającej "
+              "wspólnej historii do liczenia korelacji), wskaźnik liczy się z tego, co akurat dostępne, "
+              "rozkładając wagi proporcjonalnie na resztę składników — pod odznaką pojawia się wtedy "
+              "adnotacja o częściowych danych. To orientacyjny skrót, nie rekomendacja — te same liczby, "
+              "tylko osobno i z pełnym kontekstem, widać w panelach niżej.")
+
     # ------------------------------------------------------------ 14
     s.h1("14. Ryzyko, korelacje, benchmark i krzywa kapitału")
     s.h2("14.1 Panel „Ryzyko i ekspozycja”")
@@ -1197,9 +1220,11 @@ def part3(s: Story) -> None:
         "OBSERWOWAĆ?”, „jakie jest ryzyko mojego portfela?”, „kiedy najbliższe wyniki moich spółek?”.")
     s.bullets([
         "Asystent odpowiada WYŁĄCZNIE na podstawie danych z dashboardu: wyników analizy (posortowanych wg "
-        "wyniku), briefu dnia, kontekstu makro, koncentracji sektorowej, portfela per waluta, ryzyka, "
-        "ekspozycji sektorowej portfela, podsumowania podatkowego i statystyk skuteczności. Dane są "
-        "pobierane na świeżo przy każdym pytaniu z ostatniego cyklu.",
+        "wyniku), briefu dnia, kontekstu makro, kalendarza najbliższych wydarzeń makro (rozdział 4.1), "
+        "koncentracji sektorowej, portfela per waluta, ryzyka, ekspozycji sektorowej portfela, "
+        "podsumowania podatkowego, przychodu z dywidend (rozdział 12.6), odchyleń od ustawionych celów "
+        "rebalancingu (rozdział 14.2.1) i statystyk skuteczności. Dane są pobierane na świeżo przy każdym "
+        "pytaniu z ostatniego cyklu.",
         "Nie udziela porad „kup” / „sprzedaj” — opisuje, co pokazują dane i jakie sygnały wygenerowało "
         "narzędzie. Jeśli o czymś nie ma danych (spółka spoza listy, wydarzenie po ostatnim cyklu), "
         "powinien to powiedzieć wprost.",
@@ -1519,6 +1544,9 @@ def part3(s: Story) -> None:
                                   "portfela IKE do wybranego wieku (procent składany, stała stopa zwrotu i "
                                   "wpłata roczna), z wykresem, licząca się na bieżąco przy zmianie pól. "
                                   "Startowa wartość wypełniana automatycznie z bieżących pozycji IKE."],
+        ["3.17", "Wrzesień 2026", "Nowy rozdział 13.2: wskaźnik „Zdrowie portfela” (0-100) łączący pięć już "
+                                  "istniejących metryk ryzyka z jawnymi wagami. Asystent czatu (18) dostał "
+                                  "w kontekście też dywidendy, odchylenia rebalancingu i kalendarz makro."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

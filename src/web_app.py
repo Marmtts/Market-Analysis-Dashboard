@@ -1221,11 +1221,28 @@ async def api_chat(req: ChatRequest):
         min_age_days=_cfg.get("effectiveness", {}).get("min_signal_age_days", 14)
     )
 
+    dividends = db.get_dividends()
+    dividend_summary = compute_dividend_summary(dividends, base_currency) if dividends else None
+
+    tolerance_pct = _cfg.get("portfolio", {}).get("rebalance_tolerance_pct", DEFAULT_REBALANCE_TOLERANCE_PCT)
+    ticker_targets = db.get_target_allocations()
+    sector_targets = db.get_sector_target_allocations()
+    rebalancing = None
+    if ticker_targets or sector_targets:
+        rebalancing = {
+            "by_ticker": compute_rebalancing_suggestions(combined_positions, ticker_targets, {}, tolerance_pct)["suggestions"],
+            "by_sector": compute_sector_rebalancing_suggestions(
+                combined_positions, fundamentals_by_ticker, sector_targets, tolerance_pct
+            )["suggestions"],
+        }
+
     extra_context = {
         "portfolio_risk": portfolio_risk,
         "sector_exposure": sector_exposure,
         "tax_summary": tax_summary,
         "effectiveness_stats": effectiveness_stats,
+        "dividend_summary": dividend_summary,
+        "rebalancing": rebalancing,
     }
 
     reply = await asyncio.to_thread(

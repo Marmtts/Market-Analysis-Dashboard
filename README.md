@@ -77,6 +77,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Panel „Korelacja i zmienność”: roczna zmienność, Sharpe, maks. obsunięcie,
   macierz korelacji i współczynnik dywersyfikacji dla obecnych wag pozycji —
   pokazuje, czy kilka spółek to w praktyce jeden zakład (np. sektor AI/tech).
+- Wskaźnik „Zdrowie portfela” (0–100): jedna, syntetyczna liczba łącząca
+  dywersyfikację, korelację, Sharpe, obsunięcie i koncentrację sektorową —
+  każda z tych metryk osobno widoczna jest w panelach wyżej, tu tylko
+  policzona razem z jawną wagą, żeby nie zgadywać, co ile znaczy.
 - Rebalancing: opcjonalny cel wagi (%) per ticker (także dla spółki, której
   jeszcze nie masz w portfelu) LUB per sektor, panel pokazuje odchylenie od
   celu i sugestię (kup/sprzedaj ile akcji dla tickera, kwotę dla sektora),
@@ -124,7 +128,8 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   lokalny LLM na koniec każdego cyklu.
 - Interaktywny czat z lokalnym LLM, który odpowiada na pytania na
   podstawie WSZYSTKICH danych z bieżącego cyklu (wyniki, portfel, ryzyko,
-  podatki, skuteczność) — bez wysyłania czegokolwiek na zewnątrz.
+  podatki, skuteczność, dywidendy, cele rebalancingu, kalendarz makro) —
+  bez wysyłania czegokolwiek na zewnątrz.
 - Wielowarstwowy cache (newsy historyczne, kursy walut, ceny) znacząco
   skracający czas kolejnych cykli analizy.
 
@@ -343,7 +348,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.16)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.17)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -384,7 +389,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.16). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.17). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
@@ -393,7 +398,7 @@ działania samego narzędzia (nie ma ich w `requirements.txt`).
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Jedenaście pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
+Trzynaście pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
 benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
 Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
 zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
@@ -410,8 +415,10 @@ Heatmapa” obok listy, z filtrem „Tylko pozycje w portfelu”), flaga „kont
 IKE” per pozycja (sekcja 1 powyżej — rozpoznawana automatycznie z importu
 XTB albo ustawiana ręcznie; podatek liczony jako dwa scenariusze, bo
 zależy od wieku przy wypłacie, którego narzędzie nie zna), rebalancing wg
-docelowych wag per ticker/sektor (sekcja 1 powyżej) i kalkulator IKE /
-FIRE (sekcja 1 powyżej). Szczegóły w
+docelowych wag per ticker/sektor (sekcja 1 powyżej), kalkulator IKE /
+FIRE (sekcja 1 powyżej), wskaźnik „Zdrowie portfela” (sekcja 1 powyżej)
+i rozszerzenie kontekstu czatu o dywidendy/rebalancing/kalendarz makro
+(sekcja 1 powyżej). Szczegóły w
 `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
 
 - Pomocnik „tax-loss harvesting” — polskie prawo pozwala odliczyć straty

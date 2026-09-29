@@ -25,6 +25,10 @@ const state = {
   // Bez tego alert cenowy/sygnałowy mógł przejść zupełnie niezauważony po
   // usunięciu (niedziałających w Brave) natywnych powiadomień przeglądarki.
   unseenAlertCount: 0,
+  // Ostatnie dane z dwóch niezależnych zapytań (statystyki + ryzyko/sektory) -
+  // wskaźnik zdrowia portfela (updatePortfolioHealthScore) przelicza się z
+  // tego, co akurat jest dostępne, więc nie musi czekać, aż OBA się załadują.
+  healthInputs: { stats: null, sectorExposure: null },
 };
 
 const el = (id) => document.getElementById(id);
@@ -2150,6 +2154,8 @@ async function loadPortfolioRisk() {
     renderCombinedSummary(data.combined);
     renderPortfolioRisk(data);
     initFireCalculator(data.combined);
+    state.healthInputs.sectorExposure = data.sector_exposure;
+    updatePortfolioHealthScore();
   } catch (err) {
     console.warn("Nie udało się pobrać ryzyka portfela:", err);
   }
@@ -2181,6 +2187,112 @@ function renderCombinedSummary(combined) {
         ${riskLine}
       </div>
       ${skippedNote}
+    </div>
+  `;
+}
+
+// ---------------- Wskaźnik zdrowia portfela ----------------
+// Syntetyzuje w JEDNĄ liczbę (0-100) metryki, które i tak już są policzone
+// i pokazane osobno w panelach "Ryzyko i ekspozycja" oraz "Korelacja i
+// zmienność" - żaden nowy fetch, czysta funkcja na już pobranych danych.
+// Każdy składnik ma jawną wagę i wzór mapujący go na 0-100, żeby liczba nie
+// była czarną skrzynką - rozpiska widoczna jest od razu pod odznaką.
+const HEALTH_SCORE_WEIGHTS = {
+  diversification: 0.30, // współczynnik dywersyfikacji (1.0 = brak korzyści, wyżej = lepiej)
+  correlation: 0.20,     // średnia korelacja między pozycjami (niżej = lepiej)
+  sharpe: 0.20,           // zwrot skorygowany o ryzyko
+  drawdown: 0.15,         // maksymalne obsunięcie w badanym okresie
+  sectorConcentration: 0.15, // % portfela w NAJWIĘKSZYM sektorze
+};
+
+function clamp01(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function computeHealthScore(stats, sectorExposure) {
+  const components = {};
+
+  if (stats && stats.available) {
+    if (stats.diversification_ratio != null) {
+      components.diversification = {
+        score: clamp01((stats.diversification_ratio - 1) / 1.0) * 100,
+        label: "Dywersyfikacja", value: `${stats.diversification_ratio}×`,
+      };
+    }
+    if (stats.avg_correlation != null) {
+      components.correlation = {
+        score: clamp01((1 - stats.avg_correlation) / 2) * 100,
+        label: "Korelacja pozycji", value: stats.avg_correlation,
+      };
+    }
+    if (stats.sharpe != null) {
+      components.sharpe = {
+        score: clamp01((stats.sharpe + 1) / 4) * 100,
+        label: "Sharpe", value: stats.sharpe,
+      };
+    }
+    if (stats.max_drawdown_pct != null) {
+      components.drawdown = {
+        score: clamp01(1 - stats.max_drawdown_pct / 50) * 100,
+        label: "Maks. obsunięcie", value: `-${stats.max_drawdown_pct}%`,
+      };
+    }
+  }
+
+  if (sectorExposure && sectorExposure.length > 0) {
+    const topPct = sectorExposure[0].pct_of_portfolio;
+    components.sectorConcentration = {
+      score: clamp01(1 - (topPct - 20) / 60) * 100,
+      label: "Koncentracja sektorowa", value: `${topPct}% w 1 sektorze`,
+    };
+  }
+
+  const keys = Object.keys(components);
+  if (keys.length === 0) return null;
+
+  const totalWeight = keys.reduce((sum, k) => sum + HEALTH_SCORE_WEIGHTS[k], 0);
+  const weighted = keys.reduce((sum, k) => sum + components[k].score * HEALTH_SCORE_WEIGHTS[k], 0);
+  const score = Math.round(weighted / totalWeight);
+
+  return { score, components, partial: keys.length < Object.keys(HEALTH_SCORE_WEIGHTS).length };
+}
+
+function healthScoreTier(score) {
+  if (score >= 75) return { cls: "great", label: "Świetnie" };
+  if (score >= 55) return { cls: "good", label: "Dobrze" };
+  if (score >= 35) return { cls: "fair", label: "Przeciętnie" };
+  return { cls: "poor", label: "Słabo" };
+}
+
+function updatePortfolioHealthScore() {
+  const panel = el("portfolioHealthPanel");
+  const result = computeHealthScore(state.healthInputs.stats, state.healthInputs.sectorExposure);
+  if (!result) {
+    panel.innerHTML = "";
+    return;
+  }
+  const tier = healthScoreTier(result.score);
+  const barColor = { great: "var(--accent-green-bright)", good: "var(--accent-gold-bright)",
+                      fair: "var(--accent-amber)", poor: "var(--accent-red-bright)" }[tier.cls];
+
+  const componentsHtml = Object.values(result.components).map((c) => `
+    <div class="health-score-component">
+      <div class="health-score-component__row"><span>${escapeHtml(c.label)}</span><span>${escapeHtml(String(c.value))}</span></div>
+      <div class="health-score-component__bar-track"><div class="health-score-component__bar-fill" style="width:${c.score.toFixed(0)}%; background:${barColor}"></div></div>
+    </div>
+  `).join("");
+
+  panel.innerHTML = `
+    <div class="health-score-card">
+      <div class="health-score-badge health-score-badge--${tier.cls}">
+        <span class="health-score-badge__number">${result.score}</span>
+        <span class="health-score-badge__label">${escapeHtml(tier.label)}</span>
+      </div>
+      <div class="health-score-body">
+        <div class="health-score-title">Zdrowie portfela</div>
+        <div class="health-score-components">${componentsHtml}</div>
+        ${result.partial ? `<p class="detail-disclaimer">Liczone z dostępnych dziś składników — część danych (np. korelacje przy bardzo świeżych pozycjach) może jeszcze nie być gotowa.</p>` : ""}
+      </div>
     </div>
   `;
 }
@@ -2648,7 +2760,10 @@ async function loadPortfolioStatistics() {
   try {
     const res = await fetch("/api/portfolio/statistics");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    renderPortfolioStatistics(await res.json());
+    const data = await res.json();
+    renderPortfolioStatistics(data);
+    state.healthInputs.stats = data;
+    updatePortfolioHealthScore();
   } catch (err) {
     panel.innerHTML = `<p class="empty-state">Nie udało się policzyć statystyk portfela.</p>`;
     console.warn("Statystyki portfela:", err);
