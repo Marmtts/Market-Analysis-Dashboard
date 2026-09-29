@@ -33,7 +33,8 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   w `config.yaml` (`macro_calendar`).
 - Heatmapa całej watchlisty (przycisk „🔥 Heatmapa” obok listy) — kolor
   każdej kafelki wg zmiany ceny w ostatniej sesji, do szybkiego przeglądu
-  bez przewijania kart.
+  bez przewijania kart. Opcjonalny filtr „Tylko pozycje w portfelu” zawęża
+  ją do faktycznie posiadanych spółek.
 - Ostrzeżenia o zbliżających się wynikach kwartalnych (badge na kartach,
   baner w panelu spółki, panel „Nadchodzące wyniki”, uwaga przy pozycjach
   w portfelu, wzmianka w briefie dnia i w czacie). Czysto informacyjne —
@@ -333,7 +334,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.13)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.14)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -374,7 +375,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.13). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.14). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).

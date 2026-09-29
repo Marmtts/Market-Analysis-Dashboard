@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.13"
+VERSION = "3.14"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -536,7 +536,9 @@ def part1(s: Story) -> None:
         "OSTATNIEJ sesji, kolor od czerwonego (spadek) przez neutralny do zielonego (wzrost), nasycenie "
         "rośnie do +/-5%. Kliknięcie kafelki otwiera ten sam pełny widok szczegółów co karta. Przydatne do "
         "szybkiego przeglądu całej watchlisty bez przewijania — wybór widoku jest zapamiętywany lokalnie "
-        "w przeglądarce.")
+        "w przeglądarce. W widoku heatmapy pojawia się dodatkowo checkbox <b>„Tylko pozycje w portfelu”</b> "
+        "— zawęża kafelki do samych spółek, które faktycznie posiadasz (rozdział 12), pomijając resztę "
+        "watchlisty obserwowanej tylko analitycznie.")
 
     # ------------------------------------------------------------ 6
     s.h1("6. Kategorie, sygnały i składniki wyniku")
@@ -1469,6 +1471,8 @@ def part3(s: Story) -> None:
         ["3.13", "Wrzesień 2026", "Rebalancing (14.2.1) rozszerzony o cele WG SEKTORA obok celów wg "
                                   "spółki — ta sama logika grupowania co panel „Ryzyko i ekspozycja”, "
                                   "sugestia kwotowa zamiast liczby akcji (sektor to zwykle kilka spółek)."],
+        ["3.14", "Wrzesień 2026", "Heatmapa watchlisty (5) ma teraz checkbox „Tylko pozycje w portfelu” — "
+                                  "zawęża kafelki do faktycznie posiadanych spółek."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

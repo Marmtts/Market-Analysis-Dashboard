@@ -258,6 +258,7 @@ function renderResultsGrid(containerId, results, emptyMessage, sortState) {
 
 // ---------------- Heatmapa watchlisty (widok alternatywny do kart) ----------------
 state.heatmapMode = localStorage.getItem("heatmapMode") === "1";
+state.heatmapPortfolioOnly = localStorage.getItem("heatmapPortfolioOnly") === "1";
 
 // Skala koloru wg zmiany dnia, nasycenie rośnie do +/-5% (dalej już maks. nasycenie) -
 // spójne z czerwienią/zielenią używaną gdzie indziej w interfejsie (positive/negative).
@@ -277,7 +278,14 @@ function renderHeatmap(results) {
     wrap.innerHTML = `<p class="empty-state">Czekam na pierwszy cykl analizy…</p>`;
     return;
   }
-  const sorted = [...results].sort((a, b) => {
+  const filtered = state.heatmapPortfolioOnly
+    ? results.filter((r) => state.portfolioTickers.has(r.ticker))
+    : results;
+  if (filtered.length === 0) {
+    wrap.innerHTML = `<p class="empty-state">📭 Żadna z Twoich pozycji portfela nie jest dziś na tej watchliście.</p>`;
+    return;
+  }
+  const sorted = [...filtered].sort((a, b) => {
     const va = a.technical?.metrics?.day_change_pct ?? -Infinity;
     const vb = b.technical?.metrics?.day_change_pct ?? -Infinity;
     return vb - va;
@@ -303,11 +311,19 @@ function setHeatmapMode(enabled) {
   el("resultsGrid").style.display = enabled ? "none" : "";
   document.querySelector('.results-header[data-sort-group="main"]').style.display = enabled ? "none" : "";
   el("watchlistHeatmap").style.display = enabled ? "" : "none";
+  el("heatmapControls").style.display = enabled ? "" : "none";
   if (enabled) renderHeatmap(state.lastPayload?.results);
 }
 
 el("heatmapToggleBtn").addEventListener("click", () => setHeatmapMode(!state.heatmapMode));
 setHeatmapMode(state.heatmapMode);
+
+el("heatmapPortfolioOnly").checked = state.heatmapPortfolioOnly;
+el("heatmapPortfolioOnly").addEventListener("change", (e) => {
+  state.heatmapPortfolioOnly = e.target.checked;
+  localStorage.setItem("heatmapPortfolioOnly", state.heatmapPortfolioOnly ? "1" : "0");
+  if (state.heatmapMode) renderHeatmap(state.lastPayload?.results);
+});
 
 // ---------------- Sortowanie klikalnych nagłówków ----------------
 const state_sort = { main: { key: null, dir: "asc" }, discovered: { key: null, dir: "asc" }, portfolio: { key: null, dir: "asc" }, closed: { key: null, dir: "asc" } };
