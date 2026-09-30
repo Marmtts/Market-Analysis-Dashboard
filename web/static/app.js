@@ -3444,6 +3444,19 @@ function stripLayoutContent(items) {
   return (items || []).map(({ content, ...rest }) => rest);
 }
 
+// Presety zapisane PRZED wersją z widocznością modułów to gołe tablice
+// (sama lista sekcji). Od teraz preset to {layout, hiddenModules} - te dwie
+// funkcje czytają obie postaci, żeby stare presety dalej działały (bez
+// pamięci widoczności - patrz presetHiddenIdsOf zwracające null).
+function presetLayoutOf(preset) {
+  return Array.isArray(preset) ? preset : (preset && preset.layout) || [];
+}
+
+function presetHiddenIdsOf(preset) {
+  if (Array.isArray(preset)) return null; // stary format - nie pamiętał widoczności
+  return (preset && preset.hiddenModules) || null;
+}
+
 function refreshLayoutPresetOptions(selected) {
   const select = el("layoutPresetSelect");
   const presets = getLayoutPresets();
@@ -3498,6 +3511,23 @@ function setModuleVisible(gridItemEl, visible) {
     portfolioGrid.removeWidget(gridItemEl, false);
     gridItemEl.classList.add("is-module-hidden");
   }
+}
+
+// Ustawia widoczność WSZYSTKICH modułów na raz wg podanej listy ukrytych id
+// - używane przy wybraniu presetu (każdy preset pamięta teraz też, które
+// moduły miał wyłączone w chwili zapisu - patrz layoutPresetSave) oraz przy
+// "Domyślny" (pusta lista = wszystko widoczne).
+function applyModuleVisibility(hiddenIds) {
+  const hiddenSet = new Set(hiddenIds || []);
+  saveHiddenModules(hiddenSet);
+  portfolioModuleItems.forEach(({ id, item }) => {
+    const shouldBeHidden = hiddenSet.has(id);
+    const isHidden = item.classList.contains("is-module-hidden");
+    if (shouldBeHidden && !isHidden) setModuleVisible(item, false);
+    else if (!shouldBeHidden && isHidden) setModuleVisible(item, true);
+  });
+  initModuleToggles();
+  requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
 }
 
 function initModuleToggles() {
@@ -3659,20 +3689,26 @@ function initPortfolioGridOnce() {
   el("layoutPresetSelect").addEventListener("change", (e) => {
     const name = e.target.value;
     const presets = getLayoutPresets();
-    const layout = name && presets[name] ? presets[name] : portfolioGridDefaultLayout;
+    const preset = name ? presets[name] : null;
+    const layout = preset ? presetLayoutOf(preset) : portfolioGridDefaultLayout;
     // addRemove:false - inaczej GridStack próbowałby DODAWAĆ/USUWAĆ kafelki,
     // których id nie ma (lub już jest) w wczytywanej liście, np. gdy preset
     // zapisano przy innym zestawie widocznych modułów niż obecny. To właśnie
     // psuło stronę przy bawieniu się modułami + presetami: potrafiło
-    // zduplikować albo realnie USUNĄĆ Z DOM-u kafelek. Widoczność modułów
-    // (patrz initModuleToggles/setModuleVisible) to osobny mechanizm - load()
-    // ma tu tylko przestawiać pozycje/rozmiary już istniejących kafelków.
+    // zduplikować albo realnie USUNĄĆ Z DOM-u kafelek. load() ma tu tylko
+    // przestawiać pozycje/rozmiary już istniejących kafelków - widoczność
+    // ustawia osobno applyModuleVisibility() niżej.
     portfolioGrid.load(stripLayoutContent(layout), false);
     try {
       localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, name || "");
     } catch {
       // jw.
     }
+    // Każdy preset pamięta też, które moduły miał wyłączone w chwili zapisu
+    // (presetHiddenIdsOf) - "domyślny układ" (brak presetu) i stare presety
+    // zapisane przed tą funkcją (null) pokazują po prostu wszystko.
+    const hiddenIds = preset ? presetHiddenIdsOf(preset) : [];
+    applyModuleVisibility(hiddenIds ?? []);
     refitAllVisibleSections();
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   });
@@ -3693,7 +3729,7 @@ function initPortfolioGridOnce() {
       const pos = item._savedGridPos;
       saved.push({ id, x: pos.x, y: pos.y, w: pos.w, h: pos.h });
     });
-    presets[name] = saved;
+    presets[name] = { layout: saved, hiddenModules: [...getHiddenModules()] };
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions(name);
     try {
@@ -3715,6 +3751,7 @@ function initPortfolioGridOnce() {
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions();
     portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout), false);
+    applyModuleVisibility([]);
     refitAllVisibleSections();
     try {
       localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
@@ -3725,6 +3762,9 @@ function initPortfolioGridOnce() {
 
   el("layoutReset").addEventListener("click", () => {
     portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout), false);
+    // "Domyślny" przywraca też widoczność wszystkich modułów - inaczej
+    // reset układu zostawiałby wcześniej wyłączone moduły nadal ukryte.
+    applyModuleVisibility([]);
     refitAllVisibleSections();
     refreshLayoutPresetOptions();
     try {
@@ -3732,14 +3772,6 @@ function initPortfolioGridOnce() {
     } catch {
       // jw.
     }
-    // "Domyślny" przywraca też widoczność wszystkich modułów - inaczej
-    // reset układu zostawiałby wcześniej wyłączone moduły nadal ukryte.
-    saveHiddenModules(new Set());
-    document.querySelectorAll("#portfolioGridStack > .grid-stack-item.is-module-hidden").forEach((item) => {
-      setModuleVisible(item, true);
-    });
-    initModuleToggles();
-    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   });
 
   // Wczytaj ostatnio używany preset (jeśli jakiś zapisano) - inaczej zostaje
@@ -3752,7 +3784,14 @@ function initPortfolioGridOnce() {
   }
   const presets = getLayoutPresets();
   if (activeName && presets[activeName]) {
-    portfolioGrid.load(stripLayoutContent(presets[activeName]), false);
+    const preset = presets[activeName];
+    portfolioGrid.load(stripLayoutContent(presetLayoutOf(preset)), false);
+    // initModuleToggles() wyżej już zastosowało GLOBALNY (ostatnio zapamiętany)
+    // stan widoczności - jeśli ten konkretny preset pamięta WŁASNY, ma
+    // pierwszeństwo. Stare presety (bez hiddenModules) zostają przy
+    // globalnym stanie.
+    const hiddenIds = presetHiddenIdsOf(preset);
+    if (hiddenIds) applyModuleVisibility(hiddenIds);
   }
   refreshLayoutPresetOptions(activeName);
 }

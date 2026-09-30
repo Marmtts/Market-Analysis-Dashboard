@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.26"
+VERSION = "3.27"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -484,15 +484,18 @@ def part1(s: Story) -> None:
         "przesuwają się w górę, wypełniając miejsce) albo przywraca go w tym samym miejscu, w którym był. "
         "To zastępuje zwijanie z rozdziału 3.1 — zamiast tymczasowo chować treść, wybierasz raz, które "
         "moduły w ogóle Cię interesują.",
-        "<b>Presety</b> — po ułożeniu wszystkiego po swojemu przycisk „Zapisz jako preset” (ikona dyskietki) "
-        "zapisuje obecną KOLEJNOŚĆ sekcji pod własną nazwą (lokalnie w przeglądarce; wysokości nie są "
-        "zapisywane, bo liczą się zawsze na nowo z treści — patrz wyżej). Lista rozwijana nad sekcjami "
-        "przełącza między zapisanymi presetami, „Usuń preset” (ikona kosza) kasuje wybrany, a „↺ Domyślny” "
-        "wraca do jednokolumnowego układu sprzed jakichkolwiek zmian i przywraca widoczność wszystkich "
-        "modułów.",
+        "<b>Presety</b> — po ułożeniu wszystkiego po swojemu (kolejność sekcji i to, które moduły są "
+        "włączone) przycisk „Zapisz jako preset” (ikona dyskietki) zapisuje TO WSZYSTKO pod własną nazwą "
+        "(lokalnie w przeglądarce; same wysokości nie są zapisywane, bo liczą się zawsze na nowo z treści — "
+        "patrz wyżej). Wybranie presetu z listy rozwijanej przywraca zarówno kolejność, jak i widoczność "
+        "modułów z chwili zapisu — dwa presety mogą więc pokazywać zupełnie inny zestaw sekcji (np. jeden "
+        "„do przeglądu ryzyka” z wyłączonym Rebalancingiem i Dywidendami, drugi „do księgowości” "
+        "odwrotnie). „Usuń preset” (ikona kosza) kasuje wybrany, a „↺ Domyślny” wraca do jednokolumnowego "
+        "układu sprzed jakichkolwiek zmian i przywraca widoczność wszystkich modułów.",
         "Ostatnio wybrany preset jest pamiętany — po ponownym otwarciu dashboardu (w tej samej "
-        "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś. Widoczność modułów jest "
-        "niezależna od presetów — obowiązuje dla wszystkich jednakowo.",
+        "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś. Ręczne włączenie/wyłączenie "
+        "modułu kafelkiem (bez zapisywania presetu) zmienia tylko to, co widać TERAZ — żeby ta zmiana "
+        "przetrwała przełączenie na inny preset i z powrotem, zapisz ją jako (nowy albo ten sam) preset.",
     ])
     s.callout("note",
               "Układ, widoczność modułów i presety są zapisane LOKALNIE w przeglądarce, tak jak reszta "
@@ -1643,6 +1646,11 @@ def part3(s: Story) -> None:
                                   "pozycje/rozmiary istniejących kafelków, nigdy nie tworzy ani nie usuwa "
                                   "żadnego. Zapis presetu pamięta też pozycję modułów schowanych w danej "
                                   "chwili, nie tylko widocznych."],
+        ["3.27", "Wrzesień 2026", "Presety (3.2) zapamiętują teraz też, które moduły były wtedy włączone - "
+                                  "wybranie presetu przywraca komplet: kolejność sekcji I ich widoczność, nie "
+                                  "tylko kolejność jak dotąd. Dwa presety mogą więc pokazywać różny zestaw "
+                                  "sekcji. Starsze, już zapisane presety (sprzed tej wersji) działają dalej "
+                                  "bez zmian - po prostu nie pamiętają jeszcze widoczności."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
