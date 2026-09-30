@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.27"
+VERSION = "3.28"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1651,6 +1651,12 @@ def part3(s: Story) -> None:
                                   "tylko kolejność jak dotąd. Dwa presety mogą więc pokazywać różny zestaw "
                                   "sekcji. Starsze, już zapisane presety (sprzed tej wersji) działają dalej "
                                   "bez zmian - po prostu nie pamiętają jeszcze widoczności."],
+        ["3.28", "Wrzesień 2026", "Naprawiono nachodzące na siebie karty w Portfelu (3.2) przy powrocie do "
+                                  "wcześniej schowanego modułu wraz ze zmianą układu (np. preset → „Domyślny” "
+                                  "→ ten sam preset): przywracany moduł wyskakiwał na pozycji zapamiętanej z "
+                                  "MOMENTU SCHOWANIA, a nie z aktualnie wczytywanego układu, więc mógł "
+                                  "wylądować w tym samym miejscu co inna sekcja. Przywracanie widoczności "
+                                  "modułu dostaje teraz jawnie pozycję z układu, który akurat się wczytuje."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
