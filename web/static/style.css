@@ -1768,21 +1768,38 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
   z-index: 20;
   background: var(--bg-elevated);
   border: 1px solid var(--border-bright);
-  border-radius: var(--radius);
-  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-lg);
+  padding: 0.8rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  min-width: 230px;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  width: max-content;
+  max-width: min(520px, 90vw);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
-.module-toggle__list label {
+.module-tile {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 0.8rem;
-  cursor: pointer;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-faint);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
   white-space: nowrap;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+.module-tile:hover { border-color: var(--border-bright); opacity: 0.8; }
+.module-tile__icon { font-size: 0.95rem; line-height: 1; }
+.module-tile.is-active {
+  background: rgba(212, 175, 55, 0.12);
+  border-color: var(--accent-gold-bright);
+  color: var(--text);
+  opacity: 1;
 }
 /* Gdy dwa przyciski-pigułki siedzą w jednym nagłówku (Ryzyko i ekspozycja:
    test Discorda + sprawdź alerty) - tylko PIERWSZY dostaje auto-margines

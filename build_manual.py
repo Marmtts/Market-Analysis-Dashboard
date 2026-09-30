@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.23"
+VERSION = "3.24"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -479,10 +479,11 @@ def part1(s: Story) -> None:
         "układ zachowuje się jak zwykła, statyczna strona — nic nie da się przypadkiem przesunąć. Wysokość "
         "ustawiona ręcznie w trybie edycji jest tymczasowa — gdy treść sekcji się zmieni (np. dojdzie "
         "kolejna pozycja), karta i tak dopasuje wysokość na nowo, żeby nic nie było ucięte.",
-        "<b>„Moduły”</b> (ikona puzzli) — rozwijana lista z checkboksami, po jednym na każdą sekcję. Odznaczenie "
-        "całkiem chowa moduł (kolejne sekcje przesuwają się w górę, wypełniając miejsce), zaznaczenie "
-        "przywraca go w tym samym miejscu, w którym był. To zastępuje zwijanie z rozdziału 3.1 — zamiast "
-        "tymczasowo chować treść, wybierasz raz, które moduły w ogóle Cię interesują.",
+        "<b>„Moduły”</b> (ikona puzzli) — rozwijana lista kafelków, po jednym na każdą sekcję; podświetlony "
+        "(złoty) kafelek oznacza widoczny moduł. Kliknięcie kafelka całkiem chowa moduł (kolejne sekcje "
+        "przesuwają się w górę, wypełniając miejsce) albo przywraca go w tym samym miejscu, w którym był. "
+        "To zastępuje zwijanie z rozdziału 3.1 — zamiast tymczasowo chować treść, wybierasz raz, które "
+        "moduły w ogóle Cię interesują.",
         "<b>Presety</b> — po ułożeniu wszystkiego po swojemu przycisk „Zapisz jako preset” (ikona dyskietki) "
         "zapisuje obecną KOLEJNOŚĆ sekcji pod własną nazwą (lokalnie w przeglądarce; wysokości nie są "
         "zapisywane, bo liczą się zawsze na nowo z treści — patrz wyżej). Lista rozwijana nad sekcjami "
@@ -1617,6 +1618,15 @@ def part3(s: Story) -> None:
                                   "nowy przełącznik „Moduły” (ikona puzzli), który pozwala całkiem wyłączyć te sekcje, "
                                   "których nie chcesz widzieć. Presety zapisują teraz tylko kolejność, nie "
                                   "wysokość (liczoną zawsze z aktualnej treści)."],
+        ["3.24", "Wrzesień 2026", "Poprawki do modułów z 3.23: odznaczenie modułu po wcześniejszym "
+                                  "zaznaczeniu przestawało działać bez odświeżenia strony (GridStack gubił "
+                                  "wewnętrzny identyfikator kafelka przy przywracaniu widoczności) — teraz "
+                                  "kafelki trzymają się stałej referencji zamiast pytać DOM na nowo. Część "
+                                  "kart (zwłaszcza z wykresami) potrafiła zostać za niska mimo automatycznego "
+                                  "dopasowania — mechanizm śledzący zmiany treści przełączono na taki, który "
+                                  "łapie też zmiany niewynikające wprost ze zmian w drzewie strony (np. "
+                                  "wykres rysujący się na canvasie). Lista modułów wygląda teraz jak rząd "
+                                  "kafelków (podświetlony = widoczny) zamiast checkboksów."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

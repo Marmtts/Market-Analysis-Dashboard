@@ -1032,6 +1032,14 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
       loadDividends();
       loadRebalancing();
       initPortfolioGridOnce();
+      // Siatka rozmiaru kart (ResizeObserver w watchSectionContentForResize)
+      // powinna sama nadążyć za dociąganiem danych, ale bywały karty, które
+      // za pierwszym otwarciem zakładki zostawały odrobinę za niskie (np.
+      // czcionka/wykres doładowujący się tuż po pierwszym pomiarze) -
+      // dodatkowe przeliczenie chwilę po otwarciu to tani "bezpiecznik" na
+      // takie przypadki.
+      setTimeout(refitAllVisibleSections, 600);
+      setTimeout(refitAllVisibleSections, 2000);
     }
     if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
   });
@@ -3395,6 +3403,14 @@ function initDashSections() {
 // utrzymywać w JS - to po prostu to, co jest w HTML przy starcie.
 let portfolioGrid = null;
 let portfolioGridDefaultLayout = null;
+// Stała referencja {id, item} do każdego kafelka, złapana RAZ przy starcie
+// siatki. GridStack nie odtwarza atrybutu gs-id na elemencie po
+// removeWidget()/makeWidget() (chowanie/przywracanie modułu - patrz
+// setModuleVisible), więc szukanie kafelków selektorem [gs-id] PO takiej
+// operacji już ich nie znajduje. Trzymając się tej listy zamiast odpytywać
+// DOM na nowo, chowanie/przywracanie/przeliczanie wysokości działa
+// niezależnie od tego, ile razy dany moduł był już chowany.
+let portfolioModuleItems = [];
 const PORTFOLIO_LAYOUT_PRESETS_KEY = "portfolioLayoutPresets";
 const PORTFOLIO_ACTIVE_PRESET_KEY = "portfolioActiveLayoutPreset";
 
@@ -3488,32 +3504,40 @@ function initModuleToggles() {
   const list = el("moduleToggleList");
   if (!list) return;
   const hidden = getHiddenModules();
-  const items = [...document.querySelectorAll("#portfolioGridStack > .grid-stack-item[gs-id]")];
+  const modules = portfolioModuleItems;
 
-  list.innerHTML = items.map((item) => {
-    const id = item.getAttribute("gs-id");
+  list.innerHTML = modules.map(({ id, item }) => {
     const titleEl = item.querySelector(".section-header h2");
-    const title = titleEl ? titleEl.textContent.trim() : id;
-    return `<label><input type="checkbox" data-module-id="${escapeHtml(id)}" ${hidden.has(id) ? "" : "checked"}> ${escapeHtml(title)}</label>`;
+    const iconEl = titleEl ? titleEl.querySelector(".section-header__icon") : null;
+    const icon = iconEl ? iconEl.textContent.trim() : "◆";
+    const fullTitle = titleEl ? titleEl.textContent.trim() : id;
+    const title = icon && fullTitle.startsWith(icon) ? fullTitle.slice(icon.length).trim() : fullTitle;
+    const active = !hidden.has(id);
+    return `<button type="button" class="module-tile${active ? " is-active" : ""}" data-module-id="${escapeHtml(id)}" aria-pressed="${active}">
+      <span class="module-tile__icon">${escapeHtml(icon)}</span>
+      <span class="module-tile__title">${escapeHtml(title)}</span>
+    </button>`;
   }).join("");
 
-  items.forEach((item) => {
-    if (hidden.has(item.getAttribute("gs-id"))) setModuleVisible(item, false);
+  modules.forEach(({ id, item }) => {
+    if (hidden.has(id) && !item.classList.contains("is-module-hidden")) setModuleVisible(item, false);
   });
 
-  list.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-    cb.addEventListener("change", () => {
-      const id = cb.dataset.moduleId;
-      const item = document.querySelector(`#portfolioGridStack > .grid-stack-item[gs-id="${CSS.escape(id)}"]`);
-      if (!item) return;
+  const tiles = [...list.querySelectorAll(".module-tile")];
+  modules.forEach(({ id, item }, i) => {
+    const tile = tiles[i];
+    tile.addEventListener("click", () => {
+      const willShow = !tile.classList.contains("is-active");
       const hiddenSet = getHiddenModules();
-      if (cb.checked) {
+      if (willShow) {
         hiddenSet.delete(id);
         setModuleVisible(item, true);
       } else {
         hiddenSet.add(id);
         setModuleVisible(item, false);
       }
+      tile.classList.toggle("is-active", willShow);
+      tile.setAttribute("aria-pressed", String(willShow));
       saveHiddenModules(hiddenSet);
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     });
@@ -3551,14 +3575,23 @@ function fitSectionHeight(gridItemEl) {
 
 // Sekcje dociągają dane asynchronicznie (fetch po wejściu w zakładkę), więc
 // treść rośnie DUŻO później niż init siatki - bez tego karty zostawałyby
-// "zamrożone" na wysokości ze stanu ładowania. MutationObserver na każdym
-// kafelku każe przeliczyć wysokość za każdym razem, gdy realnie coś się w
-// nim zmieni.
+// "zamrożone" na wysokości ze stanu ładowania.
+//
+// ResizeObserver na .dash-section__body (nie MutationObserver na całym
+// kafelku!) - pilnujemy REALNEGO rozmiaru treści, nie samych zmian w
+// drzewie DOM. To ważne, bo część treści rośnie BEZ zmian w DOM: wykresy
+// (Lightweight Charts) rysują się na <canvas> (ResizeObserver to łapie,
+// MutationObserver nie), a nawet zwykłe dociągnięcie danych czasem tylko
+// zmienia tekst/layout istniejących węzłów. MutationObserver przegapiał
+// część takich przypadków, więc niektóre karty zostawały za niskie
+// (wewnętrzny scrollbar) mimo że kod "próbował" dopasować wysokość.
 function watchSectionContentForResize(gridItemEl) {
   if (!portfolioGrid || gridItemEl._resizeWatcherAttached) return;
+  const body = gridItemEl.querySelector(":scope > .grid-stack-item-content > .dash-section__body");
+  if (!body) return;
   gridItemEl._resizeWatcherAttached = true;
   let scheduled = false;
-  const observer = new MutationObserver(() => {
+  const observer = new ResizeObserver(() => {
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(() => {
@@ -3566,7 +3599,7 @@ function watchSectionContentForResize(gridItemEl) {
       fitSectionHeight(gridItemEl);
     });
   });
-  observer.observe(gridItemEl, { childList: true, subtree: true, characterData: true });
+  observer.observe(body);
   fitSectionHeight(gridItemEl);
 }
 
@@ -3575,7 +3608,9 @@ function watchSectionContentForResize(gridItemEl) {
 // presetu (zapisanego zanim treść urosła) przywróciłoby za małą wysokość i
 // wrócilibyśmy do ucinania/scrollowania, którego cała ta zmiana ma unikać.
 function refitAllVisibleSections() {
-  document.querySelectorAll("#portfolioGridStack > .grid-stack-item[gs-id]:not(.is-module-hidden)").forEach(fitSectionHeight);
+  portfolioModuleItems.forEach(({ item }) => {
+    if (!item.classList.contains("is-module-hidden")) fitSectionHeight(item);
+  });
 }
 
 function initPortfolioGridOnce() {
@@ -3598,8 +3633,11 @@ function initPortfolioGridOnce() {
 
   portfolioGridDefaultLayout = stripLayoutContent(portfolioGrid.save(false));
 
-  const gridItems = [...gridEl.querySelectorAll(":scope > .grid-stack-item[gs-id]")];
-  gridItems.forEach(watchSectionContentForResize);
+  portfolioModuleItems = [...gridEl.querySelectorAll(":scope > .grid-stack-item[gs-id]")].map((item) => ({
+    id: item.getAttribute("gs-id"),
+    item,
+  }));
+  portfolioModuleItems.forEach(({ item }) => watchSectionContentForResize(item));
   initModuleToggles();
 
   // Wykresy (Lightweight Charts) wewnątrz kafelków liczą swoją szerokość z
