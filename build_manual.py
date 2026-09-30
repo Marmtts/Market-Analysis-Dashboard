@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.24"
+VERSION = "3.25"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1627,6 +1627,13 @@ def part3(s: Story) -> None:
                                   "łapie też zmiany niewynikające wprost ze zmian w drzewie strony (np. "
                                   "wykres rysujący się na canvasie). Lista modułów wygląda teraz jak rząd "
                                   "kafelków (podświetlony = widoczny) zamiast checkboksów."],
+        ["3.25", "Wrzesień 2026", "Dwie dalsze poprawki w Portfelu: domyślna wysokość kart (3.2) dostała "
+                                  "dodatkowy zapas, żeby drobne niedopasowania sub-pikselowe nie zostawiały "
+                                  "wewnętrznego scrollbara. Heatmapa (1) z aktywnym filtrem „Tylko pozycje w "
+                                  "portfelu” po twardym odświeżeniu strony potrafiła pokazać fałszywy komunikat "
+                                  "o braku pozycji — lista posiadanych tickerów ładuje się asynchronicznie i "
+                                  "pierwsze rysowanie heatmapy nie zawsze na nią czekało; teraz heatmapa "
+                                  "przerysowuje się ponownie, gdy ta lista jest już gotowa."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

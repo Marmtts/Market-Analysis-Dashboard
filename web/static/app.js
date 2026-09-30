@@ -3566,7 +3566,11 @@ function fitSectionHeight(gridItemEl) {
   if (!content || !body) return;
   const cs = getComputedStyle(content);
   const verticalPadding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-  const wantedPx = body.scrollHeight + verticalPadding;
+  // +16px zapasu: same zaokrąglenie w górę (Math.ceil) w teorii wystarcza,
+  // ale drobne niedopasowania sub-pikselowe (box-sizing, czcionki
+  // doładowujące się po pomiarze) potrafiły zostawić kartę dosłownie o
+  // włos za niską - i to właśnie wtedy pojawiał się wewnętrzny scrollbar.
+  const wantedPx = body.scrollHeight + verticalPadding + 16;
   const rows = Math.max(1, Math.ceil(wantedPx / PORTFOLIO_CELL_HEIGHT));
   if (gridItemEl.gridstackNode && gridItemEl.gridstackNode.h !== rows) {
     portfolioGrid.update(gridItemEl, { h: rows });
@@ -3754,6 +3758,13 @@ function initPortfolioGridOnce() {
   setupSortableHeaders();
   await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness()]);
   await refreshHeldTickers();
+  // loadResults() (wyżej) już zdążył narysować heatmapę, ale w tamtym
+  // momencie state.portfolioTickers było jeszcze puste (refreshHeldTickers
+  // kończy się dopiero tutaj) - przy filtrze "tylko pozycje w portfelu"
+  // dawało to fałszywe "żadna pozycja nie jest dziś na tej watchliście" tuż
+  // po twardym odświeżeniu, mimo że pozycje faktycznie tam były. Trzeba
+  // przerysować heatmapę teraz, gdy portfolioTickers jest już znane.
+  if (state.heatmapMode) renderHeatmap(state.lastPayload?.results);
   connectWebSocket();
   updateNextRunLabel();
 })();
