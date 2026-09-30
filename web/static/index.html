@@ -337,12 +337,17 @@
       <button type="button" class="btn btn--secondary" id="layoutPresetSave" title="Zapisz obecny układ (kolejność, rozmiary) jako nowy preset">💾 Zapisz jako preset</button>
       <button type="button" class="btn btn--secondary" id="layoutPresetDelete" title="Usuń wybrany preset">🗑 Usuń preset</button>
       <button type="button" class="btn btn--secondary" id="layoutReset" title="Wróć do domyślnego, jednokolumnowego układu">↺ Domyślny</button>
+      <details class="module-toggle" id="moduleTogglePanel">
+        <summary class="btn btn--secondary" title="Wybierz, które moduły mają być widoczne">🧩 Moduły</summary>
+        <div class="module-toggle__list" id="moduleToggleList"></div>
+      </details>
     </div>
 
     <div class="grid-stack" id="portfolioGridStack">
 
     <div class="grid-stack-item" gs-id="portfolio-risk" gs-w="12" gs-h="4">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-risk">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">⚠</span>Ryzyko i ekspozycja</h2>
       <button type="button" class="section-header__action" id="testDiscordBtn" title="Wyślij testową wiadomość na skonfigurowany webhook Discorda (notifications w config.yaml)">🧪 Testuj Discord</button>
@@ -351,9 +356,11 @@
     <div class="section-card" id="portfolioRiskPanel"></div>
     </div>
     </div>
+    </div>
 
     <div class="grid-stack-item" gs-id="portfolio-correlation" gs-w="12" gs-h="4">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-correlation">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">∿</span>Korelacja i zmienność</h2>
       <span class="section-header__meta" id="portfolioStatsMeta"></span>
@@ -361,9 +368,11 @@
     <div class="section-card" id="portfolioStatsPanel"></div>
     </div>
     </div>
+    </div>
 
     <div class="grid-stack-item" gs-id="portfolio-rebalancing" gs-w="12" gs-h="5">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-rebalancing">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">⚖</span>Rebalancing</h2>
     </div>
@@ -387,9 +396,11 @@
     </div>
     </div>
     </div>
+    </div>
 
     <div class="grid-stack-item" gs-id="portfolio-equity" gs-w="12" gs-h="6">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-equity">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">⟶</span>Krzywa kapitału</h2>
       <span class="section-header__meta" id="equityDrawdownLabel"></span>
@@ -407,9 +418,11 @@
     </div>
     </div>
     </div>
+    </div>
 
     <div class="grid-stack-item" gs-id="portfolio-positions" gs-w="12" gs-h="5">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-positions">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">☰</span>Pozycje</h2>
     </div>
@@ -426,9 +439,11 @@
     </div>
     </div>
     </div>
+    </div>
 
     <div class="grid-stack-item" gs-id="portfolio-dividends" gs-w="12" gs-h="4">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-dividends">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">💵</span>Dywidendy</h2>
     </div>
@@ -436,9 +451,11 @@
     <div class="dividend-table-wrap" id="dividendTableWrap"></div>
     </div>
     </div>
+    </div>
 
     <div class="grid-stack-item" gs-id="portfolio-fire" gs-w="12" gs-h="6">
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-fire">
+    <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">🔥</span>Kalkulator IKE / FIRE</h2>
     </div>
@@ -465,6 +482,7 @@
         <div id="fireChartContainer" class="fire-chart-container"></div>
       </div>
       <p class="detail-disclaimer">🔥 Prosta projekcja składanego wzrostu przy STAŁEJ, założonej stopie zwrotu — nie prognoza ani porada inwestycyjna czy emerytalna. Realne zwroty rynkowe są zmienne z roku na rok, nie stałe; nie uwzględnia inflacji, zmian limitu rocznych wpłat na IKE ani ewentualnych opłat. Bieżąca wartość IKE jest wstępnie wypełniona z Twoich pozycji oznaczonych jako konto IKE (rozdział 12.1) — możesz ją zmienić, żeby zasymulować inny punkt startowy.</p>
+    </div>
     </div>
     </div>
     </div>

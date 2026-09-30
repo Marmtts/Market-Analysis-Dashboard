@@ -1739,7 +1739,10 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 1rem 1.1rem;
-  overflow-y: auto;
+  /* Kafelki liczą wysokość z realnej treści (sizeToContent w initPortfolioGridOnce) -
+     żadnego wewnętrznego scrolla/ucinania, karta zawsze rośnie tak, żeby
+     wszystko było widoczne bez przewijania w środku. */
+  overflow: visible;
   transition: border-color 0.18s ease;
 }
 .grid-stack-item-content.dash-section:hover { border-color: var(--border-bright); }
@@ -1747,6 +1750,40 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
    tylko wtedy, żeby na co dzień siatka nie kusiła przypadkowym przeciągnięciem. */
 body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--accent-gold); border-style: dashed; }
 .grid-stack-item.ui-draggable-disabled .ui-resizable-handle { display: none !important; }
+/* Moduł wyłączony przełącznikiem widoczności (initModuleToggles) - kafelek
+   zostaje w DOM (GridStack.removeWidget(el, false)), ale znika z siatki. */
+.grid-stack-item.is-module-hidden { display: none !important; }
+
+.module-toggle { position: relative; }
+.module-toggle > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.module-toggle > summary::-webkit-details-marker,
+.module-toggle > summary::marker { display: none; content: ""; }
+.module-toggle__list {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 20;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 230px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.module-toggle__list label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
 /* Gdy dwa przyciski-pigułki siedzą w jednym nagłówku (Ryzyko i ekspozycja:
    test Discorda + sprawdź alerty) - tylko PIERWSZY dostaje auto-margines
    (odpycha całą parę do prawej), drugi zwykły odstęp, inaczej oba auto-

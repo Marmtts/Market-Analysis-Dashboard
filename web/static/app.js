@@ -3337,6 +3337,13 @@ const DASH_SECTION_COLLAPSE_PREFIX = "dashSectionCollapsed:";
 
 function initDashSections() {
   document.querySelectorAll(".dash-section[data-section-id]").forEach((section) => {
+    // Sekcje w zakładce Portfel siedzą w kafelkach Gridstacka - tam widoczność
+    // modułu przełącza się w całości (patrz initModuleToggles), a zwijanie
+    // pojedynczej karty tylko psuło układ siatki (pusta, "ucięta" przestrzeń
+    // po zwinięciu). Poza siatką (Analiza, Zamknięte transakcje) zwijanie
+    // sekcji zostaje bez zmian.
+    if (section.closest(".grid-stack-item")) return;
+
     const header = section.querySelector(":scope > .section-header");
     if (!header) return;
     const id = section.dataset.sectionId;
@@ -3352,29 +3359,12 @@ function initDashSections() {
 
     if (localStorage.getItem(key) === "1") section.classList.add("is-collapsed");
 
-    // Sekcja może siedzieć wewnątrz kafelka Gridstack (na razie tylko
-    // zakładka Portfel, patrz initPortfolioGridOnce) - samo schowanie treści
-    // (CSS wyżej) nie zmienia WYSOKOŚCI KAFELKA, więc bez tego zwinięcie
-    // zostawiało pusty, "ucięty" nagłówek na górze dużego, pustego pola.
-    // Zwijamy więc kafelek do 1 wiersza, pamiętając poprzednią wysokość,
-    // żeby rozwinięcie oddało dokładnie tyle miejsca, ile było wcześniej.
-    const gridItemEl = section.closest(".grid-stack-item");
-    let expandedRows = null;
-
     const toggle = () => {
       const collapsed = section.classList.toggle("is-collapsed");
       try {
         localStorage.setItem(key, collapsed ? "1" : "0");
       } catch {
         // brak trwałości - dashboard nadal działa, tylko nie zapamięta stanu
-      }
-      if (portfolioGrid && gridItemEl) {
-        if (collapsed) {
-          expandedRows = gridItemEl.gridstackNode?.h || expandedRows;
-          portfolioGrid.update(gridItemEl, { h: 1 });
-        } else {
-          portfolioGrid.update(gridItemEl, { h: expandedRows || 4 });
-        }
       }
       if (!collapsed) {
         // Sekcja mogła zawierać wykres (Lightweight Charts), który przy
@@ -3424,6 +3414,20 @@ function saveLayoutPresets(presets) {
   }
 }
 
+// GridStack.save() domyślnie zapisuje też `content` (pełny innerHTML każdego
+// kafelka - wykresy, przyciski, id...) w każdym elemencie układu. Nam to
+// niepotrzebne (i szkodliwe): sekcje mają stałe id w HTML, więc do
+// odtworzenia układu wystarczą x/y/w/h. Zapisywanie/ładowanie z `content`
+// robiło z presetów kilkusetkilobajtowe zrzuty HTML, a przy wczytywaniu
+// GridStack realnie PODMIENIAŁ żywą treść kafelka na ten zamrożony zrzut,
+// odrywając wszystkie podpięte listenery/wykresy (stąd "surowy HTML" i ogólne
+// psucie się UI po zmianie presetu). Usuwamy `content` zarówno przy zapisie,
+// jak i defensywnie przy odczycie (na wypadek starych, już zepsutych presetów
+// zapisanych w localStorage przed tą poprawką).
+function stripLayoutContent(items) {
+  return (items || []).map(({ content, ...rest }) => rest);
+}
+
 function refreshLayoutPresetOptions(selected) {
   const select = el("layoutPresetSelect");
   const presets = getLayoutPresets();
@@ -3442,6 +3446,138 @@ function setLayoutEditing(enabled) {
   btn.textContent = enabled ? "✓ Zakończ edycję" : "✏ Edytuj układ";
 }
 
+// ---------------- Widoczność modułów (Portfel) ----------------
+// Zastępuje dawne zwijanie pojedynczych kart (kolidowało z siatką - patrz
+// initDashSections): tu użytkownik całkiem wyłącza moduł, którego nie chce
+// widzieć, zamiast go zwijać do "uciętego" nagłówka. Niezależne od presetów
+// układu - dotyczy WSZYSTKICH presetów jednakowo.
+const PORTFOLIO_HIDDEN_MODULES_KEY = "portfolioHiddenModules";
+
+function getHiddenModules() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(PORTFOLIO_HIDDEN_MODULES_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHiddenModules(set) {
+  try {
+    localStorage.setItem(PORTFOLIO_HIDDEN_MODULES_KEY, JSON.stringify([...set]));
+  } catch {
+    // brak trwałości - dashboard nadal działa, tylko nie zapamięta wyboru
+  }
+}
+
+function setModuleVisible(gridItemEl, visible) {
+  if (!portfolioGrid) return;
+  if (visible) {
+    gridItemEl.classList.remove("is-module-hidden");
+    portfolioGrid.makeWidget(gridItemEl, gridItemEl._savedGridPos || undefined);
+    gridItemEl._savedGridPos = null;
+    fitSectionHeight(gridItemEl);
+  } else {
+    const node = gridItemEl.gridstackNode;
+    if (node) gridItemEl._savedGridPos = { x: node.x, y: node.y, w: node.w, h: node.h };
+    portfolioGrid.removeWidget(gridItemEl, false);
+    gridItemEl.classList.add("is-module-hidden");
+  }
+}
+
+function initModuleToggles() {
+  const list = el("moduleToggleList");
+  if (!list) return;
+  const hidden = getHiddenModules();
+  const items = [...document.querySelectorAll("#portfolioGridStack > .grid-stack-item[gs-id]")];
+
+  list.innerHTML = items.map((item) => {
+    const id = item.getAttribute("gs-id");
+    const titleEl = item.querySelector(".section-header h2");
+    const title = titleEl ? titleEl.textContent.trim() : id;
+    return `<label><input type="checkbox" data-module-id="${escapeHtml(id)}" ${hidden.has(id) ? "" : "checked"}> ${escapeHtml(title)}</label>`;
+  }).join("");
+
+  items.forEach((item) => {
+    if (hidden.has(item.getAttribute("gs-id"))) setModuleVisible(item, false);
+  });
+
+  list.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const id = cb.dataset.moduleId;
+      const item = document.querySelector(`#portfolioGridStack > .grid-stack-item[gs-id="${CSS.escape(id)}"]`);
+      if (!item) return;
+      const hiddenSet = getHiddenModules();
+      if (cb.checked) {
+        hiddenSet.delete(id);
+        setModuleVisible(item, true);
+      } else {
+        hiddenSet.add(id);
+        setModuleVisible(item, false);
+      }
+      saveHiddenModules(hiddenSet);
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    });
+  });
+}
+
+// Wysokość kafelków w wierszach siatki (patrz initPortfolioGridOnce -
+// cellHeight musi się tu zgadzać z opcją przekazaną do GridStack.init).
+const PORTFOLIO_CELL_HEIGHT = 70;
+
+// Każda sekcja ma wewnątrz jeden wrapper .dash-section__body (patrz
+// index.html) obejmujący CAŁĄ jej treść - nagłówek i resztę. Mierzymy jego
+// naturalną wysokość (scrollHeight, bo overflow:visible w CSS) i przeliczamy
+// na liczbę wierszy siatki, żeby kafelek zawsze mieścił całą treść bez
+// wewnętrznego scrolla ("dobrze wyskalowane, bez przewijania kart").
+//
+// Uwaga: próbowaliśmy wbudowanej opcji GridStacka `sizeToContent` - w tej
+// wersji biblioteki (gridstack@14 z CDN) `resizeToContent()`/auto-sizing
+// nie stosowało realnie nowej wysokości do DOM (node.h się zmieniał, ale
+// renderowana wysokość zostawała stara), więc liczymy to sami i wołamy
+// zwykłe, sprawdzone portfolioGrid.update(el, {h}).
+function fitSectionHeight(gridItemEl) {
+  if (!portfolioGrid || gridItemEl.classList.contains("is-module-hidden")) return;
+  const content = gridItemEl.querySelector(":scope > .grid-stack-item-content");
+  const body = content && content.querySelector(":scope > .dash-section__body");
+  if (!content || !body) return;
+  const cs = getComputedStyle(content);
+  const verticalPadding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  const wantedPx = body.scrollHeight + verticalPadding;
+  const rows = Math.max(1, Math.ceil(wantedPx / PORTFOLIO_CELL_HEIGHT));
+  if (gridItemEl.gridstackNode && gridItemEl.gridstackNode.h !== rows) {
+    portfolioGrid.update(gridItemEl, { h: rows });
+  }
+}
+
+// Sekcje dociągają dane asynchronicznie (fetch po wejściu w zakładkę), więc
+// treść rośnie DUŻO później niż init siatki - bez tego karty zostawałyby
+// "zamrożone" na wysokości ze stanu ładowania. MutationObserver na każdym
+// kafelku każe przeliczyć wysokość za każdym razem, gdy realnie coś się w
+// nim zmieni.
+function watchSectionContentForResize(gridItemEl) {
+  if (!portfolioGrid || gridItemEl._resizeWatcherAttached) return;
+  gridItemEl._resizeWatcherAttached = true;
+  let scheduled = false;
+  const observer = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      fitSectionHeight(gridItemEl);
+    });
+  });
+  observer.observe(gridItemEl, { childList: true, subtree: true, characterData: true });
+  fitSectionHeight(gridItemEl);
+}
+
+// Presety (patrz getLayoutPresets) pamiętają tylko KOLEJNOŚĆ sekcji (x/y) -
+// wysokość zawsze liczymy na nowo z treści, inaczej wczytanie starego
+// presetu (zapisanego zanim treść urosła) przywróciłoby za małą wysokość i
+// wrócilibyśmy do ucinania/scrollowania, którego cała ta zmiana ma unikać.
+function refitAllVisibleSections() {
+  document.querySelectorAll("#portfolioGridStack > .grid-stack-item[gs-id]:not(.is-module-hidden)").forEach(fitSectionHeight);
+}
+
 function initPortfolioGridOnce() {
   if (portfolioGrid || typeof GridStack === "undefined") return;
   const gridEl = document.getElementById("portfolioGridStack");
@@ -3453,14 +3589,18 @@ function initPortfolioGridOnce() {
     margin: 8,
     handle: ".section-header",
     // float:false (domyślne) - sekcje "grawitują" w górę, wypełniając puste
-    // miejsce automatycznie. Ważne przy zwijaniu (initDashSections): bez
-    // tego skrócenie kafelka zostawiałoby pustą dziurę zamiast przysunąć
-    // kolejne sekcje wyżej.
+    // miejsce automatycznie (ważne przy wyłączaniu modułów - patrz
+    // setModuleVisible - bez tego usunięcie kafelka zostawiałoby dziurę
+    // zamiast przysunąć kolejne sekcje wyżej).
     float: false,
   }, "#portfolioGridStack");
   portfolioGrid.setStatic(true); // zablokowany domyślnie - "Edytuj układ" odblokowuje
 
-  portfolioGridDefaultLayout = portfolioGrid.save();
+  portfolioGridDefaultLayout = stripLayoutContent(portfolioGrid.save(false));
+
+  const gridItems = [...gridEl.querySelectorAll(":scope > .grid-stack-item[gs-id]")];
+  gridItems.forEach(watchSectionContentForResize);
+  initModuleToggles();
 
   // Wykresy (Lightweight Charts) wewnątrz kafelków liczą swoją szerokość z
   // clientWidth kontenera w momencie tworzenia/ostatniego przeliczenia - po
@@ -3477,12 +3617,14 @@ function initPortfolioGridOnce() {
   el("layoutPresetSelect").addEventListener("change", (e) => {
     const name = e.target.value;
     const presets = getLayoutPresets();
-    portfolioGrid.load(name && presets[name] ? presets[name] : portfolioGridDefaultLayout);
+    const layout = name && presets[name] ? presets[name] : portfolioGridDefaultLayout;
+    portfolioGrid.load(stripLayoutContent(layout));
     try {
       localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, name || "");
     } catch {
       // jw.
     }
+    refitAllVisibleSections();
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   });
 
@@ -3490,7 +3632,7 @@ function initPortfolioGridOnce() {
     const name = (prompt("Nazwa presetu:") || "").trim();
     if (!name) return;
     const presets = getLayoutPresets();
-    presets[name] = portfolioGrid.save();
+    presets[name] = stripLayoutContent(portfolioGrid.save(false));
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions(name);
     try {
@@ -3511,7 +3653,8 @@ function initPortfolioGridOnce() {
     delete presets[name];
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions();
-    portfolioGrid.load(portfolioGridDefaultLayout);
+    portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout));
+    refitAllVisibleSections();
     try {
       localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
     } catch {
@@ -3520,13 +3663,21 @@ function initPortfolioGridOnce() {
   });
 
   el("layoutReset").addEventListener("click", () => {
-    portfolioGrid.load(portfolioGridDefaultLayout);
+    portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout));
+    refitAllVisibleSections();
     refreshLayoutPresetOptions();
     try {
       localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
     } catch {
       // jw.
     }
+    // "Domyślny" przywraca też widoczność wszystkich modułów - inaczej
+    // reset układu zostawiałby wcześniej wyłączone moduły nadal ukryte.
+    saveHiddenModules(new Set());
+    document.querySelectorAll("#portfolioGridStack > .grid-stack-item.is-module-hidden").forEach((item) => {
+      setModuleVisible(item, true);
+    });
+    initModuleToggles();
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   });
 
@@ -3540,7 +3691,7 @@ function initPortfolioGridOnce() {
   }
   const presets = getLayoutPresets();
   if (activeName && presets[activeName]) {
-    portfolioGrid.load(presets[activeName]);
+    portfolioGrid.load(stripLayoutContent(presets[activeName]));
   }
   refreshLayoutPresetOptions(activeName);
 }

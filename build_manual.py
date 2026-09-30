@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.22"
+VERSION = "3.23"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -453,43 +453,51 @@ def part1(s: Story) -> None:
         "go zwija/rozwija — uchwyt przeciągania i strzałki ▲/▼ nadal działają osobno, bo mają inne, własne "
         "działanie. Kolejność i stan zwinięcia są pamiętane osobno dla panelu bocznego Analizy i osobno "
         "dla Portfela.",
-        "<b>Sekcje głównej kolumny</b> (na wszystkich trzech zakładkach — np. „Ryzyko i ekspozycja”, "
-        "„Krzywa kapitału”, „Historia transakcji”) — każdy nagłówek sekcji ma z prawej strony mały "
-        "przycisk ▾, ale podobnie jak wyżej, kliknięcie CAŁEGO nagłówka (poza innymi przyciskami w nim, "
-        "np. „Testuj Discord” czy „Eksportuj CSV”) też zwija sekcję do samego nagłówka. Przydatne, gdy "
-        "jakaś sekcja (np. macierz korelacji przy dużej watchliście) zajmuje dużo miejsca, a nie "
-        "sprawdzasz jej za każdym razem.",
+        "<b>Sekcje głównej kolumny</b> (zakładki Analiza i Zamknięte transakcje — np. „Stała watchlista”, "
+        "„Propozycje AI”, „Historia transakcji”) — każdy nagłówek sekcji ma z prawej strony mały przycisk "
+        "▾, ale podobnie jak wyżej, kliknięcie CAŁEGO nagłówka (poza innymi przyciskami w nim, np. "
+        "„Eksportuj CSV”) też zwija sekcję do samego nagłówka. Przydatne, gdy jakaś sekcja zajmuje dużo "
+        "miejsca, a nie sprawdzasz jej za każdym razem. Główna kolumna zakładki Portfel ma OSOBNY "
+        "mechanizm — patrz rozdział 3.2.",
     ])
     s.callout("note",
               "Zwinięcie NIE wyłącza obliczeń ani danych w tle — to czysto wizualne ukrycie. Wykresy "
-              "wewnątrz zwiniętej sekcji (np. krzywa kapitału) poprawnie doskalowują się z powrotem po "
-              "jej rozwinięciu.")
+              "wewnątrz zwiniętej sekcji poprawnie doskalowują się z powrotem po jej rozwinięciu.")
 
     s.h2("3.2 Dynamiczny układ (zakładka Portfel)")
-    s.p("Ponad opisanym wyżej zwijaniem, główna kolumna zakładki Portfel pozwala DOWOLNIE przestawiać i "
-        "skalować każdą sekcję (Ryzyko, Korelacja, Rebalancing, Krzywa kapitału, Pozycje, Dywidendy, "
-        "Kalkulator IKE/FIRE) — panel boczny po lewej zostaje bez zmian. To pilotaż: na razie działa tylko "
-        "w tej jednej zakładce.")
+    s.p("Główna kolumna zakładki Portfel pozwala DOWOLNIE przestawiać i skalować każdą sekcję (Ryzyko, "
+        "Korelacja, Rebalancing, Krzywa kapitału, Pozycje, Dywidendy, Kalkulator IKE/FIRE) — panel boczny "
+        "po lewej zostaje bez zmian. To pilotaż: na razie działa tylko w tej jednej zakładce. W "
+        "przeciwieństwie do sekcji opisanych w rozdziale 3.1, sekcje tutaj NIE da się zwinąć pojedynczo — "
+        "zwijanie kolidowało z przeciąganiem/skalowaniem w siatce (pusta, „ucięta” przestrzeń po "
+        "zwinięciu). Zamiast tego każda sekcja zawsze pokazuje CAŁĄ swoją treść (karta sama dopasowuje "
+        "wysokość, bez wewnętrznego przewijania), a to, które moduły w ogóle są widoczne, kontroluje się "
+        "osobno — patrz „Moduły” niżej.")
     s.bullets([
         "Przycisk <b>„✏ Edytuj układ”</b> nad sekcjami odblokowuje tryb edycji — dopiero wtedy da się "
         "przeciągać sekcje (za nagłówek) i zmieniać ich rozmiar (za róg). Na co dzień (tryb zablokowany) "
-        "układ zachowuje się jak zwykła, statyczna strona — nic nie da się przypadkiem przesunąć.",
+        "układ zachowuje się jak zwykła, statyczna strona — nic nie da się przypadkiem przesunąć. Wysokość "
+        "ustawiona ręcznie w trybie edycji jest tymczasowa — gdy treść sekcji się zmieni (np. dojdzie "
+        "kolejna pozycja), karta i tak dopasuje wysokość na nowo, żeby nic nie było ucięte.",
+        "<b>„Moduły”</b> (ikona puzzli) — rozwijana lista z checkboksami, po jednym na każdą sekcję. Odznaczenie "
+        "całkiem chowa moduł (kolejne sekcje przesuwają się w górę, wypełniając miejsce), zaznaczenie "
+        "przywraca go w tym samym miejscu, w którym był. To zastępuje zwijanie z rozdziału 3.1 — zamiast "
+        "tymczasowo chować treść, wybierasz raz, które moduły w ogóle Cię interesują.",
         "<b>Presety</b> — po ułożeniu wszystkiego po swojemu przycisk „Zapisz jako preset” (ikona dyskietki) "
-        "zapisuje obecny układ pod własną nazwą (lokalnie w przeglądarce). Lista rozwijana nad sekcjami "
+        "zapisuje obecną KOLEJNOŚĆ sekcji pod własną nazwą (lokalnie w przeglądarce; wysokości nie są "
+        "zapisywane, bo liczą się zawsze na nowo z treści — patrz wyżej). Lista rozwijana nad sekcjami "
         "przełącza między zapisanymi presetami, „Usuń preset” (ikona kosza) kasuje wybrany, a „↺ Domyślny” "
-        "wraca do jednokolumnowego układu sprzed jakichkolwiek zmian.",
+        "wraca do jednokolumnowego układu sprzed jakichkolwiek zmian i przywraca widoczność wszystkich "
+        "modułów.",
         "Ostatnio wybrany preset jest pamiętany — po ponownym otwarciu dashboardu (w tej samej "
-        "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś.",
-        "Zwijanie sekcji (rozdział 3.1) działa też tutaj i jest z tym układem świadomie zsynchronizowane: "
-        "zwinięcie kurczy kafelek do samego nagłówka, a kolejne sekcje automatycznie przesuwają się w "
-        "górę, żeby nie zostawiać pustego miejsca. Rozwinięcie oddaje dokładnie tyle miejsca, ile kafelek "
-        "miał wcześniej — także po ręcznej zmianie jego rozmiaru w trybie edycji.",
+        "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś. Widoczność modułów jest "
+        "niezależna od presetów — obowiązuje dla wszystkich jednakowo.",
     ])
     s.callout("note",
-              "Układ (i presety) są zapisane LOKALNIE w przeglądarce, tak jak reszta personalizacji z "
-              "rozdziału 3.1 — inna przeglądarka albo inne urządzenie zobaczy domyślny układ. Nie wchodzą "
-              "do kopii zapasowej (rozdział 20.2), która dotyczy Twoich danych (pozycji, watchlisty), nie "
-              "wyglądu interfejsu.")
+              "Układ, widoczność modułów i presety są zapisane LOKALNIE w przeglądarce, tak jak reszta "
+              "personalizacji z rozdziału 3.1 — inna przeglądarka albo inne urządzenie zobaczy domyślny "
+              "układ. Nie wchodzą do kopii zapasowej (rozdział 20.2), która dotyczy Twoich danych (pozycji, "
+              "watchlisty), nie wyglądu interfejsu.")
 
     # ------------------------------------------------------------ 4
     s.h1("4. Panel boczny (zakładka Analiza)")
@@ -1603,6 +1611,12 @@ def part3(s: Story) -> None:
         ["3.22", "Wrzesień 2026", "Naprawiono kolizję zwijania sekcji (3.1) z dynamicznym układem (3.2) — "
                                   "zwinięcie kafelka w siatce zostawiało pustą, „ucięta” przestrzeń zamiast "
                                   "realnie kurczyć się do nagłówka i przesuwać kolejne sekcje w górę."],
+        ["3.23", "Wrzesień 2026", "Zakładka Portfel (3.2): usunięto zwijanie pojedynczych sekcji w siatce "
+                                  "(psuło UX przy przeciąganiu/skalowaniu) — każda karta zawsze pokazuje całą "
+                                  "treść, sama dopasowując wysokość, bez wewnętrznego przewijania. Doszedł "
+                                  "nowy przełącznik „Moduły” (ikona puzzli), który pozwala całkiem wyłączyć te sekcje, "
+                                  "których nie chcesz widzieć. Presety zapisują teraz tylko kolejność, nie "
+                                  "wysokość (liczoną zawsze z aktualnej treści)."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
