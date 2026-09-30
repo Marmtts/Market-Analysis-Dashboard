@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.25"
+VERSION = "3.26"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1634,6 +1634,15 @@ def part3(s: Story) -> None:
                                   "o braku pozycji — lista posiadanych tickerów ładuje się asynchronicznie i "
                                   "pierwsze rysowanie heatmapy nie zawsze na nią czekało; teraz heatmapa "
                                   "przerysowuje się ponownie, gdy ta lista jest już gotowa."],
+        ["3.26", "Wrzesień 2026", "Naprawiono interakcję presetów (3.2) z przełącznikiem modułów: wybieranie "
+                                  "zapisanego presetu przy jednocześnie wyłączonych modułach potrafiło "
+                                  "namieszać w stronie (zdublowany albo zniknięty kafelek) — Gridstack przy "
+                                  "wczytywaniu układu domyślnie sam dodawał/usuwał kafelki, których id nie "
+                                  "zgadzało się dokładnie z zapisaną listą, co kolidowało z osobnym "
+                                  "mechanizmem chowania modułów. Wczytywanie presetu tylko przestawia "
+                                  "pozycje/rozmiary istniejących kafelków, nigdy nie tworzy ani nie usuwa "
+                                  "żadnego. Zapis presetu pamięta też pozycję modułów schowanych w danej "
+                                  "chwili, nie tylko widocznych."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

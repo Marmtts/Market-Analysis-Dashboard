@@ -3660,7 +3660,14 @@ function initPortfolioGridOnce() {
     const name = e.target.value;
     const presets = getLayoutPresets();
     const layout = name && presets[name] ? presets[name] : portfolioGridDefaultLayout;
-    portfolioGrid.load(stripLayoutContent(layout));
+    // addRemove:false - inaczej GridStack próbowałby DODAWAĆ/USUWAĆ kafelki,
+    // których id nie ma (lub już jest) w wczytywanej liście, np. gdy preset
+    // zapisano przy innym zestawie widocznych modułów niż obecny. To właśnie
+    // psuło stronę przy bawieniu się modułami + presetami: potrafiło
+    // zduplikować albo realnie USUNĄĆ Z DOM-u kafelek. Widoczność modułów
+    // (patrz initModuleToggles/setModuleVisible) to osobny mechanizm - load()
+    // ma tu tylko przestawiać pozycje/rozmiary już istniejących kafelków.
+    portfolioGrid.load(stripLayoutContent(layout), false);
     try {
       localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, name || "");
     } catch {
@@ -3674,7 +3681,19 @@ function initPortfolioGridOnce() {
     const name = (prompt("Nazwa presetu:") || "").trim();
     if (!name) return;
     const presets = getLayoutPresets();
-    presets[name] = stripLayoutContent(portfolioGrid.save(false));
+    // portfolioGrid.save() widzi tylko AKTUALNIE śledzone (czyli widoczne)
+    // kafelki - schowany moduł (patrz setModuleVisible) w ogóle by tu nie
+    // trafił. Dokładamy go ręcznie z jego ostatniej znanej pozycji
+    // (_savedGridPos), żeby preset pamiętał układ WSZYSTKICH sekcji, nie
+    // tylko tych akurat włączonych w chwili zapisu.
+    const saved = stripLayoutContent(portfolioGrid.save(false));
+    const savedIds = new Set(saved.map((n) => n.id));
+    portfolioModuleItems.forEach(({ id, item }) => {
+      if (savedIds.has(id) || !item._savedGridPos) return;
+      const pos = item._savedGridPos;
+      saved.push({ id, x: pos.x, y: pos.y, w: pos.w, h: pos.h });
+    });
+    presets[name] = saved;
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions(name);
     try {
@@ -3695,7 +3714,7 @@ function initPortfolioGridOnce() {
     delete presets[name];
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions();
-    portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout));
+    portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout), false);
     refitAllVisibleSections();
     try {
       localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
@@ -3705,7 +3724,7 @@ function initPortfolioGridOnce() {
   });
 
   el("layoutReset").addEventListener("click", () => {
-    portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout));
+    portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout), false);
     refitAllVisibleSections();
     refreshLayoutPresetOptions();
     try {
@@ -3733,7 +3752,7 @@ function initPortfolioGridOnce() {
   }
   const presets = getLayoutPresets();
   if (activeName && presets[activeName]) {
-    portfolioGrid.load(stripLayoutContent(presets[activeName]));
+    portfolioGrid.load(stripLayoutContent(presets[activeName]), false);
   }
   refreshLayoutPresetOptions(activeName);
 }
