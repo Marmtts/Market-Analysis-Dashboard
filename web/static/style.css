@@ -1778,26 +1778,43 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
 }
 .layout-onboarding__close:hover { color: var(--text); }
 
-/* Toast "Cofnij" po operacjach na presetach/resetach, które realnie coś
-   usuwają/nadpisują (patrz showUndoToast w app.js) - samo info bez tego
-   dawało użytkownikowi zero szansy odwrócić przypadkowe kliknięcie. */
-.undo-toast {
+/* System powiadomień (patrz showToast/showErrorToast/showSuccessToast/
+   showUndoToast w app.js) - zastępuje natywne alert() dla błędów walidacji,
+   błędów API i podsumowań importu/kopii zapasowej w CAŁEJ aplikacji (każda
+   zakładka). Kontener stackuje wiele toastów na raz (np. kilka równoległych
+   żądań nie nadpisuje się nawzajem, jak robił to jeden wspólny alert()). */
+.toast-container {
   position: fixed; left: 50%; bottom: 1.6rem; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 0.9rem;
-  background: var(--bg-elevated); border: 1px solid var(--border-bright);
-  border-radius: var(--radius-lg); padding: 0.7rem 0.9rem 0.7rem 1.1rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  z-index: 200; font-size: 0.82rem; color: var(--text);
-  animation: undoToastIn 0.18s ease;
+  z-index: 200; display: flex; flex-direction: column; gap: 0.6rem;
+  align-items: center; width: min(560px, calc(100vw - 2rem));
+  pointer-events: none;
 }
-@keyframes undoToastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-.undo-toast__btn {
+.toast {
+  display: flex; align-items: flex-start; gap: 0.7rem; pointer-events: auto;
+  background: var(--bg-elevated); border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg); padding: 0.7rem 0.7rem 0.7rem 1rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 0.82rem; color: var(--text); width: 100%;
+  animation: toastIn 0.18s ease;
+}
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.toast--error { border-color: #d4604a; }
+.toast--success { border-color: var(--accent-gold-bright); }
+.toast__msg { flex: 1; line-height: 1.5; white-space: pre-line; padding-top: 0.15rem; }
+.toast--error .toast__msg::before { content: "⚠ "; }
+.toast--success .toast__msg::before { content: "✓ "; color: var(--accent-gold-bright); }
+.toast__action {
   background: rgba(212, 175, 55, 0.14); border: 1px solid var(--accent-gold-bright);
   color: var(--accent-gold-bright); border-radius: var(--radius); padding: 0.35rem 0.7rem;
   font-family: var(--font-body); font-size: 0.78rem; font-weight: 600; cursor: pointer;
-  white-space: nowrap;
+  white-space: nowrap; flex-shrink: 0;
 }
-.undo-toast__btn:hover { background: rgba(212, 175, 55, 0.22); }
+.toast__action:hover { background: rgba(212, 175, 55, 0.22); }
+.toast__close {
+  background: none; border: none; cursor: pointer; color: var(--text-faint);
+  font-size: 0.9rem; line-height: 1; padding: 0.15rem 0.2rem; flex-shrink: 0;
+}
+.toast__close:hover { color: var(--text); }
 
 .module-toggle { position: relative; }
 .module-toggle > summary {

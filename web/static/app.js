@@ -504,7 +504,7 @@ el("addForm").addEventListener("submit", async (e) => {
     appendLog({ level: "info", message: `Dodano ${ticker.toUpperCase()} do watchlisty. Pojawi się w kolejnym cyklu analizy.` });
   } else {
     const body = await res.json().catch(() => ({}));
-    alert(body.detail || "Nie udało się dodać spółki.");
+    showErrorToast(body.detail || "Nie udało się dodać spółki.");
   }
 });
 
@@ -1159,7 +1159,7 @@ el("dividendForm").addEventListener("submit", async (e) => {
     notes: el("divNotes").value.trim(),
   };
   if (!payload.ticker || !payload.currency || !payload.pay_date || isNaN(payload.amount_gross) || payload.amount_gross <= 0) {
-    alert("Uzupełnij ticker, walutę, datę i prawidłową kwotę brutto.");
+    showErrorToast("Uzupełnij ticker, walutę, datę i prawidłową kwotę brutto.");
     return;
   }
   const res = await fetch("/api/dividends", {
@@ -1172,7 +1172,7 @@ el("dividendForm").addEventListener("submit", async (e) => {
     await loadDividends();
   } else {
     const b = await res.json().catch(() => ({}));
-    alert(b.detail || "Nie udało się dodać dywidendy.");
+    showErrorToast(b.detail || "Nie udało się dodać dywidendy.");
   }
 });
 
@@ -1240,7 +1240,7 @@ el("targetForm").addEventListener("submit", async (e) => {
   const ticker = el("targetTicker").value.trim();
   const pct = parseFloat(el("targetPct").value);
   if (!ticker || isNaN(pct) || pct < 0 || pct > 100) {
-    alert("Podaj ticker i cel w przedziale 0-100%.");
+    showErrorToast("Podaj ticker i cel w przedziale 0-100%.");
     return;
   }
   const res = await fetch("/api/portfolio/targets", {
@@ -1253,7 +1253,7 @@ el("targetForm").addEventListener("submit", async (e) => {
     await loadRebalancing();
   } else {
     const b = await res.json().catch(() => ({}));
-    alert(b.detail || "Nie udało się ustawić celu.");
+    showErrorToast(b.detail || "Nie udało się ustawić celu.");
   }
 });
 
@@ -1304,7 +1304,7 @@ el("sectorTargetForm").addEventListener("submit", async (e) => {
   const sector = el("sectorTargetName").value.trim();
   const pct = parseFloat(el("sectorTargetPct").value);
   if (!sector || isNaN(pct) || pct < 0 || pct > 100) {
-    alert("Podaj sektor i cel w przedziale 0-100%.");
+    showErrorToast("Podaj sektor i cel w przedziale 0-100%.");
     return;
   }
   const res = await fetch("/api/portfolio/sector-targets", {
@@ -1317,7 +1317,7 @@ el("sectorTargetForm").addEventListener("submit", async (e) => {
     await loadRebalancing();
   } else {
     const b = await res.json().catch(() => ({}));
-    alert(b.detail || "Nie udało się ustawić celu.");
+    showErrorToast(b.detail || "Nie udało się ustawić celu.");
   }
 });
 
@@ -1639,7 +1639,7 @@ function renderLotCard(p) {
     if (sellPrice === null || sellPrice.trim() === "") return;
     const parsed = parseFloat(sellPrice);
     if (isNaN(parsed) || parsed <= 0) {
-      alert("Nieprawidłowa cena.");
+      showErrorToast("Nieprawidłowa cena.");
       return;
     }
     const fxInput = prompt(
@@ -1650,7 +1650,7 @@ function renderLotCard(p) {
     if (fxInput !== null && fxInput.trim() !== "") {
       const parsedFx = parseFloat(fxInput);
       if (isNaN(parsedFx) || parsedFx <= 0) {
-        alert("Nieprawidłowy kurs wymiany - zignorowano, użyty zostanie bieżący kurs rynkowy.");
+        showErrorToast("Nieprawidłowy kurs wymiany - zignorowano, użyty zostanie bieżący kurs rynkowy.");
       } else {
         sellFxRate = parsedFx;
       }
@@ -1665,7 +1665,7 @@ function renderLotCard(p) {
       await loadPortfolio();
     } else {
       const b = await res.json().catch(() => ({}));
-      alert(b.detail || "Nie udało się zamknąć pozycji.");
+      showErrorToast(b.detail || "Nie udało się zamknąć pozycji.");
     }
   });
   // Przycisk ✎ wcześniej nie miał żadnego handlera - startEditPosition() istniało, ale nic go nie wywoływało.
@@ -1764,7 +1764,7 @@ el("portfolioForm").addEventListener("submit", async (e) => {
     await loadPortfolio();
   } else {
     const b = await res.json().catch(() => ({}));
-    alert(b.detail || "Nie udało się zapisać pozycji.");
+    showErrorToast(b.detail || "Nie udało się zapisać pozycji.");
   }
 });
 
@@ -2768,7 +2768,7 @@ el("xtbImportBtn").addEventListener("click", async () => {
   const fileInput = el("xtbImportFile");
   const file = fileInput.files[0];
   if (!file) {
-    alert("Wybierz plik .xlsx z eksportu XTB.");
+    showErrorToast("Wybierz plik .xlsx z eksportu XTB.");
     return;
   }
 
@@ -2783,7 +2783,7 @@ el("xtbImportBtn").addEventListener("click", async () => {
     const res = await fetch("/api/portfolio/import-xtb", { method: "POST", body: formData });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.detail || "Nie udało się zaimportować pliku.");
+      showErrorToast(data.detail || "Nie udało się zaimportować pliku.");
       return;
     }
     let msg = `Zaimportowano: ${data.imported_open} otwartych, ${data.imported_closed} zamkniętych pozycji.`;
@@ -2793,13 +2793,14 @@ el("xtbImportBtn").addEventListener("click", async () => {
     if (data.imported_dividends) msg += ` Zaimportowano ${data.imported_dividends} dywidend.`;
     appendLog({ level: "success", message: `📥 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📥 ${w}` }));
-    alert(msg + (data.warnings?.length ? `\n\nUwagi (patrz też log na żywo):\n${data.warnings.slice(0, 5).join("\n")}` : ""));
+    const hasWarnings = data.warnings?.length > 0;
+    showSuccessToast(msg + (hasWarnings ? `\n\nUwagi (patrz też log na żywo):\n${data.warnings.slice(0, 5).join("\n")}` : ""), { sticky: hasWarnings });
     fileInput.value = "";
     await loadPortfolio();
     await loadDividends();
     await loadClosedPortfolio();
   } catch (err) {
-    alert("Błąd połączenia podczas importu.");
+    showErrorToast("Błąd połączenia podczas importu.");
   } finally {
     btn.disabled = false;
     btn.textContent = "📥 Importuj pozycje";
@@ -2968,7 +2969,7 @@ el("backupImportBtn").addEventListener("click", async () => {
   const fileInput = el("backupImportFile");
   const file = fileInput.files[0];
   if (!file) {
-    alert("Wybierz plik kopii zapasowej (.json).");
+    showErrorToast("Wybierz plik kopii zapasowej (.json).");
     return;
   }
   const btn = el("backupImportBtn");
@@ -2981,14 +2982,15 @@ el("backupImportBtn").addEventListener("click", async () => {
     const res = await fetch("/api/backup/import", { method: "POST", body: formData });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.detail || "Nie udało się wczytać kopii.");
+      showErrorToast(data.detail || "Nie udało się wczytać kopii.");
       return;
     }
     const msg = `Wczytano: ${data.positions_added} pozycji, ${data.watchlist_added} spółek, ${data.dividends_added ?? 0} dywidend i ${(data.targets_set ?? 0) + (data.sector_targets_set ?? 0)} celów alokacji. ` +
       `Pominięto duplikaty: ${data.positions_skipped} pozycji, ${data.watchlist_skipped} spółek, ${data.dividends_skipped ?? 0} dywidend.`;
     appendLog({ level: "success", message: `📤 ${msg}` });
     (data.warnings || []).forEach((w) => appendLog({ level: "warning", message: `📤 ${w}` }));
-    alert(msg + (data.warnings && data.warnings.length ? `\n\nUwagi:\n${data.warnings.slice(0, 5).join("\n")}` : ""));
+    const hasWarnings = data.warnings && data.warnings.length > 0;
+    showSuccessToast(msg + (hasWarnings ? `\n\nUwagi:\n${data.warnings.slice(0, 5).join("\n")}` : ""), { sticky: hasWarnings });
     fileInput.value = "";
     el("backupFileNameLabel").textContent = "📂 Wybierz plik kopii (.json)";
     await loadPortfolio();
@@ -2996,7 +2998,7 @@ el("backupImportBtn").addEventListener("click", async () => {
     await loadDividends();
     await loadRebalancing();
   } catch (err) {
-    alert("Błąd połączenia podczas wczytywania kopii.");
+    showErrorToast("Błąd połączenia podczas wczytywania kopii.");
   } finally {
     btn.disabled = false;
     btn.textContent = "📤 Wczytaj kopię";
@@ -3491,24 +3493,67 @@ function initLayoutOnboarding() {
   });
 }
 
+// Wspólny system powiadomień (patrz #toastContainer w index.html) - zastępuje
+// natywne alert() używane wcześniej w całej aplikacji dla błędów walidacji,
+// błędów API i podsumowań importu/kopii zapasowej. Kontener stackuje wiele
+// toastów naraz, więc kolejne wywołanie nie "zjada" poprzedniego komunikatu
+// (czego pojedynczy blokujący alert() nie pozwalał odróżnić).
+//
+// duration: null/0 = toast zostaje, aż ktoś go zamknie ręcznie (✕) - używane
+// tam, gdzie treść jest dłuższa/ważniejsza (np. lista ostrzeżeń z importu) i
+// zbyt łatwo przegapić ją w kilka sekund.
+function showToast(message, opts = {}) {
+  const { type = "info", actionLabel = null, onAction = null, duration = 5500 } = opts;
+  const container = el("toastContainer");
+  if (!container) return null;
+  const toast = document.createElement("div");
+  toast.className = `toast toast--${type}`;
+  const msg = document.createElement("span");
+  msg.className = "toast__msg";
+  msg.textContent = message;
+  toast.appendChild(msg);
+  let timer = null;
+  const dismiss = () => {
+    if (timer) clearTimeout(timer);
+    toast.remove();
+  };
+  if (actionLabel) {
+    const actionBtn = document.createElement("button");
+    actionBtn.type = "button";
+    actionBtn.className = "toast__action";
+    actionBtn.textContent = actionLabel;
+    actionBtn.addEventListener("click", () => {
+      dismiss();
+      onAction && onAction();
+    });
+    toast.appendChild(actionBtn);
+  }
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "toast__close";
+  closeBtn.setAttribute("aria-label", "Zamknij");
+  closeBtn.textContent = "✕";
+  closeBtn.addEventListener("click", dismiss);
+  toast.appendChild(closeBtn);
+  container.appendChild(toast);
+  if (duration) timer = setTimeout(dismiss, duration);
+  return { dismiss };
+}
+
+function showErrorToast(message) {
+  showToast(message, { type: "error", duration: 7000 });
+}
+
+function showSuccessToast(message, opts = {}) {
+  showToast(message, { type: "success", duration: opts.sticky ? null : (opts.duration ?? 6500) });
+}
+
 // Toast z przyciskiem "Cofnij" po operacjach, które realnie coś
 // usuwają/nadpisują (usunięcie presetu, reset układu, nadpisanie istniejącego
 // presetu) - restoreFn dostaje dokładnie tyle czasu (6s), ile trwa wyświetlenie
 // toasta, zanim zmiana stanie się "ostateczna".
 function showUndoToast(message, restoreFn) {
-  const existing = document.getElementById("undoToast");
-  if (existing) existing.remove();
-  const toast = document.createElement("div");
-  toast.id = "undoToast";
-  toast.className = "undo-toast";
-  toast.innerHTML = `<span class="undo-toast__msg">${escapeHtml(message)}</span><button type="button" class="undo-toast__btn">↺ Cofnij</button>`;
-  document.body.appendChild(toast);
-  const timer = setTimeout(() => toast.remove(), 6000);
-  toast.querySelector(".undo-toast__btn").addEventListener("click", () => {
-    clearTimeout(timer);
-    toast.remove();
-    restoreFn();
-  });
+  showToast(message, { type: "info", actionLabel: "↺ Cofnij", onAction: restoreFn, duration: 6000 });
 }
 
 function setLayoutEditing(enabled) {
@@ -3881,7 +3926,7 @@ function initPortfolioGridOnce() {
   el("layoutPresetDelete").addEventListener("click", () => {
     const name = el("layoutPresetSelect").value;
     if (!name) {
-      alert("Wybierz najpierw preset do usunięcia.");
+      showErrorToast("Wybierz najpierw preset do usunięcia.");
       return;
     }
     if (!confirm(`Usunąć preset „${name}”?`)) return;

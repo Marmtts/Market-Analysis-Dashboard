@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.29"
+VERSION = "3.30"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1667,6 +1667,12 @@ def part3(s: Story) -> None:
                                   "oraz nadpisanie istniejącego presetu nową zawartością dają teraz kilka "
                                   "sekund na kliknięcie „Cofnij” w wyświetlonym komunikacie, zanim zmiana "
                                   "stanie się ostateczna."],
+        ["3.30", "Wrzesień 2026", "Zastąpiono natywne okienka alert() przeglądarki (błędy walidacji formularzy, "
+                                  "błędy zapisu, podsumowania importu z XTB i kopii zapasowej) spójnymi "
+                                  "powiadomieniami (toastami) w dolnej części ekranu, we WSZYSTKICH "
+                                  "zakładkach — nie blokują już reszty strony i można mieć kilka naraz. "
+                                  "Potwierdzenia usunięcia (confirm) oraz okienka z pytaniem o cenę/kurs przy "
+                                  "sprzedaży (prompt) zostają na razie bez zmian — to osobny etap."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
