@@ -138,7 +138,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   które moduły są włączone) można zapisać jako nazwane presety (lokalnie w
   przeglądarce) i przełączać się między nimi, np. jeden „do przeglądu” z
   jednym zestawem widocznych sekcji, inny „do wprowadzania transakcji” z
-  innym.
+  innym. Przy pierwszym wejściu pojawia się jednorazowy baner z wyjaśnieniem
+  tych przycisków, a usunięcie/nadpisanie presetu oraz reset do domyślnego
+  układu dają kilka sekund na kliknięcie „Cofnij”, zanim zmiana jest
+  ostateczna.
 - Codzienny brief AI — krótkie podsumowanie sytuacji generowane przez
   lokalny LLM na koniec każdego cyklu.
 - Interaktywny czat z lokalnym LLM, który odpowiada na pytania na
@@ -363,7 +366,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.28)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.29)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -404,7 +407,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.28). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.29). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).

@@ -3466,6 +3466,51 @@ function refreshLayoutPresetOptions(selected) {
   select.value = selected && names.includes(selected) ? selected : "";
 }
 
+// Baner "jak to działa" (patrz #layoutOnboarding w index.html) - pokazuje się
+// tylko RAZ, bo nic innego w interfejsie nie zdradza, że kafelki da się
+// przeciągać/skalować i zapisywać jako preset. Znika na stałe po kliknięciu ×.
+const PORTFOLIO_ONBOARDING_SEEN_KEY = "portfolioOnboardingSeen";
+
+function initLayoutOnboarding() {
+  const banner = el("layoutOnboarding");
+  if (!banner) return;
+  let seen = false;
+  try {
+    seen = localStorage.getItem(PORTFOLIO_ONBOARDING_SEEN_KEY) === "1";
+  } catch {
+    seen = false;
+  }
+  if (!seen) banner.hidden = false;
+  el("layoutOnboardingClose").addEventListener("click", () => {
+    banner.hidden = true;
+    try {
+      localStorage.setItem(PORTFOLIO_ONBOARDING_SEEN_KEY, "1");
+    } catch {
+      // brak trwałości - baner i tak zamknięty na tę sesję
+    }
+  });
+}
+
+// Toast z przyciskiem "Cofnij" po operacjach, które realnie coś
+// usuwają/nadpisują (usunięcie presetu, reset układu, nadpisanie istniejącego
+// presetu) - restoreFn dostaje dokładnie tyle czasu (6s), ile trwa wyświetlenie
+// toasta, zanim zmiana stanie się "ostateczna".
+function showUndoToast(message, restoreFn) {
+  const existing = document.getElementById("undoToast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.id = "undoToast";
+  toast.className = "undo-toast";
+  toast.innerHTML = `<span class="undo-toast__msg">${escapeHtml(message)}</span><button type="button" class="undo-toast__btn">↺ Cofnij</button>`;
+  document.body.appendChild(toast);
+  const timer = setTimeout(() => toast.remove(), 6000);
+  toast.querySelector(".undo-toast__btn").addEventListener("click", () => {
+    clearTimeout(timer);
+    toast.remove();
+    restoreFn();
+  });
+}
+
 function setLayoutEditing(enabled) {
   if (!portfolioGrid) return;
   portfolioGrid.setStatic(!enabled);
@@ -3655,6 +3700,66 @@ function watchSectionContentForResize(gridItemEl) {
 // wysokość zawsze liczymy na nowo z treści, inaczej wczytanie starego
 // presetu (zapisanego zanim treść urosła) przywróciłoby za małą wysokość i
 // wrócilibyśmy do ucinania/scrollowania, którego cała ta zmiana ma unikać.
+// Pełny układ WSZYSTKICH sekcji, łącznie z aktualnie schowanymi modułami -
+// portfolioGrid.save() widzi tylko śledzone (widoczne) kafelki, więc schowane
+// dokładamy ręcznie z ich ostatniej znanej pozycji (_savedGridPos). Używane
+// zarówno przy zapisie presetu, jak i przy snapshotcie do "Cofnij".
+function captureFullLayout() {
+  const saved = stripLayoutContent(portfolioGrid.save(false));
+  const savedIds = new Set(saved.map((n) => n.id));
+  portfolioModuleItems.forEach(({ id, item }) => {
+    if (savedIds.has(id) || !item._savedGridPos) return;
+    const pos = item._savedGridPos;
+    saved.push({ id, x: pos.x, y: pos.y, w: pos.w, h: pos.h });
+  });
+  return saved;
+}
+
+// Zrzut całego stanu układu Portfela (presety, aktywny preset, bieżący
+// rozkład, widoczność modułów) przed akcją, która coś nadpisuje/usuwa (usuń
+// preset, reset do domyślnego) - restorePortfolioLayoutState() wraca do
+// TEGO stanu po kliknięciu "Cofnij" w toaście (patrz showUndoToast).
+function snapshotPortfolioLayoutState() {
+  let presetsJson = null;
+  let activeName = null;
+  try {
+    presetsJson = localStorage.getItem(PORTFOLIO_LAYOUT_PRESETS_KEY);
+  } catch {
+    // jw.
+  }
+  try {
+    activeName = localStorage.getItem(PORTFOLIO_ACTIVE_PRESET_KEY);
+  } catch {
+    // jw.
+  }
+  return {
+    presetsJson,
+    activeName,
+    layout: captureFullLayout(),
+    hiddenModules: [...getHiddenModules()],
+  };
+}
+
+function restorePortfolioLayoutState(snap) {
+  try {
+    if (snap.presetsJson === null) localStorage.removeItem(PORTFOLIO_LAYOUT_PRESETS_KEY);
+    else localStorage.setItem(PORTFOLIO_LAYOUT_PRESETS_KEY, snap.presetsJson);
+  } catch {
+    // jw.
+  }
+  try {
+    if (snap.activeName === null) localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
+    else localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, snap.activeName);
+  } catch {
+    // jw.
+  }
+  portfolioGrid.load(stripLayoutContent(snap.layout), false);
+  applyModuleVisibility(snap.hiddenModules, snap.layout);
+  refitAllVisibleSections();
+  refreshLayoutPresetOptions(snap.activeName || "");
+  requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+}
+
 function refitAllVisibleSections() {
   portfolioModuleItems.forEach(({ item }) => {
     if (!item.classList.contains("is-module-hidden")) fitSectionHeight(item);
@@ -3693,6 +3798,7 @@ function initPortfolioGridOnce() {
   }));
   portfolioModuleItems.forEach(({ item }) => watchSectionContentForResize(item));
   initModuleToggles();
+  initLayoutOnboarding();
 
   // Wykresy (Lightweight Charts) wewnątrz kafelków liczą swoją szerokość z
   // clientWidth kontenera w momencie tworzenia/ostatniego przeliczenia - po
@@ -3737,25 +3843,38 @@ function initPortfolioGridOnce() {
     const name = (prompt("Nazwa presetu:") || "").trim();
     if (!name) return;
     const presets = getLayoutPresets();
-    // portfolioGrid.save() widzi tylko AKTUALNIE śledzone (czyli widoczne)
-    // kafelki - schowany moduł (patrz setModuleVisible) w ogóle by tu nie
-    // trafił. Dokładamy go ręcznie z jego ostatniej znanej pozycji
-    // (_savedGridPos), żeby preset pamiętał układ WSZYSTKICH sekcji, nie
-    // tylko tych akurat włączonych w chwili zapisu.
-    const saved = stripLayoutContent(portfolioGrid.save(false));
-    const savedIds = new Set(saved.map((n) => n.id));
-    portfolioModuleItems.forEach(({ id, item }) => {
-      if (savedIds.has(id) || !item._savedGridPos) return;
-      const pos = item._savedGridPos;
-      saved.push({ id, x: pos.x, y: pos.y, w: pos.w, h: pos.h });
-    });
-    presets[name] = { layout: saved, hiddenModules: [...getHiddenModules()] };
+    // Nadpisanie istniejącego presetu usuwa jego poprzednią treść bezpowrotnie
+    // - zanim to zrobimy, chowamy stary JSON presetów w zamknięciu, żeby
+    // "Cofnij" mógł go po prostu przywrócić (grid/widoczność się tu nie
+    // zmieniają, więc wystarczy odtworzyć sam zapis presetów + listę).
+    const overwriting = Object.prototype.hasOwnProperty.call(presets, name);
+    const previousPresetsJson = overwriting ? JSON.stringify(presets) : null;
+    const previousActiveName = overwriting ? (() => {
+      try { return localStorage.getItem(PORTFOLIO_ACTIVE_PRESET_KEY); } catch { return null; }
+    })() : null;
+    presets[name] = { layout: captureFullLayout(), hiddenModules: [...getHiddenModules()] };
     saveLayoutPresets(presets);
     refreshLayoutPresetOptions(name);
     try {
       localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, name);
     } catch {
       // jw.
+    }
+    if (overwriting) {
+      showUndoToast(`Nadpisano preset „${name}”.`, () => {
+        try {
+          localStorage.setItem(PORTFOLIO_LAYOUT_PRESETS_KEY, previousPresetsJson);
+        } catch {
+          // jw.
+        }
+        try {
+          if (previousActiveName === null) localStorage.removeItem(PORTFOLIO_ACTIVE_PRESET_KEY);
+          else localStorage.setItem(PORTFOLIO_ACTIVE_PRESET_KEY, previousActiveName);
+        } catch {
+          // jw.
+        }
+        refreshLayoutPresetOptions(previousActiveName || "");
+      });
     }
   });
 
@@ -3766,6 +3885,7 @@ function initPortfolioGridOnce() {
       return;
     }
     if (!confirm(`Usunąć preset „${name}”?`)) return;
+    const snap = snapshotPortfolioLayoutState();
     const presets = getLayoutPresets();
     delete presets[name];
     saveLayoutPresets(presets);
@@ -3778,9 +3898,11 @@ function initPortfolioGridOnce() {
     } catch {
       // jw.
     }
+    showUndoToast(`Usunięto preset „${name}”.`, () => restorePortfolioLayoutState(snap));
   });
 
   el("layoutReset").addEventListener("click", () => {
+    const snap = snapshotPortfolioLayoutState();
     portfolioGrid.load(stripLayoutContent(portfolioGridDefaultLayout), false);
     // "Domyślny" przywraca też widoczność wszystkich modułów - inaczej
     // reset układu zostawiałby wcześniej wyłączone moduły nadal ukryte.
@@ -3792,6 +3914,7 @@ function initPortfolioGridOnce() {
     } catch {
       // jw.
     }
+    showUndoToast("Przywrócono domyślny układ.", () => restorePortfolioLayoutState(snap));
   });
 
   // Wczytaj ostatnio używany preset (jeśli jakiś zapisano) - inaczej zostaje

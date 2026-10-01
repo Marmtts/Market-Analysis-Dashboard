@@ -1754,6 +1754,51 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
    zostaje w DOM (GridStack.removeWidget(el, false)), ale znika z siatki. */
 .grid-stack-item.is-module-hidden { display: none !important; }
 
+/* Baner "jak to działa" przy pierwszym wejściu na zakładkę Portfel -
+   wyjaśnia Edytuj układ / Moduły / presety, bo bez tego nic w interfejsie
+   nie zdradza, że kafelki da się przeciągać i zapisywać jako preset.
+   Znika na stałe po kliknięciu × (patrz PORTFOLIO_ONBOARDING_SEEN_KEY w app.js). */
+.layout-onboarding {
+  display: flex; align-items: flex-start; gap: 0.7rem;
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  font-size: 0.82rem;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+.layout-onboarding__icon { font-size: 1.1rem; line-height: 1.4; }
+.layout-onboarding__text strong { color: var(--text); }
+.layout-onboarding__close {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: var(--text-faint); font-size: 1rem; line-height: 1; padding: 0.1rem 0.3rem;
+  flex-shrink: 0;
+}
+.layout-onboarding__close:hover { color: var(--text); }
+
+/* Toast "Cofnij" po operacjach na presetach/resetach, które realnie coś
+   usuwają/nadpisują (patrz showUndoToast w app.js) - samo info bez tego
+   dawało użytkownikowi zero szansy odwrócić przypadkowe kliknięcie. */
+.undo-toast {
+  position: fixed; left: 50%; bottom: 1.6rem; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 0.9rem;
+  background: var(--bg-elevated); border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg); padding: 0.7rem 0.9rem 0.7rem 1.1rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  z-index: 200; font-size: 0.82rem; color: var(--text);
+  animation: undoToastIn 0.18s ease;
+}
+@keyframes undoToastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.undo-toast__btn {
+  background: rgba(212, 175, 55, 0.14); border: 1px solid var(--accent-gold-bright);
+  color: var(--accent-gold-bright); border-radius: var(--radius); padding: 0.35rem 0.7rem;
+  font-family: var(--font-body); font-size: 0.78rem; font-weight: 600; cursor: pointer;
+  white-space: nowrap;
+}
+.undo-toast__btn:hover { background: rgba(212, 175, 55, 0.22); }
+
 .module-toggle { position: relative; }
 .module-toggle > summary {
   list-style: none;

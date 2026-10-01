@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.28"
+VERSION = "3.29"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -496,6 +496,10 @@ def part1(s: Story) -> None:
         "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś. Ręczne włączenie/wyłączenie "
         "modułu kafelkiem (bez zapisywania presetu) zmienia tylko to, co widać TERAZ — żeby ta zmiana "
         "przetrwała przełączenie na inny preset i z powrotem, zapisz ją jako (nowy albo ten sam) preset.",
+        "Przy pierwszym wejściu na zakładkę pojawia się jednorazowy baner wyjaśniający powyższe trzy "
+        "przyciski — zamyka się na stałe krzyżykiem i nie wraca później. Akcje, które coś nadpisują albo "
+        "usuwają (nadpisanie presetu tą samą nazwą, „Usuń preset”, „↺ Domyślny”) pokazują na kilka sekund "
+        "komunikat z przyciskiem „↺ Cofnij” — kliknięcie w tym czasie przywraca stan sprzed danej akcji.",
     ])
     s.callout("note",
               "Układ, widoczność modułów i presety są zapisane LOKALNIE w przeglądarce, tak jak reszta "
@@ -1657,6 +1661,12 @@ def part3(s: Story) -> None:
                                   "MOMENTU SCHOWANIA, a nie z aktualnie wczytywanego układu, więc mógł "
                                   "wylądować w tym samym miejscu co inna sekcja. Przywracanie widoczności "
                                   "modułu dostaje teraz jawnie pozycję z układu, który akurat się wczytuje."],
+        ["3.29", "Wrzesień 2026", "Dwa usprawnienia UX w Portfelu (3.2): przy pierwszym wejściu na zakładkę "
+                                  "pokazuje się jednorazowy baner wyjaśniający „Edytuj układ”/„Moduły”/zapis "
+                                  "presetów (można go zamknąć na stałe). Usunięcie presetu, reset do „Domyślny” "
+                                  "oraz nadpisanie istniejącego presetu nową zawartością dają teraz kilka "
+                                  "sekund na kliknięcie „Cofnij” w wyświetlonym komunikacie, zanim zmiana "
+                                  "stanie się ostateczna."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
