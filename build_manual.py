@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.31"
+VERSION = "3.32"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1679,6 +1679,16 @@ def part3(s: Story) -> None:
                                   "pozycji, nazwa nowego presetu) zastąpiono własnymi, stylowanymi oknami "
                                   "dialogowymi zgodnymi z resztą interfejsu. Cena sprzedaży i kurs wymiany, "
                                   "wcześniej dwa kolejne okienka z rzędu, są teraz jednym formularzem."],
+        ["3.32", "Wrzesień 2026", "Audyt UX dopełniony o pięć drobniejszych poprawek: formularze "
+                                  "(watchlista, dywidendy, pozycje, cele rebalancingu) blokują przycisk "
+                                  "zapisu na czas żądania, żeby szybki drugi klik nie zdublował wpisu, i "
+                                  "pokazują toast potwierdzający sukces, nie tylko błąd. Usuwanie celu "
+                                  "rebalancingu (wg spółki i wg sektora) pyta teraz o potwierdzenie, tak "
+                                  "jak inne usuwanie w aplikacji. Własne okna dialogowe (3.31) dostały "
+                                  "pułapkę fokusu (Tab nie ucieka już w tło) i oddają fokus z powrotem "
+                                  "przyciskowi, który je otworzył. Kilka sekcji (portfel, dywidendy, "
+                                  "rebalancing, zamknięte transakcje i inne), które przy błędzie pobierania "
+                                  "danych wcześniej milczały (błąd tylko w konsoli), teraz pokazują toast."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

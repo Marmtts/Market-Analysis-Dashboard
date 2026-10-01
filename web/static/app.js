@@ -457,6 +457,23 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Wspólny wrapper dla handlerów submit formularzy - blokuje przycisk na czas
+// zapytania (bez tego szybki drugi klik/Enter wysyłał dwa requesty z rzędu i
+// mógł zdublować pozycję/dywidendę/cel) i łapie wyjątki sieciowe (serwer
+// offline itp.), których część handlerów wcześniej w ogóle nie obsługiwała -
+// user nie widział wtedy ŻADNEGO komunikatu o błędzie.
+async function submitWithLock(form, handler) {
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) btn.disabled = true;
+  try {
+    await handler();
+  } catch (err) {
+    showErrorToast("Błąd połączenia z serwerem.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ---------------- Watchlista ----------------
 async function loadWatchlist() {
   const res = await fetch("/api/watchlist");
@@ -492,20 +509,23 @@ el("addForm").addEventListener("submit", async (e) => {
   const xtb = el("addXtb").value.trim();
   if (!ticker) return;
 
-  const res = await fetch("/api/watchlist", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ticker, name, xtb_symbol: xtb }),
-  });
+  await submitWithLock(e.target, async () => {
+    const res = await fetch("/api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker, name, xtb_symbol: xtb }),
+    });
 
-  if (res.ok) {
-    el("addForm").reset();
-    await loadWatchlist();
-    appendLog({ level: "info", message: `Dodano ${ticker.toUpperCase()} do watchlisty. Pojawi się w kolejnym cyklu analizy.` });
-  } else {
-    const body = await res.json().catch(() => ({}));
-    showErrorToast(body.detail || "Nie udało się dodać spółki.");
-  }
+    if (res.ok) {
+      el("addForm").reset();
+      await loadWatchlist();
+      appendLog({ level: "info", message: `Dodano ${ticker.toUpperCase()} do watchlisty. Pojawi się w kolejnym cyklu analizy.` });
+      showSuccessToast(`Dodano ${ticker.toUpperCase()} do watchlisty.`);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      showErrorToast(body.detail || "Nie udało się dodać spółki.");
+    }
+  });
 });
 
 // ---------------- Wyniki (cache + odświeżanie po WS) ----------------
@@ -1057,6 +1077,7 @@ async function loadPortfolio() {
     loadPortfolioStatistics();
   } catch (err) {
     console.warn("Nie udało się pobrać portfela:", err);
+    showErrorToast("Nie udało się pobrać portfela.");
   }
 }
 
@@ -1069,6 +1090,7 @@ async function loadDividends() {
     renderDividendTable(data.dividends);
   } catch (err) {
     console.warn("Nie udało się pobrać dywidend:", err);
+    showErrorToast("Nie udało się pobrać dywidend.");
   }
 }
 
@@ -1162,18 +1184,21 @@ el("dividendForm").addEventListener("submit", async (e) => {
     showErrorToast("Uzupełnij ticker, walutę, datę i prawidłową kwotę brutto.");
     return;
   }
-  const res = await fetch("/api/dividends", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+  await submitWithLock(e.target, async () => {
+    const res = await fetch("/api/dividends", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      e.target.reset();
+      await loadDividends();
+      showSuccessToast(`Dodano dywidendę dla ${payload.ticker.toUpperCase()}.`);
+    } else {
+      const b = await res.json().catch(() => ({}));
+      showErrorToast(b.detail || "Nie udało się dodać dywidendy.");
+    }
   });
-  if (res.ok) {
-    e.target.reset();
-    await loadDividends();
-  } else {
-    const b = await res.json().catch(() => ({}));
-    showErrorToast(b.detail || "Nie udało się dodać dywidendy.");
-  }
 });
 
 // ---------------- Rebalancing (docelowe wagi per ticker) ----------------
@@ -1185,6 +1210,7 @@ async function loadRebalancing() {
     renderSectorRebalancing(data.sectors, data.base_currency);
   } catch (err) {
     console.warn("Nie udało się pobrać danych rebalancingu:", err);
+    showErrorToast("Nie udało się pobrać danych rebalancingu.");
   }
 }
 
@@ -1229,6 +1255,7 @@ function renderRebalancing(data) {
   panel.innerHTML = html;
   panel.querySelectorAll(".watchlist__remove").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      if (!(await showConfirmDialog(`Usunąć cel alokacji dla ${btn.dataset.ticker}?`))) return;
       await fetch(`/api/portfolio/targets/${encodeURIComponent(btn.dataset.ticker)}`, { method: "DELETE" });
       await loadRebalancing();
     });
@@ -1243,18 +1270,21 @@ el("targetForm").addEventListener("submit", async (e) => {
     showErrorToast("Podaj ticker i cel w przedziale 0-100%.");
     return;
   }
-  const res = await fetch("/api/portfolio/targets", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ticker, target_weight_pct: pct }),
+  await submitWithLock(e.target, async () => {
+    const res = await fetch("/api/portfolio/targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker, target_weight_pct: pct }),
+    });
+    if (res.ok) {
+      e.target.reset();
+      await loadRebalancing();
+      showSuccessToast(`Ustawiono cel ${pct}% dla ${ticker.toUpperCase()}.`);
+    } else {
+      const b = await res.json().catch(() => ({}));
+      showErrorToast(b.detail || "Nie udało się ustawić celu.");
+    }
   });
-  if (res.ok) {
-    e.target.reset();
-    await loadRebalancing();
-  } else {
-    const b = await res.json().catch(() => ({}));
-    showErrorToast(b.detail || "Nie udało się ustawić celu.");
-  }
 });
 
 function renderSectorRebalancing(data, baseCurrency) {
@@ -1293,6 +1323,7 @@ function renderSectorRebalancing(data, baseCurrency) {
   panel.innerHTML = html;
   panel.querySelectorAll(".watchlist__remove").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      if (!(await showConfirmDialog(`Usunąć cel alokacji dla sektora ${btn.dataset.sector}?`))) return;
       await fetch(`/api/portfolio/sector-targets/${encodeURIComponent(btn.dataset.sector)}`, { method: "DELETE" });
       await loadRebalancing();
     });
@@ -1307,18 +1338,21 @@ el("sectorTargetForm").addEventListener("submit", async (e) => {
     showErrorToast("Podaj sektor i cel w przedziale 0-100%.");
     return;
   }
-  const res = await fetch("/api/portfolio/sector-targets", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sector, target_weight_pct: pct }),
+  await submitWithLock(e.target, async () => {
+    const res = await fetch("/api/portfolio/sector-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sector, target_weight_pct: pct }),
+    });
+    if (res.ok) {
+      e.target.reset();
+      await loadRebalancing();
+      showSuccessToast(`Ustawiono cel ${pct}% dla sektora ${sector}.`);
+    } else {
+      const b = await res.json().catch(() => ({}));
+      showErrorToast(b.detail || "Nie udało się ustawić celu.");
+    }
   });
-  if (res.ok) {
-    e.target.reset();
-    await loadRebalancing();
-  } else {
-    const b = await res.json().catch(() => ({}));
-    showErrorToast(b.detail || "Nie udało się ustawić celu.");
-  }
 });
 
 // Współdzielone przez renderPortfolio (wybór "najpilniejszej" transzy na
@@ -1761,18 +1795,21 @@ el("portfolioForm").addEventListener("submit", async (e) => {
   const url = editId ? `/api/portfolio/${editId}` : "/api/portfolio";
   const method = editId ? "PUT" : "POST";
 
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  await submitWithLock(e.target, async () => {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      resetPortfolioForm();
+      await loadPortfolio();
+      showSuccessToast(editId ? `Zapisano zmiany dla ${body.ticker.toUpperCase()}.` : `Dodano pozycję ${body.ticker.toUpperCase()}.`);
+    } else {
+      const b = await res.json().catch(() => ({}));
+      showErrorToast(b.detail || "Nie udało się zapisać pozycji.");
+    }
   });
-  if (res.ok) {
-    resetPortfolioForm();
-    await loadPortfolio();
-  } else {
-    const b = await res.json().catch(() => ({}));
-    showErrorToast(b.detail || "Nie udało się zapisać pozycji.");
-  }
 });
 
 
@@ -1997,6 +2034,7 @@ async function loadEffectiveness() {
     renderEffectiveness(stats);
   } catch (err) {
     console.warn("Nie udało się pobrać statystyk skuteczności:", err);
+    showErrorToast("Nie udało się pobrać statystyk skuteczności.");
   }
 }
 
@@ -2085,6 +2123,7 @@ async function loadClosedPortfolio() {
     renderClosedPortfolio(data.positions, data.summary);
   } catch (err) {
     console.warn("Nie udało się pobrać zamkniętych transakcji:", err);
+    showErrorToast("Nie udało się pobrać zamkniętych transakcji.");
   }
 }
 
@@ -2189,6 +2228,7 @@ async function loadPortfolioRisk() {
     updatePortfolioHealthScore();
   } catch (err) {
     console.warn("Nie udało się pobrać ryzyka portfela:", err);
+    showErrorToast("Nie udało się pobrać ryzyka portfela.");
   }
 }
 
@@ -2503,6 +2543,7 @@ async function loadPortfolioEquitySection() {
     await loadPortfolioEquity(equityCurrentCurrency);
   } catch (err) {
     console.warn("Nie udało się pobrać walut krzywej kapitału:", err);
+    showErrorToast("Nie udało się pobrać walut krzywej kapitału.");
   }
 }
 
@@ -2645,6 +2686,7 @@ async function loadTaxSummary() {
     renderTaxSummary(data);
   } catch (err) {
     console.warn("Nie udało się pobrać podsumowania podatkowego:", err);
+    showErrorToast("Nie udało się pobrać podsumowania podatkowego.");
   }
 }
 
@@ -3555,6 +3597,12 @@ function showToast(message, opts = {}) {
 // `await` i `.then`/`null`-check zamiast zmieniać logikę.
 function openDialog({ title, message, fields = [], confirmLabel = "OK", cancelLabel = "Anuluj", danger = false }) {
   return new Promise((resolve) => {
+    // Natywny confirm()/prompt() blokował fokus na przeglądarkowym okienku
+    // samoistnie i oddawał go z powrotem po zamknięciu - nasz dialog musi to
+    // odtworzyć ręcznie, inaczej Tab ucieka w tło pod overlay, a po
+    // zamknięciu fokus "gubi się" gdzieś na <body> zamiast wrócić tam, skąd
+    // dialog otwarto (np. na przycisk, który go wywołał).
+    const previouslyFocused = document.activeElement;
     const overlay = document.createElement("div");
     overlay.className = "dialog-overlay";
     const fieldsHtml = fields.map((f) => `
@@ -3596,10 +3644,30 @@ function openDialog({ title, message, fields = [], confirmLabel = "OK", cancelLa
       settled = true;
       document.removeEventListener("keydown", onKeydown);
       overlay.remove();
+      if (previouslyFocused && typeof previouslyFocused.focus === "function") previouslyFocused.focus();
       resolve(result);
     };
     const onKeydown = (e) => {
-      if (e.key === "Escape") finish(null);
+      if (e.key === "Escape") {
+        finish(null);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      // Pułapka fokusu - Tab/Shift+Tab krąży WEWNĄTRZ .dialog-box zamiast
+      // wychodzić do elementów w tle pod overlay (te formalnie wciąż są
+      // "fokusowalne", mimo że wizualnie przysłonięte i wyłączone z
+      // interakcji myszą).
+      const focusable = [...overlay.querySelectorAll("button, input, [tabindex]")].filter((elx) => !elx.disabled);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeydown);
     overlay.addEventListener("mousedown", (e) => {
