@@ -1009,12 +1009,18 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
    wzorzec znany z Linear/Vercel/GitHub (Cmd+K). */
 .cmdk-overlay {
   position: fixed; inset: 0; z-index: 250;
-  display: flex; align-items: flex-start; justify-content: center;
+  align-items: flex-start; justify-content: center;
   background: rgba(4,6,10,0.75);
   backdrop-filter: blur(4px);
   animation: modal-backdrop-in 0.15s ease;
   padding: 12vh 1rem 1rem;
 }
+/* [hidden] ma w CSS domyślnie taką samą specyficzność jak zwykła klasa, więc
+   bez tego jawnego override'u reguła "display: flex" wyżej wygrywała z
+   atrybutem hidden i paleta była widoczna CAŁY CZAS, niezależnie od tego, czy
+   el("cmdkOverlay").hidden ustawiano na true (patrz closeCommandPalette). */
+.cmdk-overlay[hidden] { display: none; }
+.cmdk-overlay:not([hidden]) { display: flex; }
 .cmdk-box {
   background: var(--mesh-hero), var(--bg-elevated);
   border: 1px solid var(--border-bright);

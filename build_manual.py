@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.33"
+VERSION = "3.34"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1700,6 +1700,10 @@ def part3(s: Story) -> None:
                                   "jeszcze watchlista wyników) pokazuje teraz pulsujące karty-symbole "
                                   "zamiast statycznego tekstu „Czekam na pierwszy cykl analizy…” - widać, "
                                   "że coś faktycznie się dzieje w tle."],
+        ["3.34", "Wrzesień 2026", "Poprawka: paleta poleceń (3.33) była widoczna cały czas i nie dało się "
+                                  "jej zamknąć (Escape, klik w tło) - reguła CSS odpowiedzialna za jej "
+                                  "wyświetlanie miała taką samą siłę co atrybut ukrywający okienko i go "
+                                  "przebijała, niezależnie od tego, czy okienko miało być akurat otwarte."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
