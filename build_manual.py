@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.34"
+VERSION = "3.35"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1704,6 +1704,11 @@ def part3(s: Story) -> None:
                                   "jej zamknąć (Escape, klik w tło) - reguła CSS odpowiedzialna za jej "
                                   "wyświetlanie miała taką samą siłę co atrybut ukrywający okienko i go "
                                   "przebijała, niezależnie od tego, czy okienko miało być akurat otwarte."],
+        ["3.35", "Wrzesień 2026", "Poprawka formatowania: nowy przycisk „Szukaj” (3.33) w pasku górnym "
+                                  "zabierał miejsce pigułkom statusu obok, przez co pigułka „kolejny cykl "
+                                  "za...” potrafiła łamać się na kilka linii zamiast zostać w jednej. Pasek "
+                                  "statusu łamie się teraz w całości do nowej linii, gdy brakuje miejsca, "
+                                  "zamiast ściskać pojedyncze pigułki."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
