@@ -478,7 +478,7 @@ async function loadWatchlist() {
   ul.querySelectorAll(".watchlist__remove").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const ticker = btn.dataset.ticker;
-      if (!confirm(`Usunąć ${ticker} z watchlisty?`)) return;
+      if (!(await showConfirmDialog(`Usunąć ${ticker} z watchlisty?`))) return;
       await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: "DELETE" });
       await loadWatchlist();
     });
@@ -1141,7 +1141,7 @@ function renderDividendTable(dividends) {
 
   wrap.querySelectorAll(".watchlist__remove").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      if (!confirm("Usunąć tę dywidendę?")) return;
+      if (!(await showConfirmDialog("Usunąć tę dywidendę?"))) return;
       await fetch(`/api/dividends/${btn.dataset.id}`, { method: "DELETE" });
       await loadDividends();
     });
@@ -1635,20 +1635,27 @@ function renderLotCard(p) {
 
   card.querySelector(".lot-sell").addEventListener("click", async (e) => {
     e.stopPropagation();
-    const sellPrice = prompt(`Cena sprzedaży dla ${p.ticker} (${p.shares} szt. @ ${p.buy_price} ${p.currency || ""})?`);
-    if (sellPrice === null || sellPrice.trim() === "") return;
-    const parsed = parseFloat(sellPrice);
+    // Oba pola w JEDNYM dialogu zamiast dwóch kolejnych prompt() - dawniej
+    // trzeba było przejść przez dwa osobne okienka z rzędu nawet gdy kurs
+    // wymiany w ogóle nie był potrzebny.
+    const result = await openDialog({
+      title: `Sprzedaż: ${p.ticker}`,
+      message: `${p.shares} szt. @ ${p.buy_price} ${p.currency || ""} (cena zakupu)`,
+      fields: [
+        { id: "price", label: "Cena sprzedaży", type: "number", step: "0.01", min: "0", required: true },
+        { id: "fxRate", label: "Własny kurs wymiany (opcjonalnie - puste = bieżący kurs rynkowy)", type: "number", step: "0.0001", min: "0", required: false },
+      ],
+      confirmLabel: "Sprzedaj",
+    });
+    if (!result) return;
+    const parsed = parseFloat(result.price);
     if (isNaN(parsed) || parsed <= 0) {
       showErrorToast("Nieprawidłowa cena.");
       return;
     }
-    const fxInput = prompt(
-      `Własny kurs wymiany przy sprzedaży (opcjonalnie, np. rzeczywisty kurs XTB z marżą)?\n` +
-      `Zostaw puste, żeby użyć bieżącego kursu rynkowego.`
-    );
     let sellFxRate = null;
-    if (fxInput !== null && fxInput.trim() !== "") {
-      const parsedFx = parseFloat(fxInput);
+    if (result.fxRate.trim() !== "") {
+      const parsedFx = parseFloat(result.fxRate);
       if (isNaN(parsedFx) || parsedFx <= 0) {
         showErrorToast("Nieprawidłowy kurs wymiany - zignorowano, użyty zostanie bieżący kurs rynkowy.");
       } else {
@@ -1679,7 +1686,7 @@ function renderLotCard(p) {
   });
   card.querySelector(".lot-delete").addEventListener("click", async (e) => {
     e.stopPropagation();
-    if (!confirm("Usunąć tę pozycję z portfela?")) return;
+    if (!(await showConfirmDialog("Usunąć tę pozycję z portfela?"))) return;
     await fetch(`/api/portfolio/${p.id}`, { method: "DELETE" });
     await loadPortfolio();
   });
@@ -2162,7 +2169,7 @@ function renderClosedPortfolio(positions, summary) {
     `;
     card.querySelector(".watchlist__remove").addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (!confirm(`Cofnąć sprzedaż ${p.ticker}? Pozycja wróci do aktywnego portfela.`)) return;
+      if (!(await showConfirmDialog(`Cofnąć sprzedaż ${p.ticker}? Pozycja wróci do aktywnego portfela.`, { confirmLabel: "Cofnij sprzedaż", danger: false }))) return;
       await fetch(`/api/portfolio/${p.id}/reopen`, { method: "POST" });
       await loadClosedPortfolio();
     });
@@ -3540,6 +3547,105 @@ function showToast(message, opts = {}) {
   return { dismiss };
 }
 
+// Modalne okienko potwierdzenia/formularza (patrz .dialog-overlay w
+// style.css) - zastępuje natywne confirm()/prompt() przeglądarki w całej
+// aplikacji. Zwraca Promise: `true`/dane formularza przy potwierdzeniu,
+// `null` przy anulowaniu (Escape, kliknięcie w tło, przycisk Anuluj) - ten
+// sam kształt odpowiedzi co confirm()/prompt(), więc wywołania tylko dopisują
+// `await` i `.then`/`null`-check zamiast zmieniać logikę.
+function openDialog({ title, message, fields = [], confirmLabel = "OK", cancelLabel = "Anuluj", danger = false }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "dialog-overlay";
+    const fieldsHtml = fields.map((f) => `
+      <label class="dialog-box__field">
+        ${f.label ? `<span>${escapeHtml(f.label)}</span>` : ""}
+        <input type="${f.type || "text"}" name="${escapeHtml(f.id)}"
+          ${f.required !== false ? "required" : ""}
+          ${f.step !== undefined ? `step="${f.step}"` : ""}
+          ${f.min !== undefined ? `min="${f.min}"` : ""}
+          placeholder="${escapeHtml(f.placeholder || "")}"
+          value="${escapeHtml(f.value ?? "")}">
+      </label>`).join("");
+    overlay.innerHTML = `
+      <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dialogBoxTitle">
+        <h3 class="dialog-box__title" id="dialogBoxTitle">${escapeHtml(title)}</h3>
+        ${message ? `<p class="dialog-box__message">${escapeHtml(message)}</p>` : ""}
+        <form class="dialog-box__form">
+          ${fieldsHtml}
+          <div class="dialog-box__actions">
+            <button type="button" class="btn dialog-box__cancel">${escapeHtml(cancelLabel)}</button>
+            <button type="submit" class="btn ${danger ? "btn--danger" : "btn--primary"}">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </form>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const form = overlay.querySelector(".dialog-box__form");
+    const firstInput = form.querySelector("input");
+    if (firstInput) {
+      firstInput.focus();
+      firstInput.select();
+    } else {
+      overlay.querySelector("[type=submit]").focus();
+    }
+
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("keydown", onKeydown);
+      overlay.remove();
+      resolve(result);
+    };
+    const onKeydown = (e) => {
+      if (e.key === "Escape") finish(null);
+    };
+    document.addEventListener("keydown", onKeydown);
+    overlay.addEventListener("mousedown", (e) => {
+      if (e.target === overlay) finish(null);
+    });
+    overlay.querySelector(".dialog-box__cancel").addEventListener("click", () => finish(null));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (fields.length === 0) {
+        finish(true);
+        return;
+      }
+      const data = {};
+      fields.forEach((f) => {
+        data[f.id] = form.elements[f.id].value;
+      });
+      finish(data);
+    });
+  });
+}
+
+// confirm() drop-in: await showConfirmDialog("Usunąć X?") - domyślnie
+// czerwony (destrukcyjne), bo wszystkie dotychczasowe wywołania to usuwanie.
+function showConfirmDialog(message, opts = {}) {
+  return openDialog({
+    title: opts.title || "Potwierdź",
+    message,
+    confirmLabel: opts.confirmLabel || "Usuń",
+    cancelLabel: opts.cancelLabel || "Anuluj",
+    danger: opts.danger !== false,
+  }).then((r) => r === true);
+}
+
+// prompt() drop-in dla jednego pola tekstowego/liczbowego: await
+// showPromptDialog({title, label, placeholder}) -> string albo null.
+function showPromptDialog(opts) {
+  return openDialog({
+    title: opts.title || "",
+    message: opts.message,
+    fields: [{ id: "value", type: opts.type || "text", label: opts.label, placeholder: opts.placeholder, value: opts.value, required: opts.required, step: opts.step, min: opts.min }],
+    confirmLabel: opts.confirmLabel || "OK",
+    cancelLabel: opts.cancelLabel || "Anuluj",
+    danger: false,
+  }).then((r) => (r ? r.value.trim() : null));
+}
+
 function showErrorToast(message) {
   showToast(message, { type: "error", duration: 7000 });
 }
@@ -3884,8 +3990,8 @@ function initPortfolioGridOnce() {
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   });
 
-  el("layoutPresetSave").addEventListener("click", () => {
-    const name = (prompt("Nazwa presetu:") || "").trim();
+  el("layoutPresetSave").addEventListener("click", async () => {
+    const name = await showPromptDialog({ title: "Zapisz jako preset", label: "Nazwa presetu", confirmLabel: "Zapisz" });
     if (!name) return;
     const presets = getLayoutPresets();
     // Nadpisanie istniejącego presetu usuwa jego poprzednią treść bezpowrotnie
@@ -3923,13 +4029,13 @@ function initPortfolioGridOnce() {
     }
   });
 
-  el("layoutPresetDelete").addEventListener("click", () => {
+  el("layoutPresetDelete").addEventListener("click", async () => {
     const name = el("layoutPresetSelect").value;
     if (!name) {
       showErrorToast("Wybierz najpierw preset do usunięcia.");
       return;
     }
-    if (!confirm(`Usunąć preset „${name}”?`)) return;
+    if (!(await showConfirmDialog(`Usunąć preset „${name}”?`))) return;
     const snap = snapshotPortfolioLayoutState();
     const presets = getLayoutPresets();
     delete presets[name];

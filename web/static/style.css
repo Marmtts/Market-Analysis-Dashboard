@@ -239,6 +239,12 @@ html, body {
 }
 .btn--secondary { width: 100%; margin-top: 0.4rem; }
 .btn--icon { padding: 0.3rem 0.6rem; font-size: 0.9rem; }
+.btn--danger {
+  background: linear-gradient(155deg, var(--accent-red-bright), var(--accent-red) 65%);
+  color: #1A0E0A;
+  border-color: var(--accent-red);
+}
+.btn--danger:hover { background: linear-gradient(155deg, #E67D63, var(--accent-red-bright) 65%); border-color: var(--accent-red-bright); }
 
 /* ---------------- Layout ---------------- */
 .layout {
@@ -938,6 +944,43 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
    patrz drawPositionPriceLines. Bez własnego marginesu górnego dwa wiersze
    legendy zlewałyby się wizualnie w jeden. */
 #chartPositionLegend { margin-top: 0.4rem; }
+/* Małe modalne okienko potwierdzenia/formularza (patrz openDialog w app.js)
+   - zastępuje natywne confirm()/prompt() przeglądarki (usuwanie pozycji,
+   sprzedaż, nazwa presetu itd.). Osobny, mniejszy komponent niż .modal
+   wyżej (ten służy do dużego wykresu) - ~420px, wyśrodkowany, z polami
+   formularza i dwoma przyciskami akcji. */
+.dialog-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4,6,10,0.75);
+  backdrop-filter: blur(4px);
+  animation: modal-backdrop-in 0.2s ease;
+  padding: 1rem;
+}
+.dialog-box {
+  background: var(--mesh-hero), var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  width: min(420px, 100%);
+  padding: 1.25rem 1.4rem 1.4rem;
+  box-shadow: var(--shadow-lg);
+  animation: modal-panel-in 0.2s var(--ease);
+}
+.dialog-box__title {
+  font-family: var(--font-display);
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+.dialog-box__message { color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; margin: 0 0 0.9rem; white-space: pre-line; }
+.dialog-box__field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.7rem; }
+.dialog-box__field input {
+  background: var(--bg); border: 1px solid var(--border-bright); border-radius: var(--radius);
+  color: var(--text); padding: 0.55rem 0.7rem; font-family: var(--font-body); font-size: 0.85rem;
+}
+.dialog-box__field input:focus { outline: none; border-color: var(--accent-gold); }
+.dialog-box__actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1rem; }
+.dialog-box__actions .btn { width: auto; margin-top: 0; }
+
 .modal__legend-sep { color: var(--border-bright); }
 .modal__legend-note { color: var(--text-faint); font-size: 0.7rem; font-style: italic; }
 .legend-marker { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; }

@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.30"
+VERSION = "3.31"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1673,6 +1673,12 @@ def part3(s: Story) -> None:
                                   "zakładkach — nie blokują już reszty strony i można mieć kilka naraz. "
                                   "Potwierdzenia usunięcia (confirm) oraz okienka z pytaniem o cenę/kurs przy "
                                   "sprzedaży (prompt) zostają na razie bez zmian — to osobny etap."],
+        ["3.31", "Wrzesień 2026", "Dokończono poprzedni etap: natywne okienka confirm() (potwierdzenie "
+                                  "usunięcia pozycji/dywidendy/presetu/wpisu z watchlisty, cofnięcie "
+                                  "sprzedaży) i prompt() (cena sprzedaży i kurs wymiany przy zamykaniu "
+                                  "pozycji, nazwa nowego presetu) zastąpiono własnymi, stylowanymi oknami "
+                                  "dialogowymi zgodnymi z resztą interfejsu. Cena sprzedaży i kurs wymiany, "
+                                  "wcześniej dwa kolejne okienka z rzędu, są teraz jednym formularzem."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
