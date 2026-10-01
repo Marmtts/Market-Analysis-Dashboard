@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.35"
+VERSION = "3.36"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1709,6 +1709,11 @@ def part3(s: Story) -> None:
                                   "za...” potrafiła łamać się na kilka linii zamiast zostać w jednej. Pasek "
                                   "statusu łamie się teraz w całości do nowej linii, gdy brakuje miejsca, "
                                   "zamiast ściskać pojedyncze pigułki."],
+        ["3.36", "Wrzesień 2026", "Przycisk otwierający paletę poleceń (3.33) wyglądał jak duże pole "
+                                  "tekstowe, w które nie dało się nic wpisać bezpośrednio (kliknięcie "
+                                  "dopiero otwierało popup z właściwym polem) - zmniejszono go do "
+                                  "kompaktowej pigułki (ikona lupy + „Ctrl K”), rozmiarem dopasowanej do "
+                                  "sąsiednich pigułek statusu."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

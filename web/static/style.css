@@ -164,7 +164,23 @@ html, body {
 }
 .topbar__status { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; }
 .topbar__status > * { flex-shrink: 0; }
-.topbar__search-btn { width: auto; margin-top: 0; display: flex; align-items: center; gap: 0.5rem; }
+/* Kompaktowa pigułka, nie przycisk na całą szerokość jak .btn--secondary -
+   to tylko otwieracz palety poleceń (patrz openCommandPalette w app.js),
+   więc rozmiarem pasuje do sąsiednich .status-pill, zamiast wyglądać jak
+   pole do wpisywania tekstu (którym nie jest - samo kliknięcie otwiera
+   popup z prawdziwym polem). */
+.topbar__search-btn {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.topbar__search-btn:hover { border-color: var(--accent-gold); color: var(--text); }
 .topbar__search-btn kbd {
   font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-faint);
   background: var(--bg); border: 1px solid var(--border-bright); border-radius: 4px;
