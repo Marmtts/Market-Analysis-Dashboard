@@ -40,7 +40,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.32"
+VERSION = "3.33"
 DATE_LABEL = "wrzesień 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
@@ -1689,6 +1689,17 @@ def part3(s: Story) -> None:
                                   "przyciskowi, który je otworzył. Kilka sekcji (portfel, dywidendy, "
                                   "rebalancing, zamknięte transakcje i inne), które przy błędzie pobierania "
                                   "danych wcześniej milczały (błąd tylko w konsoli), teraz pokazują toast."],
+        ["3.33", "Wrzesień 2026", "Trzy usprawnienia z audytu modernizacji: (1) /app.js i /style.css są "
+                                  "teraz serwowane pod URL-em z hashem treści (np. /app.js?v=...), który "
+                                  "zmienia się TYLKO gdy plik faktycznie się zmienił - przeglądarka może "
+                                  "więc cache'ować je bezpiecznie i długo, bez ryzyka serwowania starej "
+                                  "wersji po aktualizacji. (2) Paleta poleceń (Ctrl+K albo przycisk "
+                                  "„Szukaj” z ikoną lupy w pasku górnym) - szybkie przejście do dowolnej spółki z "
+                                  "watchlisty/portfela/propozycji AI albo akcji (zmiana zakładki, odśwież, "
+                                  "log, asystent) bez szukania myszą. (3) Pierwszy cykl analizy (pusta "
+                                  "jeszcze watchlista wyników) pokazuje teraz pulsujące karty-symbole "
+                                  "zamiast statycznego tekstu „Czekam na pierwszy cykl analizy…” - widać, "
+                                  "że coś faktycznie się dzieje w tle."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")

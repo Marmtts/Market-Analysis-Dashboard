@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -77,6 +78,27 @@ logger = logging.getLogger("xtb_trend_watch.web_app")
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "web" / "static"
 
+# Cache-busting dla /app.js i /style.css: index.html był dotąd jedynym plikiem
+# serwowanym jako statyczny zasób pod gołym URL-em, więc po każdej zmianie
+# JS/CSS przeglądarka (a w tej sesji też nasz własny Browser pane podczas
+# testów) potrafiła nadal serwować starą, scache'owaną wersję - jedynym
+# obejściem było ręczne dopisywanie "?cache-bust" do URL-i. Zamiast tego
+# index.html jest teraz renderowany przez ten endpoint, który dopisuje do obu
+# linków krótki hash treści pliku (`?v=...`) - zmienia się TYLKO, gdy plik
+# faktycznie się zmienił, więc URL (a nie tylko nagłówki) różni się między
+# wersjami i przeglądarka nie ma szans pomylić starej treści z nową.
+_asset_version_cache: dict[str, tuple[float, str]] = {}
+
+
+def _asset_version(path: Path) -> str:
+    mtime = path.stat().st_mtime
+    cached = _asset_version_cache.get(str(path))
+    if cached and cached[0] == mtime:
+        return cached[1]
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+    _asset_version_cache[str(path)] = (mtime, digest)
+    return digest
+
 _cfg: dict = {}
 _is_running: bool = False
 _next_run_at: datetime | None = None
@@ -104,6 +126,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="XTB Trend Watch Dashboard", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def _cache_versioned_assets(request, call_next):
+    # Tylko gdy URL niesie nasz "?v=<hash treści>" (patrz _asset_version
+    # wyżej) wolno kazać przeglądarce cache'ować agresywnie i bezwarunkowo
+    # (immutable) - URL zmienia się SAM, gdy plik się zmienia, więc nie ma
+    # ryzyka serwowania nieaktualnej treści pod starym URL-em. Bez parametru
+    # "v" (np. ktoś wejdzie pod goły /app.js) zostaje domyślne zachowanie
+    # StaticFiles (ETag/Last-Modified, rewalidacja przy każdym żądaniu).
+    response = await call_next(request)
+    if request.url.path in ("/app.js", "/style.css") and "v=" in request.url.query:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 # =====================================================================
@@ -1332,6 +1368,17 @@ async def api_get_chart(ticker: str, period: str = "1y"):
     return sanitize_for_json(
     {"ticker": ticker.upper(), "candles": candles, "ma50": ma50_series, "ma200": ma200_series}
 )
+
+
+@app.get("/", include_in_schema=False)
+async def serve_index():
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace(
+        'src="/app.js"', f'src="/app.js?v={_asset_version(STATIC_DIR / "app.js")}"'
+    ).replace(
+        'href="/style.css"', f'href="/style.css?v={_asset_version(STATIC_DIR / "style.css")}"'
+    )
+    return Response(content=html, media_type="text/html")
 
 
 @app.websocket("/ws")

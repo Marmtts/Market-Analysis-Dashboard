@@ -27,6 +27,7 @@
   </div>
 
   <div class="topbar__status">
+    <button class="btn btn--secondary topbar__search-btn" id="cmdkOpenBtn" title="Szybkie przejście do spółki lub akcji">🔎 Szukaj <kbd>Ctrl K</kbd></button>
     <div class="status-pill" id="connPill">
       <span class="status-pill__dot"></span>
       <span id="connLabel">łączę…</span>
@@ -580,6 +581,13 @@
       <input type="text" id="chatInput" placeholder="Zadaj pytanie..." autocomplete="off">
       <button type="submit" class="btn btn--primary">Wyślij</button>
     </form>
+  </div>
+</div>
+
+<div class="cmdk-overlay" id="cmdkOverlay" hidden>
+  <div class="cmdk-box" role="dialog" aria-modal="true" aria-label="Szybkie przejście">
+    <input type="text" id="cmdkInput" class="cmdk-input" placeholder="Szukaj spółki (ticker, nazwa) albo akcji…" autocomplete="off">
+    <div class="cmdk-list" id="cmdkList"></div>
   </div>
 </div>
 

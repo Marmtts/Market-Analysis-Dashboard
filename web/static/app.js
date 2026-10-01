@@ -15,6 +15,11 @@ const state = {
   openTicker: null,
   categoryByTicker: new Map(),
   portfolioTickers: new Set(),
+  // Trwa cykl analizy w tle? (patrz loadStatus, run_started/run_finished w
+  // handleWsMessage) - używane przez renderResultsGrid, żeby pokazać
+  // skeleton zamiast statycznego tekstu podczas PIERWSZEGO cyklu (gdy
+  // results jest jeszcze puste).
+  isRunning: false,
   // Personalizacja kolumn watchlisty/propozycji AI (patrz loadColumnPreferences) -
   // wartość domyślna tu tylko na wypadek, gdyby coś odczytało state.columnPrefs
   // zanim init() zdąży wczytać localStorage; loadColumnPreferences() i tak
@@ -235,6 +240,15 @@ function renderResultsGrid(containerId, results, emptyMessage, sortState) {
   const isCustomizable = containerId === "resultsGrid" || containerId === "discoveredGrid";
 
   if (!results || results.length === 0) {
+    // Skeleton TYLKO podczas faktycznie trwającego cyklu (state.isRunning) -
+    // pusta watchlista albo brak propozycji AI poza cyklem to legalny,
+    // "spokojny" stan, nie coś, na co trzeba czekać, więc zostaje zwykły
+    // tekst (np. "Brak propozycji w tym cyklu.").
+    if (state.isRunning && containerId === "resultsGrid") {
+      container.innerHTML = Array.from({ length: 4 }, () => `<div class="skeleton-card"></div>`).join("");
+      if (isCustomizable) applyColumnVisibility(state.columnPrefs);
+      return;
+    }
     const p = document.createElement("p");
     p.className = "empty-state";
     p.textContent = emptyMessage;
@@ -666,8 +680,18 @@ async function loadStatus() {
   const res = await fetch("/api/status");
   const status = await res.json();
   state.nextRunAt = status.next_run_at;
+  state.isRunning = status.is_running;
   el("runNowBtn").disabled = status.is_running;
-  if (status.is_running) el("runNowBtn").textContent = "Analiza w toku…";
+  if (status.is_running) {
+    el("runNowBtn").textContent = "Analiza w toku…";
+    // Pokrywa rzadki przypadek otwarcia dashboardu W TRAKCIE trwającego
+    // cyklu, zanim padną jakiekolwiek wyniki - loadResults() i loadStatus()
+    // lecą równolegle (patrz init()), więc w momencie pierwszego renderu
+    // resultsGrid state.isRunning mogło jeszcze nie być ustawione.
+    if (!state.lastPayload?.results?.length) {
+      renderResultsGrid("resultsGrid", [], "Czekam na pierwszy cykl analizy…", state_sort.main);
+    }
+  }
 }
 
 el("runNowBtn").addEventListener("click", async () => {
@@ -761,6 +785,14 @@ function handleWsMessage(msg) {
     case "run_started":
       el("runNowBtn").disabled = true;
       el("runNowBtn").textContent = "Analiza w toku…";
+      state.isRunning = true;
+      // Jeśli grid jest akurat pusty (pierwsze uruchomienie, zanim padną
+      // jakiekolwiek wyniki), od razu pokaż skeleton zamiast czekać na
+      // kolejny przypadkowy re-render - bez tego "Analiza w toku…" na
+      // przycisku było jedynym sygnałem, że cokolwiek się dzieje.
+      if (!state.lastPayload?.results?.length) {
+        renderResultsGrid("resultsGrid", [], "Czekam na pierwszy cykl analizy…", state_sort.main);
+      }
       appendLog({ level: "info", message: "— Rozpoczęto nowy cykl analizy —" });
       break;
     case "results":
@@ -770,6 +802,7 @@ function handleWsMessage(msg) {
       el("runNowBtn").disabled = false;
       el("runNowBtn").textContent = "Odśwież teraz";
       state.nextRunAt = msg.next_run_at;
+      state.isRunning = false;
       appendLog({ level: "success", message: "— Cykl analizy zakończony —" });
       break;
     case "watchlist_changed":
@@ -1038,31 +1071,142 @@ window.addEventListener("resize", () => {
 });
 
 // ---------------- Zakładki ----------------
+// Wydzielone z listenera kliknięcia, żeby ten sam kod przełączania mógł
+// wywołać też paleta poleceń (Ctrl+K, patrz niżej) - bez tego trzeba by
+// było duplikować logikę ładowania danych per zakładka w dwóch miejscach.
+function switchTab(tab) {
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("is-active", b.dataset.tab === tab));
+  el("tab-analysis").style.display = tab === "analysis" ? "" : "none";
+  el("tab-portfolio").style.display = tab === "portfolio" ? "" : "none";
+  el("tab-closed").style.display = tab === "closed" ? "" : "none";
+  if (tab === "portfolio") {
+    loadPortfolio();
+    loadPortfolioEquitySection();
+    loadDividends();
+    loadRebalancing();
+    initPortfolioGridOnce();
+    // Siatka rozmiaru kart (ResizeObserver w watchSectionContentForResize)
+    // powinna sama nadążyć za dociąganiem danych, ale bywały karty, które
+    // za pierwszym otwarciem zakładki zostawały odrobinę za niskie (np.
+    // czcionka/wykres doładowujący się tuż po pierwszym pomiarze) -
+    // dodatkowe przeliczenie chwilę po otwarciu to tani "bezpiecznik" na
+    // takie przypadki.
+    setTimeout(refitAllVisibleSections, 600);
+    setTimeout(refitAllVisibleSections, 2000);
+  }
+  if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
+}
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("is-active"));
-    btn.classList.add("is-active");
-    const tab = btn.dataset.tab;
-    el("tab-analysis").style.display = tab === "analysis" ? "" : "none";
-    el("tab-portfolio").style.display = tab === "portfolio" ? "" : "none";
-    el("tab-closed").style.display = tab === "closed" ? "" : "none";
-    if (tab === "portfolio") {
-      loadPortfolio();
-      loadPortfolioEquitySection();
-      loadDividends();
-      loadRebalancing();
-      initPortfolioGridOnce();
-      // Siatka rozmiaru kart (ResizeObserver w watchSectionContentForResize)
-      // powinna sama nadążyć za dociąganiem danych, ale bywały karty, które
-      // za pierwszym otwarciem zakładki zostawały odrobinę za niskie (np.
-      // czcionka/wykres doładowujący się tuż po pierwszym pomiarze) -
-      // dodatkowe przeliczenie chwilę po otwarciu to tani "bezpiecznik" na
-      // takie przypadki.
-      setTimeout(refitAllVisibleSections, 600);
-      setTimeout(refitAllVisibleSections, 2000);
-    }
-    if (tab === "closed") { loadClosedPortfolio(); loadTaxSummary(); }
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+// ---------------- Paleta poleceń (Ctrl+K) ----------------
+// Szybkie przejście do dowolnej spółki (watchlista, portfel, propozycje AI)
+// albo akcji, bez szukania myszą po całym interfejsie - wzorzec znany z
+// Linear/Vercel/GitHub. Lista tickerów jest budowana na bieżąco z
+// state.resultsByTicker (watchlista + propozycje AI) i state.portfolioTickers
+// (pozycje portfela, które mogą nie być akurat na watchliście) - nie ma
+// osobnego, utrzymywanego ręcznie indeksu.
+const CMDK_ACTIONS = [
+  { icon: "◆", label: "Przejdź do: Analiza", run: () => switchTab("analysis") },
+  { icon: "◈", label: "Przejdź do: Portfel", run: () => switchTab("portfolio") },
+  { icon: "◇", label: "Przejdź do: Zamknięte transakcje", run: () => switchTab("closed") },
+  { icon: "↻", label: "Odśwież teraz", run: () => el("runNowBtn").click() },
+  { icon: "📋", label: "Pokaż/ukryj log na żywo", run: () => el("logDrawerToggle").click() },
+  { icon: "💬", label: "Otwórz asystenta", run: () => el("chatToggleBtn").click() },
+];
+
+function cmdkTickerItems() {
+  const byTicker = new Map();
+  state.resultsByTicker.forEach((r, ticker) => byTicker.set(ticker, r.name || ticker));
+  (state.portfolioTickers || new Set()).forEach((ticker) => {
+    if (!byTicker.has(ticker)) byTicker.set(ticker, ticker);
   });
+  return [...byTicker.entries()].map(([ticker, name]) => ({
+    icon: "📈",
+    label: `${ticker} — ${name}`,
+    run: () => openChart(ticker, name),
+  }));
+}
+
+let cmdkItems = [];
+let cmdkActiveIndex = 0;
+
+function renderCmdkList(query) {
+  const q = query.trim().toLowerCase();
+  const all = [...CMDK_ACTIONS, ...cmdkTickerItems()];
+  cmdkItems = q ? all.filter((it) => it.label.toLowerCase().includes(q)) : all;
+  cmdkActiveIndex = 0;
+  const list = el("cmdkList");
+  if (!cmdkItems.length) {
+    list.innerHTML = `<p class="empty-state">Brak wyników dla „${escapeHtml(query)}”.</p>`;
+    return;
+  }
+  list.innerHTML = cmdkItems.map((it, i) => `
+    <button type="button" class="cmdk-item${i === 0 ? " is-active" : ""}" data-index="${i}">
+      <span class="cmdk-item__icon">${it.icon}</span>
+      <span>${escapeHtml(it.label)}</span>
+    </button>`).join("");
+  list.querySelectorAll(".cmdk-item").forEach((btn) => {
+    const idx = Number(btn.dataset.index);
+    btn.addEventListener("click", () => runCmdkItem(idx));
+    btn.addEventListener("mouseenter", () => setCmdkActive(idx));
+  });
+}
+
+function setCmdkActive(index) {
+  cmdkActiveIndex = index;
+  const buttons = [...el("cmdkList").querySelectorAll(".cmdk-item")];
+  buttons.forEach((btn, i) => btn.classList.toggle("is-active", i === index));
+  buttons[index]?.scrollIntoView({ block: "nearest" });
+}
+
+function runCmdkItem(index) {
+  const item = cmdkItems[index];
+  if (!item) return;
+  closeCommandPalette();
+  item.run();
+}
+
+function openCommandPalette() {
+  el("cmdkOverlay").hidden = false;
+  const input = el("cmdkInput");
+  input.value = "";
+  renderCmdkList("");
+  input.focus();
+}
+
+function closeCommandPalette() {
+  el("cmdkOverlay").hidden = true;
+}
+
+el("cmdkOpenBtn").addEventListener("click", openCommandPalette);
+el("cmdkInput").addEventListener("input", (e) => renderCmdkList(e.target.value));
+el("cmdkInput").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    setCmdkActive(Math.min(cmdkActiveIndex + 1, cmdkItems.length - 1));
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    setCmdkActive(Math.max(cmdkActiveIndex - 1, 0));
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    runCmdkItem(cmdkActiveIndex);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeCommandPalette();
+  }
+});
+el("cmdkOverlay").addEventListener("mousedown", (e) => {
+  if (e.target === el("cmdkOverlay")) closeCommandPalette();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    if (el("cmdkOverlay").hidden) openCommandPalette();
+    else closeCommandPalette();
+  }
 });
 
 // ---------------- Portfel ----------------

@@ -117,6 +117,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Pełny dashboard webowy (FastAPI + WebSocket) z trzema zakładkami
   (Analiza, Portfel, Zamknięte transakcje), watchlistą, miniwykresami,
   panelem skuteczności narzędzia i zwijanym logiem na żywo.
+- Paleta poleceń (Ctrl+K albo przycisk „🔎 Szukaj” w pasku górnym) —
+  szybkie przejście do dowolnej spółki z watchlisty/portfela/propozycji AI
+  po tickerze lub nazwie, albo do akcji (zmiana zakładki, odśwież teraz,
+  log, asystent), bez szukania myszą.
 - Personalizacja interfejsu (zapamiętywana lokalnie w przeglądarce, osobno
   per zakładka): panele boczne (Analiza i Portfel) można zwijać i dowolnie
   przestawiać (przeciąganie albo ▲/▼); każda większa sekcja głównej kolumny
@@ -373,7 +377,7 @@ xtb_trend_watch/
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.32)
+├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.33)
 ├── build_manual.py             # generator instrukcji PDF (reportlab)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
@@ -414,7 +418,7 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.32). Instrukcję
+`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.33). Instrukcję
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
