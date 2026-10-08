@@ -11,7 +11,15 @@ TMP_DB_DIR="$(mktemp -d)"
 export XTW_DB_PATH="$TMP_DB_DIR/test.db"
 export PYTHONIOENCODING=utf-8
 
-venv/Scripts/python.exe -m src.web_app --config e2e/test-config.yaml --port "$PORT" &
+# Lokalnie (Windows) odpalamy z venv jak reszta projektu; w CI (ubuntu-latest,
+# brak venv - zależności idą prosto z pip install) wystarczy python3 na PATH.
+if [ -f venv/Scripts/python.exe ]; then
+  PYTHON=venv/Scripts/python.exe
+else
+  PYTHON=python3
+fi
+
+"$PYTHON" -m src.web_app --config e2e/test-config.yaml --port "$PORT" &
 SERVER_PID=$!
 cleanup() {
   kill "$SERVER_PID" 2>/dev/null || true
