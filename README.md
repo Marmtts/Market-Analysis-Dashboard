@@ -383,6 +383,10 @@ xtb_trend_watch/
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
 ├── reports/                    # raporty z CLI - w .gitignore
 ├── logs/                       # logi z run_daily.bat - w .gitignore
+├── .github/workflows/e2e.yml   # GitHub Actions: testy E2E na każdym PR do main
+├── e2e/                        # testy E2E (Playwright + Java) - patrz niżej
+│   ├── run-tests.sh             # odpala świeżą, izolowaną instancję + testy
+│   └── src/test/java/xtw/
 ├── web/
 │   └── static/                 # frontend dashboardu (HTML/CSS/JS, bez build-stepu)
 │       ├── index.html
@@ -422,6 +426,12 @@ Pełny opis wszystkich funkcji dashboardu znajdziesz w
 generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
+
+Testy E2E (Playwright + Java, katalog `e2e/`) odpalisz lokalnie przez
+`bash e2e/run-tests.sh` - stawia świeżą, izolowaną instancję dashboardu
+(osobna, tymczasowa baza SQLite, pusta watchlista) na porcie 8123, więc nie
+dotyka Twoich prawdziwych danych. Ten sam skrypt uruchamia GitHub Actions
+(`.github/workflows/e2e.yml`) na każdym pull requeście do `main`.
 
 ---
 
