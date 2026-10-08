@@ -1,0 +1,17 @@
+# Minimalny config dla testów E2E (patrz run-tests.sh) - pusta watchlista i
+# wyłączona analiza na starcie, żeby odpalenie serwera było natychmiastowe i
+# nie biło w yfinance/Ollama przy każdym uruchomieniu testów.
+watchlist: []
+
+web:
+  host: "127.0.0.1"
+  port: 8000
+  run_analysis_on_startup: false
+  refresh_interval_minutes: 999999
+  price_alert_interval_seconds: 0
+
+llm:
+  enabled: false
+
+notifications:
+  enabled: false

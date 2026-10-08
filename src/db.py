@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -23,7 +24,10 @@ from pathlib import Path
 
 from .json_utils import sanitize_for_json
 
-DB_PATH = Path("data") / "xtb_trend_watch.db"
+# Nadpisywalne przez XTW_DB_PATH (patrz e2e/run-tests.sh) - testy E2E
+# odpalają serwer na osobnej, jednorazowej bazie, żeby nie dotykać
+# prawdziwych danych w data/xtb_trend_watch.db.
+DB_PATH = Path(os.environ.get("XTW_DB_PATH", "data/xtb_trend_watch.db"))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS watchlist (
