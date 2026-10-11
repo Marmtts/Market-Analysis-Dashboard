@@ -43,12 +43,33 @@ jobs:
 
       # Surowe wyniki Allure (JSON, nie gotowy HTML) - małe, rosną liniowo z
       # liczbą testów zamiast dublować kilka MB zbundlowanego UI Allure przy
-      # każdym uruchomieniu. Przejrzyj lokalnie: pobierz artifact, rozpakuj
-      # do e2e/target/allure-results i odpal `allure serve target/allure-results`.
-      - name: Upload Allure results
+      # każdym uruchomieniu. Ten artifact to "blob" do dalszego przetwarzania
+      # (łączenia z innych jobów, historii trendów) - NIE jest sam w sobie
+      # raportem do otwarcia, stąd osobny krok budowania raportu niżej.
+      - name: Upload Allure results (blob)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: e2e/target/allure-results
+          retention-days: 14
+
+      # Osobny krok PO testach - buduje gotowy, klikalny raport HTML z
+      # surowych wyników wyżej. Rozdzielone celowo: krok testowy ma tylko
+      # wyprodukować dane, ten tutaj je przetwarza - gdyby generowanie
+      # raportu kiedyś wymagało łączenia wyników z wielu jobów (sharding),
+      # to już osobny krok/job, nie zmiana w run-tests.sh. "|| true" na
+      # wypadek gdyby testy padły PRZED wyprodukowaniem jakichkolwiek
+      # wyników (np. build failure) - wtedy generate nie ma z czego budować.
+      - name: Build Allure HTML report
+        if: always()
+        working-directory: e2e
+        run: npx --yes allure-commandline generate target/allure-results -o target/allure-report --clean || true
+
+      - name: Upload Allure HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: e2e/target/allure-report
           retention-days: 14
