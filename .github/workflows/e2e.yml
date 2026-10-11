@@ -5,6 +5,34 @@ on:
     branches: [main]
 
 jobs:
+  # Niezależny od "test" (brak needs) - skanuje repo niezależnie od wyniku
+  # testów, więc leci równolegle, nie czeka w kolejce za nimi. Jedno
+  # narzędzie (Trivy) zamiast osobnych dla zależności Pythona/Javy i
+  # sekretów - mniej kroków do utrzymania niż np_audit+osobny skaner
+  # podatności Mavena+gitleaks z osobna. Projekt nie ma package.json/npm -
+  # ten konkretny przykład pipeline'u (npm audit, setup-node) nie pasuje do
+  # naszego stacku (Python + Java, nie Node).
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # scan-type: fs = skanuje pliki w repo (requirements.txt, e2e/pom.xml),
+      # nie obraz Dockera. scanners: vuln,secret = podatności w zależnościach
+      # ORAZ wyciekłe sekrety (klucze API, tokeny) w JEDNYM przebiegu. Celowo
+      # skanuje tylko bieżący stan repo, nie historię gita (jak gitleaks
+      # potrafi) - jeśli kiedyś okaże się, że sekret trafił do historii i
+      # został później usunięty, to osobny, głębszy skan do dodania wtedy.
+      - name: Scan dependencies and secrets (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
   test:
     runs-on: ubuntu-latest
     steps:
