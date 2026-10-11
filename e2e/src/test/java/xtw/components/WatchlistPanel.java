@@ -1,4 +1,4 @@
-package xtw.pages;
+package xtw.components;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;

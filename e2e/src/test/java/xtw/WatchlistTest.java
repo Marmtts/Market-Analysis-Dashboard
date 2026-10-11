@@ -3,7 +3,7 @@ package xtw;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.junit.UsePlaywright;
 import org.junit.jupiter.api.Test;
-import xtw.pages.WatchlistPanel;
+import xtw.components.WatchlistPanel;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 
