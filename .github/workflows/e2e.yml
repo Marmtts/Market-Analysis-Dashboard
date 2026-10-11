@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 jobs:
-  playwright:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,3 +40,42 @@ jobs:
         with:
           name: surefire-reports
           path: e2e/target/surefire-reports
+
+      # Surowe wyniki Allure (JSON, nie gotowy HTML) - małe, rosną liniowo z
+      # liczbą testów zamiast dublować kilka MB zbundlowanego UI Allure przy
+      # każdym uruchomieniu. Ten artifact to "blob" konsumowany przez job
+      # "report" niżej - NIE jest sam w sobie raportem do otwarcia.
+      - name: Upload Allure results (blob)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: e2e/target/allure-results
+          retention-days: 14
+
+  # Osobny job, nie krok w powyższym - buduje gotowy, klikalny raport HTML z
+  # blobu wyprodukowanego przez "test". Nie potrzebuje Javy/Pythona/Playwrighta
+  # (tylko Node, który jest na runnerze domyślnie), więc dzielenie środowiska
+  # testowego z nim byłoby zbędnym balastem. Komunikacja między jobami idzie
+  # WYŁĄCZNIE przez artifact (upload w "test" / download tutaj) - osobne joby
+  # nie dzielą współdzielonego systemu plików.
+  report:
+    needs: test
+    if: always() # raport przydaje się też (zwłaszcza) wtedy, gdy "test" padł
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Allure results
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+
+      - name: Build Allure HTML report
+        run: npx --yes allure-commandline generate allure-results -o allure-report --clean || true
+
+      - name: Upload Allure HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+          retention-days: 14
