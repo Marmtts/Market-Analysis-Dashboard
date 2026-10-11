@@ -24,6 +24,17 @@
       <version>5.11.0</version>
       <scope>test</scope>
     </dependency>
+    <!-- Auto-rejestruje się jako JUnit5 TestExecutionListener (ServiceLoader) -
+         samo dodanie zależności wystarcza, zero dodatkowej konfiguracji w
+         testach. Zapisuje surowe wyniki (małe pliki JSON, nie gotowy HTML) do
+         target/allure-results - to jest "blob" wrzucany jako CI artifact,
+         viewer (allure serve) generuje z niego raport dopiero na żądanie. -->
+    <dependency>
+      <groupId>io.qameta.allure</groupId>
+      <artifactId>allure-junit5</artifactId>
+      <version>2.29.1</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -32,6 +43,15 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.3.1</version>
+        <configuration>
+          <!-- Domyślnie allure-junit5 pisałby do ./allure-results (obok
+               pom.xml) - celujemy w target/, bo to i tak build output
+               (ignorowany, kasowany przy "mvn clean"), zamiast zaśmiecać
+               katalog źródłowy. -->
+          <systemPropertyVariables>
+            <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
     </plugins>
   </build>

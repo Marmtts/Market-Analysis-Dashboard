@@ -40,3 +40,15 @@ jobs:
         with:
           name: surefire-reports
           path: e2e/target/surefire-reports
+
+      # Surowe wyniki Allure (JSON, nie gotowy HTML) - małe, rosną liniowo z
+      # liczbą testów zamiast dublować kilka MB zbundlowanego UI Allure przy
+      # każdym uruchomieniu. Przejrzyj lokalnie: pobierz artifact, rozpakuj
+      # do e2e/target/allure-results i odpal `allure serve target/allure-results`.
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: e2e/target/allure-results
+          retention-days: 14
