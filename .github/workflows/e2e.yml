@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 jobs:
-  playwright:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,9 +43,8 @@ jobs:
 
       # Surowe wyniki Allure (JSON, nie gotowy HTML) - małe, rosną liniowo z
       # liczbą testów zamiast dublować kilka MB zbundlowanego UI Allure przy
-      # każdym uruchomieniu. Ten artifact to "blob" do dalszego przetwarzania
-      # (łączenia z innych jobów, historii trendów) - NIE jest sam w sobie
-      # raportem do otwarcia, stąd osobny krok budowania raportu niżej.
+      # każdym uruchomieniu. Ten artifact to "blob" konsumowany przez job
+      # "report" niżej - NIE jest sam w sobie raportem do otwarcia.
       - name: Upload Allure results (blob)
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,22 +53,29 @@ jobs:
           path: e2e/target/allure-results
           retention-days: 14
 
-      # Osobny krok PO testach - buduje gotowy, klikalny raport HTML z
-      # surowych wyników wyżej. Rozdzielone celowo: krok testowy ma tylko
-      # wyprodukować dane, ten tutaj je przetwarza - gdyby generowanie
-      # raportu kiedyś wymagało łączenia wyników z wielu jobów (sharding),
-      # to już osobny krok/job, nie zmiana w run-tests.sh. "|| true" na
-      # wypadek gdyby testy padły PRZED wyprodukowaniem jakichkolwiek
-      # wyników (np. build failure) - wtedy generate nie ma z czego budować.
+  # Osobny job, nie krok w powyższym - buduje gotowy, klikalny raport HTML z
+  # blobu wyprodukowanego przez "test". Nie potrzebuje Javy/Pythona/Playwrighta
+  # (tylko Node, który jest na runnerze domyślnie), więc dzielenie środowiska
+  # testowego z nim byłoby zbędnym balastem. Komunikacja między jobami idzie
+  # WYŁĄCZNIE przez artifact (upload w "test" / download tutaj) - osobne joby
+  # nie dzielą współdzielonego systemu plików.
+  report:
+    needs: test
+    if: always() # raport przydaje się też (zwłaszcza) wtedy, gdy "test" padł
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Allure results
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+
       - name: Build Allure HTML report
-        if: always()
-        working-directory: e2e
-        run: npx --yes allure-commandline generate target/allure-results -o target/allure-report --clean || true
+        run: npx --yes allure-commandline generate allure-results -o allure-report --clean || true
 
       - name: Upload Allure HTML report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
-          path: e2e/target/allure-report
+          path: allure-report
           retention-days: 14
