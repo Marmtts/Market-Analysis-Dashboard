@@ -3,6 +3,22 @@ name: E2E Tests
 on:
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 2 * * *" # nocny health-check niezależny od PR-ów
+  workflow_dispatch: {} # ręczne odpalenie z zakładki Actions na żądanie
+
+# Nowy push na ten sam PR/branch anuluje poprzedni, wciąż trwający bieg -
+# bez tego kilka commitów z rzędu kolejkowało kilka równoległych,
+# w większości już nieaktualnych przebiegów.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Najmniejsze możliwe uprawnienia domyślnego GITHUB_TOKEN dla całego
+# workflow - pojedyncze joby podnoszą je punktowo tam, gdzie faktycznie
+# potrzebują (patrz "checks: write" w "test" niżej).
+permissions:
+  contents: read
 
 jobs:
   # Niezależny od "test" (brak needs) - skanuje repo niezależnie od wyniku
@@ -35,6 +51,11 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # checks: write ponad domyślne (read-only) uprawnienia workflow - potrzebne
+    # dorny/test-reporter niżej do opublikowania wyniku jako GitHub Check.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +82,19 @@ jobs:
 
       - name: Run E2E tests (isolated instance, see e2e/run-tests.sh)
         run: bash e2e/run-tests.sh
+
+      # Czyta ten sam surefire-reports/*.xml co krok niżej (na failu) i
+      # publikuje wynik PER TEST wprost w zakładce Checks na PR-ze - bez tego
+      # jedyny sposób zobaczenia, który konkretnie test padł, to przewijanie
+      # logu "Run E2E tests" wyżej.
+      - name: Publish test results as GitHub Check
+        if: always()
+        uses: dorny/test-reporter@v3.2.0
+        with:
+          name: E2E test results
+          path: e2e/target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: true
 
       - name: Upload test report on failure
         if: failure()
