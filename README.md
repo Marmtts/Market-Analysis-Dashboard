@@ -437,28 +437,9 @@ dotyka Twoich prawdziwych danych. Ten sam skrypt uruchamia GitHub Actions
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Trzynaście pomysłów z tej sekcji zostało już zrealizowanych: TWR na tle
-benchmarku (przełącznik "Zwrot (TWR)" przy krzywej kapitału w zakładce
-Portfel), alternatywne źródła newsów GPW (sekcja 5 powyżej), eksport CSV
-zamkniętych transakcji (przycisk w zakładce Zamknięte transakcje),
-sprawdzenie okna przedwynikowego (`python -m src.backtest
---check-earnings-window` — wynik: brak sygnału, scoring bez zmian, patrz
-komentarz w kodzie `backtest.py`), uwzględnienie rzeczywistego kursu
-wymiany brokera (`buy_fx_rate`/`sell_fx_rate`) także przy ręcznym
-zamykaniu pozycji (przycisk 💰 pyta teraz opcjonalnie o kurs sprzedaży,
-analogicznie do pola przy dodawaniu), śledzenie dywidend (sekcja 1
-powyżej — przychód brutto/netto per wypłata, import z raportu XTB albo
-ręczne dodawanie), kalendarz makro (sekcja 1 powyżej — FOMC/RPP/CPI,
-`config.yaml` → `macro_calendar`), heatmapa watchlisty (przycisk „🔥
-Heatmapa” obok listy, z filtrem „Tylko pozycje w portfelu”), flaga „konto
-IKE” per pozycja (sekcja 1 powyżej — rozpoznawana automatycznie z importu
-XTB albo ustawiana ręcznie; podatek liczony jako dwa scenariusze, bo
-zależy od wieku przy wypłacie, którego narzędzie nie zna), rebalancing wg
-docelowych wag per ticker/sektor (sekcja 1 powyżej), kalkulator IKE /
-FIRE (sekcja 1 powyżej), wskaźnik „Zdrowie portfela” (sekcja 1 powyżej)
-i rozszerzenie kontekstu czatu o dywidendy/rebalancing/kalendarz makro
-(sekcja 1 powyżej). Szczegóły w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`. Aktualna lista:
+Pełna historia zmian jest w `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`
+(rozdział "Historia zmian dokumentu"). Pomysły poniżej nie są jeszcze
+zrealizowane:
 
 - Pomocnik „tax-loss harvesting” — polskie prawo pozwala odliczyć straty
   kapitałowe od zysków w tym samym roku podatkowym (i przenosić straty do
@@ -467,8 +448,9 @@ i rozszerzenie kontekstu czatu o dywidendy/rebalancing/kalendarz makro
 - Wczesne ostrzeżenie przed stop-lossem (np. cena w promieniu kilku % od
   stopu), zanim faktycznie go przebije — rozszerzenie dzisiejszych alertów
   cenowych (sekcja 16 instrukcji PDF) o dodatkowy, łagodniejszy próg.
-- Testy automatyczne (Playwright) pokrywające najnowsze funkcje UI
-  (przeciąganie paneli, przełącznik TWR, odznaka alertów).
+- Rozszerzenie zestawu testów E2E (`e2e/`, sekcja 9 powyżej) o bardziej
+  złożone interakcje UI (przeciąganie paneli, przełącznik TWR, odznaka
+  alertów) oraz o testy na poziomie API, bez przeglądarki.
 - Dodatkowa, informacyjna kolumna z rzeczywistym kursem brokera obok
   kolumny NBP w eksporcie CSV zamkniętych transakcji — świadomie NIE
   zastępuje kursu NBP (art. 11a ustawy o PIT wymaga go do rozliczenia
