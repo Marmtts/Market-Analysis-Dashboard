@@ -21,13 +21,14 @@ permissions:
   contents: read
 
 jobs:
-  # Niezależny od "test" (brak needs) - skanuje repo niezależnie od wyniku
-  # testów, więc leci równolegle, nie czeka w kolejce za nimi. Jedno
-  # narzędzie (Trivy) zamiast osobnych dla zależności Pythona/Javy i
-  # sekretów - mniej kroków do utrzymania niż np_audit+osobny skaner
-  # podatności Mavena+gitleaks z osobna. Projekt nie ma package.json/npm -
-  # ten konkretny przykład pipeline'u (npm audit, setup-node) nie pasuje do
-  # naszego stacku (Python + Java, nie Node).
+  # Pierwszy w kolejce (test/report mają na nim "needs") - nie ma sensu
+  # płacić czasem/zasobami za instalację Playwrighta i pełny przebieg
+  # testów, skoro repo ma już znaną, krytyczną podatność albo wyciekły
+  # sekret. Jedno narzędzie (Trivy) zamiast osobnych dla zależności
+  # Pythona/Javy i sekretów - mniej kroków do utrzymania niż npm audit +
+  # osobny skaner podatności Mavena + gitleaks z osobna. Projekt nie ma
+  # package.json/npm - ten konkretny przykład pipeline'u (npm audit,
+  # setup-node) nie pasuje do naszego stacku (Python + Java, nie Node).
   security:
     name: Security
     runs-on: ubuntu-latest
@@ -50,6 +51,7 @@ jobs:
           exit-code: "1"
 
   test:
+    needs: security
     runs-on: ubuntu-latest
     # checks: write ponad domyślne (read-only) uprawnienia workflow - potrzebne
     # dorny/test-reporter niżej do opublikowania wyniku jako GitHub Check.
