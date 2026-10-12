@@ -95,6 +95,12 @@ jobs:
           path: e2e/target/surefire-reports/*.xml
           reporter: java-junit
           fail-on-error: true
+          # Domyślne use-actions-summary:true pisze wynik TYLKO do zakładki
+          # "Summary" przebiegu, bez tworzenia osobnego Check Runu - a o to
+          # właśnie chodziło (wynik per test wprost na PR, nie zagrzebany w
+          # podsumowaniu). Zweryfikowane: bez tego nie powstawał żaden nowy
+          # check (sprawdzone przez GitHub API check-runs na PR #5).
+          use-actions-summary: false
 
       - name: Upload test report on failure
         if: failure()
