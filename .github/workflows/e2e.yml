@@ -50,8 +50,43 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
 
+  # Równolegle z "security" (oba szybkie, niezależne od siebie) - "test"
+  # niżej czeka na OBA, żeby nie płacić za wolny Playwright, gdy już wiadomo,
+  # że zawiodła szybsza, tańsza kontrola (literówka w logice scoringu wyłapana
+  # tu w kilka sekund, zamiast dopiero po kilkudziesięciu sekundach Playwrighta).
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run unit tests
+        run: pytest tests/ --junitxml=reports/unit.xml
+
+      - name: Publish test results as GitHub Check
+        if: always()
+        uses: dorny/test-reporter@v3.2.0
+        with:
+          name: Unit test results
+          path: reports/unit.xml
+          reporter: java-junit # parsuje standardowy schemat JUnit XML - ten sam co pytest --junitxml produkuje
+          fail-on-error: true
+          use-actions-summary: false
+
   test:
-    needs: security
+    needs: [security, unit]
     runs-on: ubuntu-latest
     # checks: write ponad domyślne (read-only) uprawnienia workflow - potrzebne
     # dorny/test-reporter niżej do opublikowania wyniku jako GitHub Check.
