@@ -16,19 +16,16 @@ concurrency:
 
 # Najmniejsze możliwe uprawnienia domyślnego GITHUB_TOKEN dla całego
 # workflow - pojedyncze joby podnoszą je punktowo tam, gdzie faktycznie
-# potrzebują (patrz "checks: write" w "test" niżej).
+# potrzebują (patrz "checks: write" w "unit"/"api"/"ui" niżej).
 permissions:
   contents: read
 
 jobs:
-  # Pierwszy w kolejce (test/report mają na nim "needs") - nie ma sensu
-  # płacić czasem/zasobami za instalację Playwrighta i pełny przebieg
-  # testów, skoro repo ma już znaną, krytyczną podatność albo wyciekły
-  # sekret. Jedno narzędzie (Trivy) zamiast osobnych dla zależności
-  # Pythona/Javy i sekretów - mniej kroków do utrzymania niż npm audit +
-  # osobny skaner podatności Mavena + gitleaks z osobna. Projekt nie ma
-  # package.json/npm - ten konkretny przykład pipeline'u (npm audit,
-  # setup-node) nie pasuje do naszego stacku (Python + Java, nie Node).
+  # Całkiem niezależny od reszty (brak needs, nikt na nim "needs") - skanuje
+  # repo równolegle ze wszystkim innym. Świadomie NIE gate'uje już "unit"/
+  # "api"/"ui" (wcześniej gate'ował "test") - wynik i tak liczy się do
+  # "pipeline-status" na końcu, a nie ma powodu wstrzymywać SZYBSZYCH
+  # testów (unit/API) na skan, który i tak leci obok nich w tym samym czasie.
   security:
     name: Security
     runs-on: ubuntu-latest
@@ -50,10 +47,9 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
 
-  # Równolegle z "security" (oba szybkie, niezależne od siebie) - "test"
-  # niżej czeka na OBA, żeby nie płacić za wolny Playwright, gdy już wiadomo,
-  # że zawiodła szybsza, tańsza kontrola (literówka w logice scoringu wyłapana
-  # tu w kilka sekund, zamiast dopiero po kilkudziesięciu sekundach Playwrighta).
+  # Pierwszy z testów (api/ui mają na nim "needs") - najszybszy i najtańszy,
+  # więc nie ma sensu płacić za Playwrighta (instalacja Chromium, wolniejsze
+  # testy UI), skoro już wiadomo, że padła podstawowa logika biznesowa.
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -85,11 +81,74 @@ jobs:
           fail-on-error: true
           use-actions-summary: false
 
-  test:
-    needs: [security, unit]
+  # Równolegle z "ui" niżej (oba czekają tylko na "unit", nie na siebie
+  # nawzajem) - testy API (Playwright APIRequestContext, bez przeglądarki)
+  # są dużo szybsze niż UI, więc nie ma powodu ich szeregować.
+  api:
+    name: API tests
+    needs: unit
     runs-on: ubuntu-latest
-    # checks: write ponad domyślne (read-only) uprawnienia workflow - potrzebne
-    # dorny/test-reporter niżej do opublikowania wyniku jako GitHub Check.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: e2e/pom.xml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      # Brak kroku instalacji Chromium - APIRequestContext nie uruchamia
+      # przeglądarki, tylko wysyła żądania HTTP, więc testy w tym jobie
+      # (klasy *ApiTest) jej nie potrzebują.
+      - name: Run API tests (isolated instance, see e2e/run-tests.sh)
+        run: bash e2e/run-tests.sh -Dtest=WatchlistApiTest
+
+      - name: Publish test results as GitHub Check
+        if: always()
+        uses: dorny/test-reporter@v3.2.0
+        with:
+          name: API test results
+          path: e2e/target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: true
+          use-actions-summary: false
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-api
+          path: e2e/target/surefire-reports
+
+      # Osobny "blob" per job (api/ui) - "report" niżej ściąga OBA i łączy
+      # w jeden raport HTML, ten sam wzorzec co merge wielu shardów, tylko
+      # źródła są dwa (api+ui), nie osiem.
+      - name: Upload Allure results (blob)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-api
+          path: e2e/target/allure-results
+          retention-days: 14
+
+  ui:
+    name: UI tests
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       checks: write
@@ -117,63 +176,47 @@ jobs:
           mvn -q dependency:build-classpath -Dmdep.outputFile=cp.txt
           java -cp "$(cat cp.txt)" com.microsoft.playwright.CLI install --with-deps chromium
 
-      - name: Run E2E tests (isolated instance, see e2e/run-tests.sh)
-        run: bash e2e/run-tests.sh
+      - name: Run UI tests (isolated instance, see e2e/run-tests.sh)
+        run: bash e2e/run-tests.sh -Dtest=SmokeTest,WatchlistTest
 
-      # Czyta ten sam surefire-reports/*.xml co krok niżej (na failu) i
-      # publikuje wynik PER TEST wprost w zakładce Checks na PR-ze - bez tego
-      # jedyny sposób zobaczenia, który konkretnie test padł, to przewijanie
-      # logu "Run E2E tests" wyżej.
       - name: Publish test results as GitHub Check
         if: always()
         uses: dorny/test-reporter@v3.2.0
         with:
-          name: E2E test results
+          name: UI test results
           path: e2e/target/surefire-reports/*.xml
           reporter: java-junit
           fail-on-error: true
-          # Domyślne use-actions-summary:true pisze wynik TYLKO do zakładki
-          # "Summary" przebiegu, bez tworzenia osobnego Check Runu - a o to
-          # właśnie chodziło (wynik per test wprost na PR, nie zagrzebany w
-          # podsumowaniu). Zweryfikowane: bez tego nie powstawał żaden nowy
-          # check (sprawdzone przez GitHub API check-runs na PR #5).
           use-actions-summary: false
 
       - name: Upload test report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
+          name: surefire-reports-ui
           path: e2e/target/surefire-reports
 
-      # Surowe wyniki Allure (JSON, nie gotowy HTML) - małe, rosną liniowo z
-      # liczbą testów zamiast dublować kilka MB zbundlowanego UI Allure przy
-      # każdym uruchomieniu. Ten artifact to "blob" konsumowany przez job
-      # "report" niżej - NIE jest sam w sobie raportem do otwarcia.
       - name: Upload Allure results (blob)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: allure-results
+          name: allure-results-ui
           path: e2e/target/allure-results
           retention-days: 14
 
-  # Osobny job, nie krok w powyższym - buduje gotowy, klikalny raport HTML z
-  # blobu wyprodukowanego przez "test". Nie potrzebuje Javy/Pythona/Playwrighta
-  # (tylko Node, który jest na runnerze domyślnie), więc dzielenie środowiska
-  # testowego z nim byłoby zbędnym balastem. Komunikacja między jobami idzie
-  # WYŁĄCZNIE przez artifact (upload w "test" / download tutaj) - osobne joby
-  # nie dzielą współdzielonego systemu plików.
+  # Czeka na OBA ("api" i "ui"), nie tylko na jeden - łączy dwa osobne bloby
+  # w jeden raport HTML, więc musi mieć komplet zanim zacznie generować.
   report:
-    needs: test
-    if: always() # raport przydaje się też (zwłaszcza) wtedy, gdy "test" padł
+    needs: [api, ui]
+    if: always() # raport przydaje się też (zwłaszcza) wtedy, gdy któryś padł
     runs-on: ubuntu-latest
     steps:
       - name: Download Allure results
         uses: actions/download-artifact@v4
         with:
-          name: allure-results
+          pattern: allure-results-*
           path: allure-results
+          merge-multiple: true
 
       - name: Build Allure HTML report
         run: npx --yes allure-commandline generate allure-results -o allure-report --clean || true
@@ -184,3 +227,26 @@ jobs:
           name: allure-report
           path: allure-report
           retention-days: 14
+
+  # Jeden zbiorczy check zamiast wymagania w branch protection każdego joba
+  # z osobna - przy kilku równoległych/warunkowych jobach to jedyny sensowny
+  # sposób na "czy WSZYSTKO przeszło", bez ręcznego dopisywania nowego joba
+  # do listy wymaganych checków za każdym razem, gdy pipeline się rozrasta.
+  pipeline-status:
+    name: Pipeline status
+    needs: [security, unit, api, ui, report]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Job results: $results"
+          for result in $results; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::A job finished with result: $result"; exit 1 ;;
+            esac
+          done
+          echo "All checks passed."
