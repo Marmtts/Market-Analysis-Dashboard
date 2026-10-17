@@ -136,7 +136,7 @@ async function refreshHeldTickers() {
 }
 
 // ---------------- Renderowanie kart wyników ----------------
-function renderResultCard(r) {
+function renderResultCard(r, flashDirection) {
   const stamp = stampInfo(r.combined.category);
   const trend = r.sentiment_trend ? r.sentiment_trend.trend_direction : "-";
   const fund = r.fundamentals;
@@ -159,6 +159,7 @@ function renderResultCard(r) {
 
   const card = document.createElement("div");
   card.className = "result-card result-card--with-sparkline result-card--customizable";
+  if (flashDirection) card.classList.add(`result-card--flash-${flashDirection}`);
 
   card.innerHTML = `
     <div class="stamp stamp--${stamp.cls}" title="${escapeHtml(r.combined.category)}">${stamp.label.replace("\n", "<br>")}</div>
@@ -231,7 +232,7 @@ function resultSortValue(r, key) {
   }
 }
 
-function renderResultsGrid(containerId, results, emptyMessage, sortState) {
+function renderResultsGrid(containerId, results, emptyMessage, sortState, changedTickers) {
   const container = el(containerId);
   container.innerHTML = "";
   // Karty poniżej są tworzone od nowa przy każdym wywołaniu, więc widoczność
@@ -270,7 +271,7 @@ function renderResultsGrid(containerId, results, emptyMessage, sortState) {
       (a, b) => (_categoryOrder[a.combined.category] ?? 9) - (_categoryOrder[b.combined.category] ?? 9)
     );
   }
-  sorted.forEach((r) => container.appendChild(renderResultCard(r)));
+  sorted.forEach((r) => container.appendChild(renderResultCard(r, changedTickers && changedTickers.get(r.ticker))));
   if (isCustomizable) applyColumnVisibility(state.columnPrefs);
 }
 
@@ -550,19 +551,34 @@ async function loadResults() {
 }
 
 function applyResultsPayload(payload) {
+  // Wynik poprzedniego cyklu (jeśli to nie pierwsze ładowanie) - do wykrycia,
+  // które spółki zmieniły final_score w tym cyklu, żeby mignąć ich kartą
+  // (zielono/czerwono) zamiast cichej podmiany liczby.
+  const prevByTicker = state.resultsByTicker;
+
   state.lastPayload = payload;
   state.resultsByTicker = new Map();
   (payload.results || []).forEach((r) => state.resultsByTicker.set(r.ticker, r));
   (payload.discovered_results || []).forEach((r) => state.resultsByTicker.set(r.ticker, r));
+
+  const changedTickers = new Map();
+  if (prevByTicker && prevByTicker.size > 0) {
+    state.resultsByTicker.forEach((r, ticker) => {
+      const prev = prevByTicker.get(ticker);
+      if (prev && prev.combined.final_score !== r.combined.final_score) {
+        changedTickers.set(ticker, r.combined.final_score > prev.combined.final_score ? "up" : "down");
+      }
+    });
+  }
 
   renderDailyBrief(payload.daily_brief);
   renderMacro(payload.macro_context);
   renderMacroCalendar(payload.macro_calendar);
   renderSectorConcentration(payload.sector_concentration);
   renderUpcomingEarnings();
-  renderResultsGrid("resultsGrid", payload.results, "Czekam na pierwszy cykl analizy…", state_sort.main);
+  renderResultsGrid("resultsGrid", payload.results, "Czekam na pierwszy cykl analizy…", state_sort.main, changedTickers);
   if (state.heatmapMode) renderHeatmap(payload.results);
-  renderResultsGrid("discoveredGrid", payload.discovered_results, "Brak propozycji w tym cyklu.", state_sort.discovered);
+  renderResultsGrid("discoveredGrid", payload.discovered_results, "Brak propozycji w tym cyklu.", state_sort.discovered, changedTickers);
   el("mainGeneratedAt").textContent = payload.generated_at
     ? `ostatnia aktualizacja: ${formatDateTime(payload.generated_at)}`
     : "brak danych";
@@ -1803,7 +1819,7 @@ function renderLotCard(p) {
       <div class="result-card__metric-label">Wartość P/L</div>
     </div>
     <div class="lot-actions">
-      <button class="lot-sell" title="Sprzedaj" data-id="${p.id}">💰</button>
+      <button class="lot-sell" title="Sprzedaj" data-id="${p.id}"><i class="ph ph-hand-coins" aria-hidden="true"></i></button>
       <button class="lot-edit" title="Edytuj" data-id="${p.id}">✎</button>
       <button class="lot-duplicate" title="Kopiuj jako nową pozycję" data-id="${p.id}">⧉</button>
       <button class="lot-delete" title="Usuń trwale" data-id="${p.id}">✕</button>
@@ -2198,7 +2214,7 @@ function renderEffectiveness(stats) {
       <div class="eff-row">
         <span class="eff-row__cat category--${cls}">${escapeHtml(cat)}</span>
         <span class="eff-row__stat">${s.count} sygn.</span>
-        <span class="eff-row__stat">win rate ${s.win_rate_pct}%</span>
+        <span class="eff-row__stat">trafność ${s.win_rate_pct}%</span>
         <span class="eff-row__stat eff-row__return">${sign}${s.avg_return_pct}% śr.</span>
       </div>`;
   }).join("");
@@ -2285,7 +2301,7 @@ function renderClosedSummaryBar(summary) {
       <div class="portfolio-summary-currency__label">Zrealizowane — ${escapeHtml(currency)}</div>
       <div class="portfolio-summary-bar">
         <div class="portfolio-summary-bar__item"><span>Liczba transakcji</span><strong>${s.count}</strong></div>
-        <div class="portfolio-summary-bar__item"><span>Win rate</span><strong>${s.win_rate_pct}%</strong></div>
+        <div class="portfolio-summary-bar__item"><span>Trafność</span><strong>${s.win_rate_pct}%</strong></div>
         <div class="portfolio-summary-bar__item"><span>Zrealizowany zysk/strata</span>
           <strong class="${s.realized_pl >= 0 ? "positive" : "negative"}">${s.realized_pl >= 0 ? "+" : ""}${s.realized_pl.toFixed(2)}</strong>
         </div>
@@ -2996,13 +3012,15 @@ el("xtbImportBtn").addEventListener("click", async () => {
     showErrorToast("Błąd połączenia podczas importu.");
   } finally {
     btn.disabled = false;
-    btn.textContent = "📥 Importuj pozycje";
+    btn.innerHTML = `<i class="ph ph-upload-simple" aria-hidden="true"></i> Importuj pozycje`;
   }
 });
 
 el("xtbImportFile").addEventListener("change", () => {
   const file = el("xtbImportFile").files[0];
-  el("xtbFileNameLabel").textContent = file ? `✅ ${file.name}` : "📂 Wybierz plik .xlsx z eksportu XTB";
+  el("xtbFileNameLabel").innerHTML = file
+    ? `<i class="ph ph-check-circle" aria-hidden="true"></i> ${escapeHtml(file.name)}`
+    : `<i class="ph ph-folder-open" aria-hidden="true"></i> Wybierz plik .xlsx z eksportu XTB`;
 });
 
 // ---------------- Korelacja i zmienność portfela ----------------
@@ -3155,7 +3173,9 @@ function renderPortfolioStatistics(data) {
 // ---------------- Kopia zapasowa (import) ----------------
 el("backupImportFile").addEventListener("change", () => {
   const file = el("backupImportFile").files[0];
-  el("backupFileNameLabel").textContent = file ? `✅ ${file.name}` : "📂 Wybierz plik kopii (.json)";
+  el("backupFileNameLabel").innerHTML = file
+    ? `<i class="ph ph-check-circle" aria-hidden="true"></i> ${escapeHtml(file.name)}`
+    : `<i class="ph ph-folder-open" aria-hidden="true"></i> Wybierz plik kopii (.json)`;
 });
 
 el("backupImportBtn").addEventListener("click", async () => {
@@ -3185,7 +3205,7 @@ el("backupImportBtn").addEventListener("click", async () => {
     const hasWarnings = data.warnings && data.warnings.length > 0;
     showSuccessToast(msg + (hasWarnings ? `\n\nUwagi:\n${data.warnings.slice(0, 5).join("\n")}` : ""), { sticky: hasWarnings });
     fileInput.value = "";
-    el("backupFileNameLabel").textContent = "📂 Wybierz plik kopii (.json)";
+    el("backupFileNameLabel").innerHTML = `<i class="ph ph-folder-open" aria-hidden="true"></i> Wybierz plik kopii (.json)`;
     await loadPortfolio();
     await loadClosedPortfolio();
     await loadDividends();
@@ -3194,7 +3214,7 @@ el("backupImportBtn").addEventListener("click", async () => {
     showErrorToast("Błąd połączenia podczas wczytywania kopii.");
   } finally {
     btn.disabled = false;
-    btn.textContent = "📤 Wczytaj kopię";
+    btn.innerHTML = `<i class="ph ph-upload-simple" aria-hidden="true"></i> Wczytaj kopię`;
   }
 });
 
