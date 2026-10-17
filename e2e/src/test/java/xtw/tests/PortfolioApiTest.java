@@ -1,4 +1,4 @@
-package xtw;
+package xtw.tests;
 
 import com.microsoft.playwright.APIRequestContext;
 import com.microsoft.playwright.junit.UsePlaywright;
