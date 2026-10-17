@@ -114,7 +114,7 @@ jobs:
       # przeglądarki, tylko wysyła żądania HTTP, więc testy w tym jobie
       # (klasy *ApiTest) jej nie potrzebują.
       - name: Run API tests (isolated instance, see e2e/run-tests.sh)
-        run: bash e2e/run-tests.sh -Dtest=WatchlistApiTest
+        run: bash e2e/run-tests.sh -Dtest=WatchlistApiTest,PortfolioApiTest
 
       - name: Publish test results as GitHub Check
         if: always()
@@ -177,7 +177,7 @@ jobs:
           java -cp "$(cat cp.txt)" com.microsoft.playwright.CLI install --with-deps chromium
 
       - name: Run UI tests (isolated instance, see e2e/run-tests.sh)
-        run: bash e2e/run-tests.sh -Dtest=SmokeTest,WatchlistTest
+        run: bash e2e/run-tests.sh -Dtest=SmokeTest,WatchlistTest,PortfolioTest
 
       - name: Publish test results as GitHub Check
         if: always()
