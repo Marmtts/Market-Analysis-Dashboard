@@ -584,6 +584,7 @@ function applyResultsPayload(payload) {
     : "brak danych";
 
   checkForAlerts(payload.results, payload.discovered_results);
+  renderQuickStats();
 }
 
 function renderDailyBrief(brief) {
@@ -2392,7 +2393,75 @@ async function loadPortfolioRisk() {
   }
 }
 
+// ---------------- Pasek "na pierwszy rzut oka" (zakładka Analiza) ----------------
+// Lekki, osobny fetch tego samego /api/portfolio/risk co loadPortfolioRisk()
+// niżej - NIE wołamy tu całego loadPortfolioRisk(), bo ono po drodze
+// inicjalizuje wykres kalkulatora FIRE (initFireCalculator), a ten renderuje
+// się w zakładce Portfel, która przy starcie jest schowana (display:none) -
+// wykres dostałby kontener o szerokości 0. Po realnym wejściu w Portfel i tak
+// poleci pełny loadPortfolioRisk() jak dotychczas.
+async function loadQuickPortfolioGlance() {
+  try {
+    const res = await fetch("/api/portfolio/risk");
+    const data = await res.json();
+    state.quickCombined = data.combined;
+  } catch (err) {
+    console.warn("Nie udało się pobrać skrótu portfela:", err);
+  }
+  renderQuickStats();
+}
+
+const BUY_SIGNAL_CATEGORY = "WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia";
+
+function renderQuickStats() {
+  const bar = el("quickStatsBar");
+  if (!bar) return;
+  const combined = state.quickCombined;
+  const chips = [];
+
+  if (combined && combined.value != null) {
+    const pl = combined.value - combined.cost;
+    const plCls = pl >= 0 ? "positive" : "negative";
+    chips.push(`
+      <div class="quick-stats__item" id="quickStatsPortfolio" title="Przejdź do Portfela">
+        <div class="quick-stats__label">Portfel (${escapeHtml(combined.base_currency)})</div>
+        <div class="quick-stats__value ${plCls}">${pl >= 0 ? "+" : ""}${pl.toFixed(2)} (${combined.pl_pct != null ? (combined.pl_pct >= 0 ? "+" : "") + combined.pl_pct + "%" : "—"})</div>
+        <div class="quick-stats__sub">wartość: ${combined.value.toFixed(2)}</div>
+      </div>
+    `);
+  }
+
+  if (state.lastPayload) {
+    const buyCount = (state.lastPayload.results || []).filter((r) => r.combined.category === BUY_SIGNAL_CATEGORY).length;
+    chips.push(`
+      <div class="quick-stats__item" id="quickStatsSignals" title="Przejdź do watchlisty">
+        <div class="quick-stats__label">Sygnały dziś</div>
+        <div class="quick-stats__value ${buyCount > 0 ? "positive" : ""}">${buyCount}</div>
+        <div class="quick-stats__sub">WARTO OBSERWOWAĆ</div>
+      </div>
+    `);
+  }
+
+  if (chips.length === 0) {
+    bar.style.display = "none";
+    bar.innerHTML = "";
+    return;
+  }
+  bar.innerHTML = chips.join("");
+  bar.style.display = "flex";
+  document.getElementById("quickStatsPortfolio")?.addEventListener("click", () => switchTab("portfolio"));
+  document.getElementById("quickStatsSignals")?.addEventListener("click", () => {
+    el("resultsGrid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function renderCombinedSummary(combined) {
+  // Ten sam combined, który dostaje pełny pasek w Portfelu - trzymamy skrót
+  // w Analizie w synchronizacji BEZ dodatkowego fetcha, bo ta funkcja i tak
+  // odpala się przy każdym realnym odświeżeniu danych portfela.
+  state.quickCombined = combined;
+  renderQuickStats();
+
   const bar = el("combinedSummaryBar");
   if (!combined || combined.value == null) {
     bar.innerHTML = "";
@@ -3388,8 +3457,14 @@ function initPanelCustomizationForSidebar(sidebar) {
   }
 
   // 2) Zwinięcie - niezależne od kolejności, jeden klucz per panel.
+  // "Skuteczność narzędzia" to metryka zaufania sprawdzana raz na jakiś
+  // czas, nie codziennie - domyślnie (dopóki użytkownik świadomie jej nie
+  // rozwinie, co zapisuje się tu tak samo jak każde inne zwinięcie) zaczyna
+  // zwinięta, żeby nie zajmowała miejsca przed treścią, po którą się
+  // codziennie wraca.
   panelsById.forEach((panel, id) => {
-    if (localStorage.getItem(PANEL_COLLAPSE_PREFIX + id) === "1") {
+    const stored = localStorage.getItem(PANEL_COLLAPSE_PREFIX + id);
+    if (stored === "1" || (stored === null && id === "effectiveness")) {
       panel.classList.add("is-collapsed");
     }
   });
@@ -4340,7 +4415,7 @@ function initPortfolioGridOnce() {
 
   setupSparklineHeaders();
   setupSortableHeaders();
-  await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness()]);
+  await Promise.all([loadWatchlist(), loadResults(), loadLogs(), loadStatus(), loadEffectiveness(), loadQuickPortfolioGlance()]);
   await refreshHeldTickers();
   // loadResults() (wyżej) już zdążył narysować heatmapę, ale w tamtym
   // momencie state.portfolioTickers było jeszcze puste (refreshHeldTickers
