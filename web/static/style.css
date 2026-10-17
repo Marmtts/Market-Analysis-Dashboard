@@ -1217,10 +1217,16 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 
 .detail-disclaimer {
   font-size: 0.72rem; color: var(--text-faint); font-style: italic; margin: 0.25rem 0 0;
-  /* Bez max-width te zdania ciągnęły się przez całą szerokość szerokich
-     sekcji (np. kalkulator IKE/FIRE w gridzie Portfela) - dużo powyżej
-     czytelnej długości linii. 68ch ~ górna granica wygodnej miary dla
-     drobnego, pochylonego tekstu. */
+}
+/* max-width TYLKO w kafelkach gridstacka Portfela (np. kalkulator IKE/FIRE,
+   krzywa kapitału - .grid-stack-item-content.dash-section) - tam bez niego
+   zdania ciągnęły się przez całą szerokość, dużo powyżej czytelnej długości
+   linii. ".dash-section" sam w sobie NIE wystarczy jako selektor - tę samą
+   klasę ma też sekcja podsumowania podatkowego w Zamkniętych transakcjach
+   (.section-card, szeroka, ale POZA gridstackiem), gdzie ten sam cap tylko
+   zostawiał martwą przestrzeń po prawej, bo kontener jest już odpowiednio
+   wymiarowany. */
+.grid-stack-item-content.dash-section .detail-disclaimer {
   max-width: 68ch;
 }
 

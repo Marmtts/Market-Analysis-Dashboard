@@ -244,11 +244,11 @@
           <input type="number" id="posBuyPrice" placeholder="Cena zakupu" step="0.01" min="0" required>
         </div>
         <input type="date" id="posBuyDate" required>
-        <input type="number" id="posBuyFxRate" placeholder="Własny kurs wymiany (opcj.)" step="0.0001" min="0"
+        <input type="number" id="posBuyFxRate" placeholder="Własny kurs wymiany (opcjonalnie)" step="0.0001" min="0"
                title="Rzeczywisty kurs zastosowany przez brokera przy tej transakcji (np. z marżą XTB) - jeśli podasz, dashboard użyje go zamiast bieżącego kursu rynkowego do przeliczenia kosztu tej pozycji na walutę bazową w podsumowaniu portfela i krzywej TWR.">
         <div class="add-form__row">
-          <input type="number" id="posCustomStop" placeholder="Stop-loss (opcj.)" step="0.01" min="0">
-          <input type="number" id="posCustomTarget" placeholder="Cel cenowy (opcj.)" step="0.01" min="0">
+          <input type="number" id="posCustomStop" placeholder="Stop-loss (opcjonalnie)" step="0.01" min="0">
+          <input type="number" id="posCustomTarget" placeholder="Cel cenowy (opcjonalnie)" step="0.01" min="0">
         </div>
         <input type="text" id="posNotes" placeholder="Notatka (opcjonalnie)" autocomplete="off">
         <label class="checkbox-row" title="Konto IKE jest zwolnione z podatku Belki TYLKO przy wypłacie po osiągnięciu wieku emerytalnego (lub innych warunkach ustawowych) - wcześniejsza wypłata jest opodatkowana jak konto standardowe. Zaznacz, żeby podsumowanie podatkowe pokazało tę pozycję osobno, z oboma scenariuszami.">
@@ -302,7 +302,7 @@
         </div>
         <div class="add-form__row">
           <input type="date" id="divPayDate" required>
-          <input type="number" id="divWithholdingTax" placeholder="Podatek u źródła (opcj.)" step="0.01" min="0">
+          <input type="number" id="divWithholdingTax" placeholder="Podatek u źródła (opcjonalnie)" step="0.01" min="0">
         </div>
         <input type="text" id="divNotes" placeholder="Notatka (opcjonalnie)" autocomplete="off">
         <div class="form-btn-row">
@@ -503,7 +503,7 @@
       <div class="chart-frame">
         <div id="fireChartContainer" class="fire-chart-container"></div>
       </div>
-      <p class="detail-disclaimer">🔥 Prosta projekcja składanego wzrostu przy STAŁEJ, założonej stopie zwrotu — nie prognoza ani porada inwestycyjna czy emerytalna. Realne zwroty rynkowe są zmienne z roku na rok, nie stałe; nie uwzględnia inflacji, zmian limitu rocznych wpłat na IKE ani ewentualnych opłat. Bieżąca wartość IKE jest wstępnie wypełniona z Twoich pozycji oznaczonych jako konto IKE (rozdział 12.1) — możesz ją zmienić, żeby zasymulować inny punkt startowy.</p>
+      <p class="detail-disclaimer">🔥 Prosta projekcja składanego wzrostu przy STAŁEJ, założonej stopie zwrotu — nie prognoza ani porada inwestycyjna czy emerytalna. Realne zwroty rynkowe są zmienne z roku na rok, nie stałe; nie uwzględnia inflacji, zmian limitu rocznych wpłat na IKE ani ewentualnych opłat. Bieżąca wartość IKE jest wstępnie wypełniona z Twoich pozycji oznaczonych jako konto IKE (formularz „Dodaj pozycję” po lewej → ✓ Konto IKE) — możesz ją zmienić, żeby zasymulować inny punkt startowy.</p>
     </div>
     </div>
     </div>
@@ -567,9 +567,9 @@
         <span><i class="legend-swatch legend-swatch--ma50"></i> SMA 50</span>
         <span><i class="legend-swatch legend-swatch--ma200"></i> SMA 200</span>
         <span class="modal__legend-sep">|</span>
-        <span class="legend-marker legend-marker--buy">▲ KUP</span>
-        <span class="legend-marker legend-marker--avoid">▼ SZCZYT</span>
-        <span class="legend-marker legend-marker--neutral">● N</span>
+        <span class="legend-marker legend-marker--buy" title="WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia">▲ KUP</span>
+        <span class="legend-marker legend-marker--avoid" title="UNIKAJ - blisko szczytu trendu (SZCZYT) albo świeży gwałtowny spadek (SPADEK)">▼ SZCZYT / SPADEK</span>
+        <span class="legend-marker legend-marker--neutral" title="NEUTRALNIE POZYTYWNIE - brak jednoznacznego sygnału wejścia">● N</span>
         <span class="modal__legend-note">— historyczne werdykty narzędzia na tej spółce</span>
       </div>
       <div class="modal__legend" id="chartPositionLegend" style="display:none"></div>
@@ -589,7 +589,7 @@
       <div class="chat-msg chat-msg--assistant">Cześć! Zapytaj mnie o dzisiejsze wyniki analizy, Twój portfel albo kontekst makro.</div>
     </div>
     <form class="chat-widget__input-row" id="chatForm">
-      <input type="text" id="chatInput" placeholder="Zadaj pytanie..." autocomplete="off">
+      <input type="text" id="chatInput" placeholder="Zadaj pytanie…" autocomplete="off">
       <button type="submit" class="btn btn--primary">Wyślij</button>
     </form>
   </div>
