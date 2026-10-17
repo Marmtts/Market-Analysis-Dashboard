@@ -7,3 +7,8 @@ reports/
 config.yaml
 KONTEKST_PROJEKTU.md
 .DS_Store
+
+# Skille Claude (frontend-design od Anthropic, ui-ux-pro-max od
+# nextlevelbuilder) - na razie wszystkie trzymane tylko lokalnie, celowo
+# nie wchodzą do repo.
+.claude/skills/

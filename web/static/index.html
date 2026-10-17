@@ -7,6 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@14/dist/gridstack.min.css">
+<!-- Phosphor Icons (outline) - zastępuje emoji jako ikony przycisków w panelach
+     narzędzi (nie geometryczne glify ◆◈◇⚠∿⟶☰ przy nagłówkach sekcji - te
+     zostają, to świadomy, typograficzny wybór, nie emoji). -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -27,7 +31,7 @@
   </div>
 
   <div class="topbar__status">
-    <button class="topbar__search-btn" id="cmdkOpenBtn" title="Szukaj spółki / szybkie przejście (Ctrl+K)">🔎 <kbd>Ctrl K</kbd></button>
+    <button class="topbar__search-btn" id="cmdkOpenBtn" title="Szukaj spółki / szybkie przejście (Ctrl+K)"><i class="ph ph-magnifying-glass" aria-hidden="true"></i> <kbd>Ctrl K</kbd></button>
     <div class="status-pill" id="connPill">
       <span class="status-pill__dot"></span>
       <span id="connLabel">łączę…</span>
@@ -152,7 +156,7 @@
   <section class="main">
 
     <div class="daily-brief" id="dailyBriefCard" style="display:none">
-      <div class="daily-brief__label">📋 Brief dnia</div>
+      <div class="daily-brief__label"><i class="ph ph-clipboard-text" aria-hidden="true"></i> Brief dnia</div>
       <p class="daily-brief__text" id="dailyBriefText"></p>
     </div>
 
@@ -160,9 +164,9 @@
     <div class="section-header">
       <h2>Stała watchlista</h2>
       <span class="section-header__meta" id="mainGeneratedAt">brak danych</span>
-      <button type="button" class="section-header__action" id="heatmapToggleBtn" title="Przełącz między widokiem kart a heatmapą kolorowaną wg zmiany dnia">🔥 Heatmapa</button>
+      <button type="button" class="section-header__action" id="heatmapToggleBtn" title="Przełącz między widokiem kart a heatmapą kolorowaną wg zmiany dnia"><i class="ph ph-fire" aria-hidden="true"></i> Heatmapa</button>
       <div class="col-settings">
-        <button type="button" class="col-settings-btn" id="columnSettingsBtn" aria-expanded="false" aria-haspopup="true" title="Dostosuj widoczne kolumny (watchlista i propozycje AI)">⚙ Kolumny</button>
+        <button type="button" class="col-settings-btn" id="columnSettingsBtn" aria-expanded="false" aria-haspopup="true" title="Dostosuj widoczne kolumny (watchlista i propozycje AI)"><i class="ph ph-gear" aria-hidden="true"></i> Kolumny</button>
         <div class="col-settings__popover" id="columnSettingsPopover" hidden>
           <div class="col-settings__title">Widoczne kolumny</div>
           <label><input type="checkbox" id="colToggleTarget" checked> Cena docelowa</label>
@@ -264,17 +268,17 @@
       </div>
       <div class="panel__body">
       <label class="file-input-label" for="xtbImportFile">
-        <span id="xtbFileNameLabel">📂 Wybierz plik .xlsx z eksportu XTB</span>
+        <span id="xtbFileNameLabel"><i class="ph ph-folder-open" aria-hidden="true"></i> Wybierz plik .xlsx z eksportu XTB</span>
       </label>
       <input type="file" id="xtbImportFile" accept=".xlsx,.xls" class="file-input-hidden">
-      <button class="btn btn--secondary" id="xtbImportBtn">📥 Importuj pozycje</button>
+      <button class="btn btn--secondary" id="xtbImportBtn"><i class="ph ph-upload-simple" aria-hidden="true"></i> Importuj pozycje</button>
       <p class="detail-disclaimer">Bezpieczne do wielokrotnego uruchamiania — już zaimportowane pozycje (rozpoznawane po numerze pozycji XTB) nigdy nie duplikują się przy ponownym imporcie. Ręcznie wpisane pozycje pozostają nietknięte. Ten sam import wczytuje też otrzymane dywidendy (sekcja „Dywidendy” niżej).</p>
       </div>
     </section>
 
     <section class="panel panel--collapsible sidebar-subpanel" id="addDividendPanel" data-panel-id="add-dividend">
       <div class="panel__header">
-        <h3 class="panel__subtitle"><span class="panel__subtitle-icon">💵</span>Dodaj dywidendę ręcznie</h3>
+        <h3 class="panel__subtitle"><span class="panel__subtitle-icon"><i class="ph ph-money" aria-hidden="true"></i></span>Dodaj dywidendę ręcznie</h3>
         <div class="panel__controls">
           <span class="panel__drag-handle" title="Przeciągnij, aby zmienić kolejność" aria-hidden="true">⠿</span>
           <button type="button" class="panel__ctrl-btn panel__move-up" title="Przesuń panel wyżej" aria-label="Przesuń panel wyżej">▲</button>
@@ -312,12 +316,12 @@
         </div>
       </div>
       <div class="panel__body">
-      <a class="btn btn--secondary backup-download-link" href="/api/backup/export" download>⬇ Pobierz kopię (JSON)</a>
+      <a class="btn btn--secondary backup-download-link" href="/api/backup/export" download><i class="ph ph-download-simple" aria-hidden="true"></i> Pobierz kopię (JSON)</a>
       <label class="file-input-label" for="backupImportFile">
-        <span id="backupFileNameLabel">📂 Wybierz plik kopii (.json)</span>
+        <span id="backupFileNameLabel"><i class="ph ph-folder-open" aria-hidden="true"></i> Wybierz plik kopii (.json)</span>
       </label>
       <input type="file" id="backupImportFile" accept=".json,application/json" class="file-input-hidden">
-      <button class="btn btn--secondary" id="backupImportBtn">📤 Wczytaj kopię</button>
+      <button class="btn btn--secondary" id="backupImportBtn"><i class="ph ph-upload-simple" aria-hidden="true"></i> Wczytaj kopię</button>
       <p class="detail-disclaimer">Kopia zawiera watchlistę, cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel), dywidendy oraz cele alokacji (rebalancing). Wczytanie jest bezpieczne do powtarzania — identyczne pozycje, spółki i dywidendy są pomijane (cele alokacji się nadpisują). Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
       </div>
     </section>
@@ -331,25 +335,25 @@
     <div id="portfolioHealthPanel"></div>
 
     <div class="layout-onboarding" id="layoutOnboarding" hidden>
-      <span class="layout-onboarding__icon">💡</span>
-      <span class="layout-onboarding__text">
-        <strong>✏ Edytuj układ</strong> odblokowuje przeciąganie i zmianę rozmiaru kafelków &middot;
-        <strong>🧩 Moduły</strong> włącza/wyłącza poszczególne sekcje &middot;
-        <strong>💾 Zapisz jako preset</strong> zachowuje cały ten rozkład (kolejność, rozmiary, widoczność), żeby wrócić do niego jednym wyborem z listy.
-      </span>
+      <i class="ph ph-lightbulb layout-onboarding__icon" aria-hidden="true"></i>
+      <ul class="layout-onboarding__text">
+        <li><strong><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edytuj układ</strong> odblokowuje przeciąganie i zmianę rozmiaru kafelków.</li>
+        <li><strong><i class="ph ph-puzzle-piece" aria-hidden="true"></i> Moduły</strong> włącza i wyłącza poszczególne sekcje.</li>
+        <li><strong><i class="ph ph-floppy-disk" aria-hidden="true"></i> Zapisz jako preset</strong> zapamiętuje cały ten rozkład, żeby wrócić do niego jednym wyborem z listy.</li>
+      </ul>
       <button type="button" class="layout-onboarding__close" id="layoutOnboardingClose" title="Nie pokazuj więcej">✕</button>
     </div>
 
     <div class="layout-toolbar">
-      <button type="button" class="btn btn--secondary" id="layoutEditToggle">✏ Edytuj układ</button>
+      <button type="button" class="btn btn--secondary" id="layoutEditToggle"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edytuj układ</button>
       <select id="layoutPresetSelect" class="layout-toolbar__select">
         <option value="">— domyślny układ —</option>
       </select>
-      <button type="button" class="btn btn--secondary" id="layoutPresetSave" title="Zapisz obecny układ (kolejność, rozmiary) jako nowy preset">💾 Zapisz jako preset</button>
-      <button type="button" class="btn btn--secondary" id="layoutPresetDelete" title="Usuń wybrany preset">🗑 Usuń preset</button>
-      <button type="button" class="btn btn--secondary" id="layoutReset" title="Wróć do domyślnego, jednokolumnowego układu">↺ Domyślny</button>
+      <button type="button" class="btn btn--secondary" id="layoutPresetSave" title="Zapisz obecny układ (kolejność, rozmiary) jako nowy preset"><i class="ph ph-floppy-disk" aria-hidden="true"></i> Zapisz jako preset</button>
+      <button type="button" class="btn btn--secondary" id="layoutPresetDelete" title="Usuń wybrany preset"><i class="ph ph-trash" aria-hidden="true"></i> Usuń preset</button>
+      <button type="button" class="btn btn--secondary" id="layoutReset" title="Wróć do domyślnego, jednokolumnowego układu"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Domyślny</button>
       <details class="module-toggle" id="moduleTogglePanel">
-        <summary class="btn btn--secondary" title="Wybierz, które moduły mają być widoczne">🧩 Moduły</summary>
+        <summary class="btn btn--secondary" title="Wybierz, które moduły mają być widoczne"><i class="ph ph-puzzle-piece" aria-hidden="true"></i> Moduły</summary>
         <div class="module-toggle__list" id="moduleToggleList"></div>
       </details>
     </div>
@@ -361,8 +365,8 @@
     <div class="dash-section__body">
     <div class="section-header">
       <h2><span class="section-header__icon">⚠</span>Ryzyko i ekspozycja</h2>
-      <button type="button" class="section-header__action" id="testDiscordBtn" title="Wyślij testową wiadomość na skonfigurowany webhook Discorda (notifications w config.yaml)">🧪 Testuj Discord</button>
-      <button type="button" class="section-header__action" id="checkAlertsNowBtn">🔔 Sprawdź alerty teraz</button>
+      <button type="button" class="section-header__action" id="testDiscordBtn" title="Wyślij testową wiadomość na skonfigurowany webhook Discorda (notifications w config.yaml)"><i class="ph ph-flask" aria-hidden="true"></i> Testuj Discord</button>
+      <button type="button" class="section-header__action" id="checkAlertsNowBtn"><i class="ph ph-bell" aria-hidden="true"></i> Sprawdź alerty teraz</button>
     </div>
     <div class="section-card" id="portfolioRiskPanel"></div>
     </div>
@@ -456,7 +460,7 @@
     <div class="grid-stack-item-content dash-section" data-section-id="portfolio-dividends">
     <div class="dash-section__body">
     <div class="section-header">
-      <h2><span class="section-header__icon">💵</span>Dywidendy</h2>
+      <h2><span class="section-header__icon"><i class="ph ph-money" aria-hidden="true"></i></span>Dywidendy</h2>
     </div>
     <div class="section-card" id="dividendSummaryPanel"></div>
     <div class="dividend-table-wrap" id="dividendTableWrap"></div>
@@ -516,7 +520,7 @@
     <div class="dash-section" data-section-id="closed-history">
     <div class="section-header">
       <h2><span class="section-header__icon">☰</span>Historia transakcji</h2>
-      <a class="section-header__action" href="/api/portfolio/closed/export" download>⬇ Eksportuj CSV</a>
+      <a class="section-header__action" href="/api/portfolio/closed/export" download><i class="ph ph-download-simple" aria-hidden="true"></i> Eksportuj CSV</a>
     </div>
     <div class="results-header" data-sort-group="closed">
       <span></span>
@@ -568,10 +572,10 @@
 </div>
 
 <div class="chat-widget" id="chatWidget">
-  <button class="chat-widget__toggle" id="chatToggleBtn" title="Zapytaj asystenta o dane w dashboardzie">💬</button>
+  <button class="chat-widget__toggle" id="chatToggleBtn" title="Zapytaj asystenta o dane w dashboardzie"><i class="ph ph-chat-circle-text" aria-hidden="true"></i></button>
   <div class="chat-widget__panel" id="chatPanel">
     <div class="chat-widget__header">
-      <span>💬 Asystent dashboardu</span>
+      <span><i class="ph ph-chat-circle-text" aria-hidden="true"></i> Asystent dashboardu</span>
       <button class="btn btn--icon" id="chatCloseBtn">✕</button>
     </div>
     <div class="chat-widget__messages" id="chatMessages">
@@ -595,7 +599,7 @@
 
 <div class="log-drawer" id="logDrawer">
   <button class="log-drawer__toggle" id="logDrawerToggle">
-    <span>📋 Log na żywo <span class="log-drawer__badge" id="logDrawerBadge" hidden></span></span>
+    <span><i class="ph ph-list-bullets" aria-hidden="true"></i> Log na żywo <span class="log-drawer__badge" id="logDrawerBadge" hidden></span></span>
     <span class="log-drawer__arrow">▲</span>
   </button>
   <div class="log-drawer__body" id="logDrawerBody">

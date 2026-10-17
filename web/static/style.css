@@ -12,7 +12,11 @@
   --border-bright: #3A4560;
   --text: #E8E6DE;
   --text-dim: #8A93A8;
-  --text-faint: #5C6478;
+  /* Było #5C6478 - tylko 3.11:1 kontrastu na --bg (2.85:1 na --bg-elevated),
+     poniżej wymaganych WCAG AA 4.5:1 dla normalnego (niedużego) tekstu, a ten
+     kolor jest używany m.in. w disclaimerach i etykietach metryk - nie jest
+     to tekst dekoracyjny. Ten sam odcień, rozjaśniony do >4.5:1 na OBU tłach. */
+  --text-faint: #7B85AC;
 
   --accent-gold: #C9A227;
   --accent-gold-bright: #E0BC4A;
@@ -29,10 +33,15 @@
   --accent-cyan: #2FC2C7;
   --accent-cyan-bright: #56E1E3;
 
-  /* Siatka gradientowa (mesh) pod "bohaterskimi" powierzchniami (topbar,
-     złote karty) - kilka rozmytych plam koloru nałożonych na ciemne tło,
-     zamiast płaskiej jednolitej powierzchni. Subtelne - to nadal poważne
-     narzędzie finansowe, nie landing page. */
+  /* Siatka gradientowa (mesh) pod "bohaterskimi" powierzchniami - kilka
+     rozmytych plam koloru nałożonych na ciemne tło, zamiast płaskiej
+     jednolitej powierzchni. Subtelne - to nadal poważne narzędzie
+     finansowe, nie landing page. CELOWO tylko na 3 prawdziwych "hero"
+     powierzchniach: .topbar (marka, wszędzie), .daily-brief (najważniejsza
+     treść zakładki Analiza), .combined-summary (najważniejsza liczba
+     zakładki Portfel) - każda inna na innej zakładce, więc nie konkurują
+     ze sobą naraz. Reszta podniesionych paneli (modal, dialog, paleta
+     poleceń, czat) dostaje płaskie tło - to narzędzia, nie "momenty". */
   --mesh-hero:
     radial-gradient(60% 140% at 12% -20%, rgba(201, 162, 39, 0.22), transparent 60%),
     radial-gradient(55% 130% at 105% 10%, rgba(47, 194, 199, 0.16), transparent 55%);
@@ -171,7 +180,7 @@ html, body {
    popup z prawdziwym polem). */
 .topbar__search-btn {
   display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.4rem 0.7rem;
+  padding: 0.68rem 0.7rem; /* dopasowane do .btn/.status-pill - spójna wysokość rzędu topbara */
   border-radius: 999px;
   background: var(--bg-elevated-2);
   border: 1px solid var(--border-bright);
@@ -191,7 +200,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.85rem;
+  padding: 0.68rem 0.85rem; /* dopasowane do .btn, żeby cały rząd topbara miał spójną wysokość */
   border-radius: 999px;
   background: var(--bg-elevated-2);
   border: 1px solid var(--border-bright);
@@ -223,11 +232,22 @@ html, body {
   50% { opacity: 0.4; }
 }
 
+/* Phosphor Icons (patrz <link> w index.html) - kolor dziedziczony z
+   "color" (currentColor), więc automatycznie dopasowuje się do kontekstu
+   (gold w przyciskach, text-faint w etykietach itd.) bez osobnej reguły
+   na każde miejsce użycia. vertical-align koryguje domyślne wyrównanie
+   fontu ikon względem tekstu obok. */
+.ph { vertical-align: -0.125em; line-height: 1; }
+
 .btn {
   font-family: var(--font-body);
   font-size: 0.82rem;
   font-weight: 600;
-  padding: 0.55rem 1.1rem;
+  /* Było 0.55rem (~33px wysokości celu dotykowego) - to GŁÓWNA klasa
+     przycisków akcji w całej appce (nie powtarzane ikony w wierszach,
+     te mają własne, mniejsze klasy), więc stać ją na ~40px bez utraty
+     gęstości tam, gdzie gęstość faktycznie ma znaczenie. */
+  padding: 0.68rem 1.1rem;
   border-radius: var(--radius);
   border: 1px solid var(--border-bright);
   background: var(--bg-elevated-2);
@@ -263,7 +283,7 @@ html, body {
   to { background-position: -220% 0; }
 }
 .btn--secondary { width: 100%; margin-top: 0.4rem; }
-.btn--icon { padding: 0.3rem 0.6rem; font-size: 0.9rem; }
+.btn--icon { padding: 0.75rem 0.7rem; font-size: 0.9rem; } /* było 0.3rem/0.6rem - zamyka modal/czat, warto mieć wygodny cel */
 .btn--danger {
   background: linear-gradient(155deg, var(--accent-red-bright), var(--accent-red) 65%);
   color: #1A0E0A;
@@ -295,12 +315,10 @@ html, body {
 }
 .panel__title {
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 600;
   margin: 0 0 0.8rem;
   color: var(--accent-gold-bright);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 /* ---------------- Macro readout ---------------- */
@@ -326,7 +344,7 @@ html, body {
 
 .macro-calendar { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.6rem; }
 .macro-calendar__title {
-  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em;
+  font-size: 0.7rem; font-weight: 600;
   color: var(--text-faint); margin-bottom: 0.4rem;
 }
 .macro-calendar__row {
@@ -362,7 +380,7 @@ html, body {
 .fire-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1rem; }
 .fire-inputs label {
   display: flex; flex-direction: column; gap: 0.35rem;
-  font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em;
+  font-size: 0.72rem; color: var(--text-faint);
 }
 .fire-inputs input {
   background: var(--bg);
@@ -460,7 +478,7 @@ html, body {
   font-family: var(--font-display);
   font-size: 0.8rem;
   font-weight: 600;
-  padding: 0.55rem 1.2rem;
+  padding: 0.85rem 1.2rem; /* było 0.55rem (~33px celu dotykowego) - pojedynczy toggle, stać nas na ~44px */
   cursor: pointer;
 }
 .log-drawer__arrow { transition: transform 0.2s ease; color: var(--text-faint); }
@@ -773,6 +791,29 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   50% { box-shadow: 0 0 12px 1px rgba(109, 190, 133, 0.35); }
 }
 
+/* Karta spółki, której final_score zmienił się w tym cyklu odświeżenia,
+   mignie raz na zielono/czerwono - sygnał "coś tu się ruszyło" zamiast cichej
+   podmiany liczby. Jednorazowe (animation-fill-mode: forwards zatrzymuje
+   końcową, niewidoczną klatkę) - karty i tak są tworzone od zera przy
+   każdym renderze, więc klasa znika sama przy kolejnym cyklu. */
+.result-card--flash-up {
+  animation: result-card-flash-up 1.6s ease-out forwards;
+}
+.result-card--flash-down {
+  animation: result-card-flash-down 1.6s ease-out forwards;
+}
+@keyframes result-card-flash-up {
+  0% { box-shadow: 0 0 0 1px rgba(109, 190, 133, 0.9), 0 0 16px 2px rgba(109, 190, 133, 0.45); background-color: rgba(109, 190, 133, 0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(109, 190, 133, 0); background-color: transparent; }
+}
+@keyframes result-card-flash-down {
+  0% { box-shadow: 0 0 0 1px rgba(218, 106, 82, 0.9), 0 0 16px 2px rgba(218, 106, 82, 0.45); background-color: rgba(218, 106, 82, 0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(218, 106, 82, 0); background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .result-card--flash-up, .result-card--flash-down { animation: none; }
+}
+
 .result-card__info { min-width: 0; }
 .result-card__name {
   font-weight: 600;
@@ -909,7 +950,7 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 .modal__panel {
   position: relative;
-  background: var(--mesh-hero), var(--bg-elevated);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-lg);
   width: min(980px, 94vw);
@@ -997,7 +1038,13 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   padding: 1rem;
 }
 .dialog-box {
-  background: var(--mesh-hero), var(--bg-elevated);
+  /* Szklany efekt (ten sam przepis co .topbar) tylko na pływających,
+     krótkotrwałych nakładkach bez gęstych danych pod spodem (dialog/cmdk/
+     toast) - gęste siatki danych (karty, tabele, modal z wykresem) zostają
+     nieprzezroczyste, bo tam czytelność jest ważniejsza niż głębia. */
+  background: linear-gradient(165deg, rgba(28, 37, 54, 0.82), rgba(14, 20, 32, 0.82));
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-lg);
   width: min(420px, 100%);
@@ -1041,7 +1088,9 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 .cmdk-overlay[hidden] { display: none; }
 .cmdk-overlay:not([hidden]) { display: flex; }
 .cmdk-box {
-  background: var(--mesh-hero), var(--bg-elevated);
+  background: linear-gradient(165deg, rgba(28, 37, 54, 0.82), rgba(14, 20, 32, 0.82));
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-lg);
   width: min(560px, 100%);
@@ -1161,6 +1210,11 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 
 .detail-disclaimer {
   font-size: 0.72rem; color: var(--text-faint); font-style: italic; margin: 0.25rem 0 0;
+  /* Bez max-width te zdania ciągnęły się przez całą szerokość szerokich
+     sekcji (np. kalkulator IKE/FIRE w gridzie Portfela) - dużo powyżej
+     czytelnej długości linii. 68ch ~ górna granica wygodnej miary dla
+     drobnego, pochylonego tekstu. */
+  max-width: 68ch;
 }
 
 /* ---------------- Kalkulator wielkości pozycji ---------------- */
@@ -1342,8 +1396,8 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   margin-bottom: 0.75rem;
 }
 .portfolio-summary-currency__label {
-  font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-faint);
-  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem;
+  font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600; color: var(--text-faint);
+  margin-bottom: 0.35rem;
 }
 
 .closed-card { cursor: default; }
@@ -1396,11 +1450,9 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
 }
 .daily-brief__label {
   font-family: var(--font-display);
-  font-size: 0.8rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--accent-gold-bright);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
 }
 .daily-brief__text {
@@ -1423,8 +1475,7 @@ body { padding-bottom: 44px; } /* miejsce na zwiniętą szufladkę logu, żeby n
   box-shadow: var(--shadow-md), 0 0 0 1px rgba(201, 162, 39, 0.08);
 }
 .combined-summary__label {
-  font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-gold-bright);
-  text-transform: uppercase; letter-spacing: 0.04em;
+  font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600; color: var(--accent-gold-bright);
 }
 .combined-summary__grid {
   display: grid;
@@ -1619,7 +1670,7 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
 .chat-widget__header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 0.7rem 0.9rem;
-  background: var(--mesh-hero), var(--bg-elevated-2);
+  background: var(--bg-elevated-2);
   font-family: var(--font-display); font-size: 0.85rem; color: var(--accent-gold-bright);
   border-bottom: 1px solid var(--border);
 }
@@ -1804,7 +1855,11 @@ html { scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin;
   font-family: var(--font-body);
   font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.3rem 0.7rem;
+  /* 0.3rem pionowo dawało ~24px wysokości celu dotykowego - za mało wg
+     WCAG (min. 44px, tu celujemy w rozsądny kompromis ~38-40px, bo to
+     pojedynczy przycisk paska narzędzi, nie powtarzana ikona w wierszu,
+     więc stać nas na więcej bez psucia gęstości). */
+  padding: 0.75rem 0.9rem;
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
@@ -1901,10 +1956,15 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
   line-height: 1.5;
 }
 .layout-onboarding__icon { font-size: 1.1rem; line-height: 1.4; }
+.layout-onboarding__text {
+  list-style: none; margin: 0; padding: 0; flex: 1;
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
 .layout-onboarding__text strong { color: var(--text); }
 .layout-onboarding__close {
   margin-left: auto; background: none; border: none; cursor: pointer;
-  color: var(--text-faint); font-size: 1rem; line-height: 1; padding: 0.1rem 0.3rem;
+  color: var(--text-faint); font-size: 1rem; line-height: 1;
+  padding: 0.7rem; /* było 0.1rem/0.3rem (~22px celu) - sam glif zostaje mały, rośnie tylko niewidoczny obszar klikalny */
   flex-shrink: 0;
 }
 .layout-onboarding__close:hover { color: var(--text); }
@@ -1922,7 +1982,10 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
 }
 .toast {
   display: flex; align-items: flex-start; gap: 0.7rem; pointer-events: auto;
-  background: var(--bg-elevated); border: 1px solid var(--border-bright);
+  background: linear-gradient(165deg, rgba(28, 37, 54, 0.85), rgba(14, 20, 32, 0.85));
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid var(--border-bright);
   border-radius: var(--radius-lg); padding: 0.7rem 0.7rem 0.7rem 1rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   font-size: 0.82rem; color: var(--text); width: 100%;
@@ -1943,7 +2006,9 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
 .toast__action:hover { background: rgba(212, 175, 55, 0.22); }
 .toast__close {
   background: none; border: none; cursor: pointer; color: var(--text-faint);
-  font-size: 0.9rem; line-height: 1; padding: 0.15rem 0.2rem; flex-shrink: 0;
+  font-size: 0.9rem; line-height: 1;
+  padding: 0.65rem 0.6rem; /* było 0.15rem/0.2rem (~20px celu) - glif zostaje maly, rośnie obszar klikalny */
+  flex-shrink: 0;
 }
 .toast__close:hover { color: var(--text); }
 
@@ -2023,11 +2088,9 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
 .col-settings__popover[hidden] { display: none; }
 .col-settings__title {
   font-family: var(--font-display);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--accent-gold-bright);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin-bottom: 0.1rem;
 }
 .col-settings__popover label {
