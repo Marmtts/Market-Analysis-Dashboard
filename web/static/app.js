@@ -1042,7 +1042,14 @@ function buildVerdictMarkers(scoreHistory, candleDates) {
     });
   }
 
-  return Array.from(byDay.values()).sort((a, b) => (a.time < b.time ? -1 : 1));
+  const sorted = Array.from(byDay.values()).sort((a, b) => (a.time < b.time ? -1 : 1));
+
+  // Gdy werdykt utrzymuje się bez zmian wiele dni z rzędu (typowe np. dla
+  // "UNIKAJ - blisko szczytu trendu"), pokazanie znacznika KAŻDEGO dnia
+  // zlewa etykiety w jedną nieczytelną plamę tekstu. Zostaje tylko pierwszy
+  // dzień danego "przebiegu" - punkt, w którym werdykt faktycznie się
+  // zmienił, czyli to, co realnie niesie informację.
+  return sorted.filter((m, i) => i === 0 || m.text !== sorted[i - 1].text);
 }
 
 function snapToTradingDay(dateStr, sortedCandleDates) {
@@ -1405,13 +1412,13 @@ function renderRebalancing(data) {
       <td>${escapeHtml(s.ticker)}${!s.has_position ? ` <span class="ike-badge" title="Brak dziś pozycji w portfelu">brak</span>` : ""}</td>
       <td>${s.current_pct}%</td>
       <td>${s.target_pct}%</td>
-      <td class="${driftCls}">${s.drift_pct >= 0 ? "+" : ""}${s.drift_pct} pkt%</td>
+      <td class="${driftCls}">${s.drift_pct >= 0 ? "+" : ""}${s.drift_pct} p.p.</td>
       <td>${escapeHtml(action)}</td>
       <td><button class="watchlist__remove" title="Usuń cel" data-ticker="${escapeHtml(s.ticker)}">✕</button></td>
     </tr>`;
   });
   html += `</tbody></table></div>${sumWarning}
-    <p class="detail-disclaimer">⚖ Sugestie to proste przeliczenie (wartość docelowa − wartość bieżąca) / cena — nie uwzględniają kosztów transakcyjnych, podatku przy sprzedaży ani minimalnych wielkości zleceń brokera. Próg odchylenia: ${data.tolerance_pct} pkt% (portfolio.rebalance_tolerance_pct w config.yaml).</p>`;
+    <p class="detail-disclaimer">⚖ Sugestie to proste przeliczenie (wartość docelowa − wartość bieżąca) / cena — nie uwzględniają kosztów transakcyjnych, podatku przy sprzedaży ani minimalnych wielkości zleceń brokera. Próg odchylenia: ${data.tolerance_pct} p.p. (portfolio.rebalance_tolerance_pct w config.yaml).</p>`;
 
   panel.innerHTML = html;
   panel.querySelectorAll(".watchlist__remove").forEach((btn) => {
@@ -1473,7 +1480,7 @@ function renderSectorRebalancing(data, baseCurrency) {
       <td title="${s.tickers.length ? escapeHtml(s.tickers.join(", ")) : "brak dziś pozycji w tym sektorze"}">${escapeHtml(s.sector)}</td>
       <td>${s.current_pct}%</td>
       <td>${s.target_pct}%</td>
-      <td class="${driftCls}">${s.drift_pct >= 0 ? "+" : ""}${s.drift_pct} pkt%</td>
+      <td class="${driftCls}">${s.drift_pct >= 0 ? "+" : ""}${s.drift_pct} p.p.</td>
       <td>${escapeHtml(action)}</td>
       <td><button class="watchlist__remove" title="Usuń cel" data-sector="${escapeHtml(s.sector)}">✕</button></td>
     </tr>`;
@@ -2055,7 +2062,7 @@ function renderDetailsHtml(r) {
           <div><span>Trend (SMA)</span><strong>${t.metrics.uptrend ? "wzrostowy" : "brak"}</strong></div>
           <div><span>Do 52-tyg. maks.</span><strong>${fmtPct(t.metrics.dist_from_52w_high_pct)}</strong></div>
           <div><span>Wolumen (anomalia)</span><strong>${t.metrics.volume_spike ? "tak" : "nie"}</strong></div>
-          ${t.metrics.relative_strength ? `<div><span>Siła wzgl. vs ${escapeHtml(t.metrics.relative_strength.benchmark)}</span><strong>${t.metrics.relative_strength.relative_strength_pct >= 0 ? "+" : ""}${t.metrics.relative_strength.relative_strength_pct} pkt%</strong></div>` : ""}
+          ${t.metrics.relative_strength ? `<div><span>Siła wzgl. vs ${escapeHtml(t.metrics.relative_strength.benchmark)}</span><strong>${t.metrics.relative_strength.relative_strength_pct >= 0 ? "+" : ""}${t.metrics.relative_strength.relative_strength_pct} p.p.</strong></div>` : ""}
         </div>
     </div>`;
 
