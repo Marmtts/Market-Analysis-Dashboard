@@ -155,6 +155,13 @@
   <!-- ============ GŁÓWNA KOLUMNA: wyniki ============ -->
   <section class="main">
 
+    <!-- Pasek "na pierwszy rzut oka" - jedyne miejsce, gdzie widać wartość
+         portfela i liczbę dzisiejszych sygnałów BEZ przełączania zakładki
+         (dane portfela normalnie ładują się dopiero po wejściu w Portfel,
+         patrz switchTab). Karmiony z już i tak wykonywanych zapytań - patrz
+         loadQuickStats/renderQuickStats w app.js. -->
+    <div class="quick-stats" id="quickStatsBar" style="display:none"></div>
+
     <div class="daily-brief" id="dailyBriefCard" style="display:none">
       <div class="daily-brief__label"><i class="ph ph-clipboard-text" aria-hidden="true"></i> Brief dnia</div>
       <p class="daily-brief__text" id="dailyBriefText"></p>
