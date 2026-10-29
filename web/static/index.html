@@ -330,6 +330,9 @@
       <input type="file" id="backupImportFile" accept=".json,application/json" class="file-input-hidden">
       <button class="btn btn--secondary" id="backupImportBtn"><i class="ph ph-upload-simple" aria-hidden="true"></i> Wczytaj kopię</button>
       <p class="detail-disclaimer">Kopia zawiera watchlistę, cały portfel (otwarte i zamknięte pozycje, własne poziomy stop/cel), dywidendy oraz cele alokacji (rebalancing). Wczytanie jest bezpieczne do powtarzania — identyczne pozycje, spółki i dywidendy są pomijane (cele alokacji się nadpisują). Historia werdyktów i krzywe kapitału nie wchodzą do kopii (odbudują się z kolejnych cykli).</p>
+
+      <button type="button" class="btn btn--secondary" id="backfillGapBtn" title="Uzupełnia brakujące dni w panelu „Skuteczność narzędzia” i na krzywej kapitału po przestoju dashboardu"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i> Uzupełnij lukę w danych</button>
+      <p class="detail-disclaimer">Skanuje ostatnie 30 dni i dopisuje TYLKO te, których jeszcze nie ma (bezpieczne do wielokrotnego klikania) — panel „Skuteczność narzędzia” i krzywą kapitału. Nie dotyczy bieżących cen/sygnałów, te odświeża zwykły cykl analizy.</p>
       </div>
     </section>
   </aside>

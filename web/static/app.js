@@ -769,6 +769,37 @@ if (testDiscordBtn) {
   });
 }
 
+// Uzupełnienie dziury w danych (score_history + krzywa kapitału) po
+// przestoju dashboardu - patrz src/backfill_gap.py i POST /api/backfill-gap.
+// innerHTML (nie textContent) przy zmianie etykiety - inaczej podmiana
+// tekstu w trakcie/po żądaniu wymazałaby ikonę (ten sam błąd co wcześniej
+// przy imporcie XTB/kopii zapasowej, patrz xtbImportBtn).
+const backfillGapBtn = el("backfillGapBtn");
+if (backfillGapBtn) {
+  const originalHtml = backfillGapBtn.innerHTML;
+  backfillGapBtn.addEventListener("click", async () => {
+    backfillGapBtn.disabled = true;
+    backfillGapBtn.innerHTML = "Uzupełniam…";
+    try {
+      const res = await fetch("/api/backfill-gap?days=30", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      const msg = `Uzupełniono lukę w danych (${data.start} – ${data.end}): `
+        + `${data.score_entries} wpisów skuteczności, ${data.equity_points} punktów krzywej kapitału.`;
+      appendLog({ level: "success", message: `⏱ ${msg}` });
+      showSuccessToast(msg);
+      loadEffectiveness();
+      loadPortfolioEquitySection();
+    } catch (err) {
+      appendLog({ level: "error", message: `⏱ Uzupełnianie luki w danych nie powiodło się: ${String(err)}` });
+      showErrorToast("Nie udało się uzupełnić luki w danych.");
+    } finally {
+      backfillGapBtn.disabled = false;
+      backfillGapBtn.innerHTML = originalHtml;
+    }
+  });
+}
+
 // ---------------- WebSocket ----------------
 function connectWebSocket() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
