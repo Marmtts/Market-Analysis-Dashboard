@@ -58,6 +58,9 @@ def _trading_days(history: pd.DataFrame, start: str, end: str) -> list[str]:
 
 
 def backfill_score_history_gap(companies: list[dict], start: str, end: str, cfg: dict) -> int:
+    if not companies:
+        return 0
+
     ma_long = cfg["technical"].get("ma_long", 200)
     min_len = max(ma_long, 252) + 5
     inserted = 0
@@ -213,7 +216,11 @@ def main():
     end = args.end or yesterday.strftime("%Y-%m-%d")
     start = args.start or (yesterday - timedelta(days=30)).strftime("%Y-%m-%d")
 
-    companies = cfg.get("watchlist", [])
+    # ŻYWA watchlista z bazy, NIE statyczna lista z config.yaml - ta w pliku
+    # jest tylko seedem wczytywanym przy pierwszym starcie, a spółki dodane
+    # później przez UI/API istnieją wyłącznie w bazie (ten sam błąd był w
+    # backfill_history.py, poprawiony tam identycznie).
+    companies = db.get_watchlist()
 
     console.rule(f"[bold cyan]Uzupełnianie dziury w danych: {start} .. {end}[/bold cyan]")
 

@@ -37,7 +37,7 @@ import io
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from contextlib import asynccontextmanager
@@ -72,6 +72,7 @@ from src.xtb_import import parse_xtb_report
 from src.fx_rates import get_fx_rate
 from src.notifications import notify_price_alerts, send_discord_alert
 from src.macro_calendar import get_upcoming_events
+from src.backfill_gap import backfill_score_history_gap, backfill_equity_gap
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("xtb_trend_watch.web_app")
@@ -583,6 +584,32 @@ async def api_check_alerts_now():
     for alert in alerts:
         await manager.broadcast({**alert, "type": "price_alert", "alert_type": alert["type"]})
     return {"alerts_sent": len(alerts)}
+
+
+@app.post("/api/backfill-gap")
+async def api_backfill_gap(days: int = 30):
+    """Uzupełnia dziurę w danych po przestoju dashboardu (patrz
+    src/backfill_gap.py) - skanuje ostatnie `days` dni i wstawia TYLKO te,
+    które jeszcze nie mają zapisu (bezpieczne do wielokrotnego klikania, nie
+    mnoży duplikatów). Wywołane z UI (przycisk w panelu Kopii zapasowej),
+    stąd synchroniczna odpowiedź zamiast WebSocketa jak przy głównym cyklu -
+    kilkanaście/kilkadziesiąt sekund dla typowej watchlisty jest akceptowalne
+    dla jednorazowej, rzadko klikanej akcji."""
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=400, detail="days musi być w zakresie 1-365.")
+
+    yesterday = datetime.now().date() - timedelta(days=1)
+    end = yesterday.strftime("%Y-%m-%d")
+    start = (yesterday - timedelta(days=days)).strftime("%Y-%m-%d")
+    companies = db.get_watchlist()  # żywa watchlista z bazy, nie statyczny seed z config.yaml
+
+    score_entries = await asyncio.to_thread(backfill_score_history_gap, companies, start, end, _cfg)
+    equity_points = await asyncio.to_thread(backfill_equity_gap, start, end, _cfg)
+
+    return {
+        "status": "ok", "start": start, "end": end,
+        "score_entries": score_entries, "equity_points": equity_points,
+    }
 
 
 @app.post("/api/notifications/test")

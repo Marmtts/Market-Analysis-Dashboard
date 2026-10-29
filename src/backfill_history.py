@@ -124,7 +124,10 @@ def main():
     if args.tickers:
         companies = [{"ticker": t.strip(), "name": t.strip()} for t in args.tickers.split(",") if t.strip()]
     else:
-        companies = cfg.get("watchlist", [])
+        # ŻYWA watchlista z bazy, NIE statyczna lista z config.yaml - ta w
+        # pliku jest tylko seedem wczytywanym przy pierwszym starcie; spółki
+        # dodane później przez UI/API istnieją wyłącznie w bazie.
+        companies = db.get_watchlist()
 
     if not companies:
         console.print("[red]Brak spółek do przetworzenia (pusta watchlista i brak --tickers).[/red]")
