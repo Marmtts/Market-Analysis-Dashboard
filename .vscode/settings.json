@@ -1,0 +1,12 @@
+{
+  "//": "e2e/ to osobny moduł Maven (pom.xml: maven.compiler.release=17) zagnieżdżony w repo Pythonowym. Na tej maszynie jest kilka zainstalowanych JDK (Oracle javapath, Zulu, Temurin...) - bez jawnego wskazania, którego użyć, rozszerzenie Java w VS Code potrafi wybrać zbyt stary/niewłaściwy JDK i wtedy np. 'var' (Java 10+) albo inne nowsze składnie wyglądają jak błąd. JAVA_HOME w tym środowisku (i to, czego używa Maven z linii poleceń) wskazuje na Temurin 21 poniżej.",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-21",
+      "path": "F:\\Program Files\\Eclipse Adoptium\\jdk-21.0.1.12-hotspot",
+      "default": true
+    }
+  ],
+  "java.import.maven.enabled": true,
+  "java.configuration.updateBuildConfiguration": "automatic"
+}

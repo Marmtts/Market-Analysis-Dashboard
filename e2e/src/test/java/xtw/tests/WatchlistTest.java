@@ -1,8 +1,10 @@
-package xtw;
+package xtw.tests;
 
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.junit.UsePlaywright;
 import org.junit.jupiter.api.Test;
+import xtw.Config;
+import xtw.HeadedOptions;
 import xtw.components.WatchlistPanel;
 
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
