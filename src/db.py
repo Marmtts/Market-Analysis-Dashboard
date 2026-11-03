@@ -358,6 +358,19 @@ def record_score_snapshot_at(ticker: str, ts: str, score: float | None, category
         conn.commit()
 
 
+def get_score_history_dates(ticker: str, start_date: str, end_date: str) -> set[str]:
+    """Daty (YYYY-MM-DD), dla których ticker ma JUŻ jakiś wpis w score_history
+    w podanym zakresie - używane przez backfill_gap.py, żeby wstawiać tylko
+    naprawdę brakujące dni, bez mnożenia duplikatów przy ponownym uruchomieniu."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT date(ts) AS d FROM score_history "
+            "WHERE ticker = ? AND date(ts) BETWEEN ? AND ?",
+            (ticker.upper(), start_date, end_date),
+        ).fetchall()
+        return {r["d"] for r in rows}
+
+
 def clear_backfill_history(ticker: str | None = None) -> int:
     """Usuwa wcześniej wygenerowane wpisy backfillu (source='backfill') -
     przydatne przed ponownym uruchomieniem skryptu z innymi parametrami,
@@ -669,6 +682,34 @@ def record_portfolio_equity_snapshot(currency: str, total_value: float, total_co
         conn.commit()
 
 
+def record_portfolio_equity_snapshot_at(currency: str, total_value: float, total_cost: float, ts: str) -> None:
+    """Jak record_portfolio_equity_snapshot(), ale pozwala jawnie podać
+    znacznik czasu - do uzupełniania dziur w krzywej po przestoju dashboardu
+    (analogicznie do record_score_snapshot_at dla historii werdyktów)."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO portfolio_equity_history (currency, total_value, total_cost, ts) VALUES (?, ?, ?, ?)",
+            (currency, total_value, total_cost, ts),
+        )
+        conn.execute(
+            "DELETE FROM portfolio_equity_history WHERE currency = ? AND id NOT IN "
+            "(SELECT id FROM portfolio_equity_history WHERE currency = ? ORDER BY ts DESC LIMIT 2000)",
+            (currency, currency),
+        )
+        conn.commit()
+
+
+def get_portfolio_equity_dates(currency: str, start_date: str, end_date: str) -> set[str]:
+    """Jak get_score_history_dates(), tylko dla krzywej kapitału per waluta."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT date(ts) AS d FROM portfolio_equity_history "
+            "WHERE currency = ? AND date(ts) BETWEEN ? AND ?",
+            (currency.upper(), start_date, end_date),
+        ).fetchall()
+        return {r["d"] for r in rows}
+
+
 def get_portfolio_equity_curve(currency: str) -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
@@ -697,6 +738,33 @@ def record_portfolio_equity_combined_snapshot(base_currency: str, total_value: f
             (base_currency.upper(), base_currency.upper()),
         )
         conn.commit()
+
+
+def record_portfolio_equity_combined_snapshot_at(base_currency: str, total_value: float, total_cost: float, ts: str) -> None:
+    """Jak record_portfolio_equity_combined_snapshot(), ale z jawnym
+    znacznikiem czasu - patrz record_portfolio_equity_snapshot_at."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO portfolio_equity_combined (base_currency, total_value, total_cost, ts) VALUES (?, ?, ?, ?)",
+            (base_currency.upper(), total_value, total_cost, ts),
+        )
+        conn.execute(
+            "DELETE FROM portfolio_equity_combined WHERE base_currency = ? AND id NOT IN "
+            "(SELECT id FROM portfolio_equity_combined WHERE base_currency = ? ORDER BY ts DESC LIMIT 2000)",
+            (base_currency.upper(), base_currency.upper()),
+        )
+        conn.commit()
+
+
+def get_portfolio_equity_combined_dates(base_currency: str, start_date: str, end_date: str) -> set[str]:
+    """Jak get_score_history_dates(), tylko dla krzywej łącznej (wszystkie waluty)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT date(ts) AS d FROM portfolio_equity_combined "
+            "WHERE base_currency = ? AND date(ts) BETWEEN ? AND ?",
+            (base_currency.upper(), start_date, end_date),
+        ).fetchall()
+        return {r["d"] for r in rows}
 
 
 def get_portfolio_equity_combined_curve(base_currency: str) -> list[dict]:
