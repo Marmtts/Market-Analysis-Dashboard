@@ -35,7 +35,7 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   z decyzją o stopach, publikacje CPI USA) w panelu bocznym — lista dat
   publikowana z wyprzedzeniem przez oficjalne instytucje, konfigurowalna
   w `config.yaml` (`macro_calendar`).
-- Heatmapa całej watchlisty (przycisk „🔥 Heatmapa” obok listy) — kolor
+- Heatmapa całej watchlisty (przycisk „Heatmapa” (ikona płomienia) obok listy) — kolor
   każdej kafelki wg zmiany ceny w ostatniej sesji, do szybkiego przeglądu
   bez przewijania kart. Opcjonalny filtr „Tylko pozycje w portfelu” zawęża
   ją do faktycznie posiadanych spółek.
@@ -107,6 +107,11 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   Czysto informacyjne — nie liczy ewentualnej dopłaty do 19% podatku od
   dywidend zagranicznych.
 - Kopia zapasowa watchlisty, portfela i dywidend (eksport/import JSON, idempotentny).
+- Przycisk „Uzupełnij lukę w danych” (zakładka Portfel → Kopia zapasowa) —
+  jeśli dashboard stał wyłączony przez jakiś czas, jednym kliknięciem
+  uzupełnia brakujące dni w panelu skuteczności narzędzia i na krzywej
+  kapitału (historyczne ceny + kursy walut), bez dotykania dni, które już
+  mają dane. To samo z linii poleceń: `python -m src.backfill_gap`.
 - Alerty cenowe niezależne od pełnego cyklu (sprawdzanie samej ceny co
   kilka minut, bez angażowania LLM/newsów): poniżej stop-lossu (własnego
   albo z ATR), osiągnięcie ceny docelowej analityków i własnego celu.
@@ -117,7 +122,7 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 - Pełny dashboard webowy (FastAPI + WebSocket) z trzema zakładkami
   (Analiza, Portfel, Zamknięte transakcje), watchlistą, miniwykresami,
   panelem skuteczności narzędzia i zwijanym logiem na żywo.
-- Paleta poleceń (Ctrl+K albo przycisk „🔎 Szukaj” w pasku górnym) —
+- Paleta poleceń (Ctrl+K albo przycisk „Szukaj” (ikona lupy) w pasku górnym) —
   szybkie przejście do dowolnej spółki z watchlisty/portfela/propozycji AI
   po tickerze lub nazwie, albo do akcji (zmiana zakładki, odśwież teraz,
   log, asystent), bez szukania myszą.
@@ -129,10 +134,10 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
   zmieścić na ekranie tylko to, co akurat interesuje (zakładka Portfel ma
   osobny mechanizm — patrz niżej). Widoczne kolumny watchlisty/propozycji AI
   (cena docelowa, sygnał, wynik, wykres) włącza się i wyłącza przyciskiem
-  „⚙ Kolumny”.
+  „Kolumny” (ikona koła zębatego).
 - Dynamiczny, przestawialny układ głównej kolumny w zakładce Portfel
   (pilotaż — pozostałe zakładki mają na razie stały układ): przycisk
-  „✏ Edytuj układ” odblokowuje przeciąganie i zmianę rozmiaru każdej
+  „Edytuj układ” (ikona ołówka) odblokowuje przeciąganie i zmianę rozmiaru każdej
   sekcji (Ryzyko, Korelacja, Rebalancing, Krzywa kapitału, Pozycje,
   Dywidendy, Kalkulator FIRE) — panel boczny zostaje bez zmian. Sekcji nie
   da się tu zwijać pojedynczo (kolidowało to z przeciąganiem/skalowaniem) —
@@ -319,7 +324,7 @@ jest zamknięty, można podpiąć webhook Discorda:
    ```
 3. Zrestartuj serwer dashboardu.
 
-W zakładce Portfel → "Ryzyko i ekspozycja" jest przycisk **"🧪 Testuj
+W zakładce Portfel → "Ryzyko i ekspozycja" jest przycisk **"Testuj
 Discord"** — wysyła jedną testową wiadomość, żeby od razu sprawdzić, czy
 webhook działa, bez czekania na prawdziwy alert. Domyślnie (`enabled: false`)
 funkcja jest wyłączona i nic się nie wysyła.
@@ -376,17 +381,23 @@ xtb_trend_watch/
 ├── config.example.yaml       # szablon konfiguracji (bez sekretów) - skopiuj jako config.yaml
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
+├── requirements-dev.txt        # dodatkowo tylko pytest (testy jednostkowe, patrz niżej)
+├── pytest.ini
 ├── README.md
 ├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.36)
-├── build_manual.py             # generator instrukcji PDF (reportlab)
+├── build_manual.py             # generator instrukcji PDF (reportlab + fonttools)
 ├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
 ├── reports/                    # raporty z CLI - w .gitignore
 ├── logs/                       # logi z run_daily.bat - w .gitignore
-├── .github/workflows/e2e.yml   # GitHub Actions: testy E2E na każdym PR do main
-├── e2e/                        # testy E2E (Playwright + Java) - patrz niżej
+├── .github/workflows/e2e.yml   # GitHub Actions CI: security scan + testy jednostkowe + API + UI na każdym PR do main
+├── tests/                      # testy jednostkowe (pytest) - scoring, sanityzacja JSON, silnik sygnałów technicznych
+├── e2e/                        # testy e2e (Playwright + Java) - patrz niżej
 │   ├── run-tests.sh             # odpala świeżą, izolowaną instancję + testy
 │   └── src/test/java/xtw/
+│       ├── tests/                # klasy testowe (*Test.java)
+│       ├── components/           # Page Objects (lokalizowanie/klikanie elementów UI)
+│       └── api/                  # cienkie wrappery na wywołania REST
 ├── web/
 │   └── static/                 # frontend dashboardu (HTML/CSS/JS, bez build-stepu)
 │       ├── index.html
@@ -407,10 +418,12 @@ xtb_trend_watch/
     ├── daily_brief.py          # codzienny brief AI (podsumowanie cyklu)
     ├── chatbot.py              # interaktywny asystent czatu (Ollama)
     ├── backtest.py             # backtest + grid search + walidacja walk-forward
-    ├── collect_training_data.py       # (badawcze) zbieranie danych do ew. fine-tuningu
-    ├── calibration_report.py          # (badawcze) kalibracja sentymentu LLM
-    ├── daily_aggregate_calibration.py # (badawcze) jw., sentyment zagregowany dziennie
-    ├── backfill_history.py     # symulacja przeszłych cykli technicznych na historii cen
+    ├── backfill_history.py     # symulacja przeszłych cykli technicznych na historii cen (wiele lat, co --step-days)
+    ├── backfill_gap.py          # uzupełnienie KONKRETNEJ dziury po przestoju dashboardu (skuteczność + krzywa kapitału) - też jako przycisk w UI (Portfel → Kopia zapasowa)
+    ├── research/                # badawcze - zbieranie danych do fine-tuningu, kalibracja sentymentu LLM
+    │   ├── collect_training_data.py
+    │   ├── calibration_report.py
+    │   └── daily_aggregate_calibration.py
     ├── report.py                # scoring, kategorie, ryzyko i statystyki portfela (korelacje, Sharpe), podatki, dywidendy, rebalancing, koncentracja sektorowa
     ├── xtb_import.py            # import pozycji z raportu XTB (.xlsx)
     ├── json_utils.py            # sanityzacja NaN/Infinity przed serializacją JSON
@@ -427,11 +440,25 @@ generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
 dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
 działania samego narzędzia (nie ma ich w `requirements.txt`).
 
-Testy E2E (Playwright + Java, katalog `e2e/`) odpalisz lokalnie przez
+**Testy jednostkowe** (pytest, katalog `tests/`) sprawdzają czystą logikę bez
+serwera/bazy/przeglądarki - scoring i kategorie (`report.py`), sanityzację
+NaN/Infinity przed JSON (`json_utils.py`) i silnik sygnałów technicznych
+(`technical_analysis.py`: RSI/trend/AT_TOP/SHARP_DECLINE, potwierdzenie
+tygodniowe). Uruchomienie: `pip install -r requirements-dev.txt`, potem
+`pytest tests/`.
+
+**Testy e2e** (Playwright + Java, katalog `e2e/`) odpalisz lokalnie przez
 `bash e2e/run-tests.sh` - stawia świeżą, izolowaną instancję dashboardu
 (osobna, tymczasowa baza SQLite, pusta watchlista) na porcie 8123, więc nie
-dotyka Twoich prawdziwych danych. Ten sam skrypt uruchamia GitHub Actions
-(`.github/workflows/e2e.yml`) na każdym pull requeście do `main`.
+dotyka Twoich prawdziwych danych. Pokrywają watchlistę, portfel i nawigację
+między zakładkami; `*ApiTest` klasy testują samo REST API bez przeglądarki
+(szybsze), reszta steruje prawdziwą stroną przez Playwrighta.
+
+Oba zestawy uruchamia GitHub Actions (`.github/workflows/e2e.yml`, mimo
+nazwy pliku to już cały pipeline CI) na każdym pull requeście do `main`:
+najpierw skan bezpieczeństwa (Trivy) i testy jednostkowe równolegle, potem
+(dopiero po jednostkowych) testy API i UI równolegle, na końcu zbiorczy
+raport Allure i jeden check „Pipeline status” wymagany do mergu.
 
 ---
 

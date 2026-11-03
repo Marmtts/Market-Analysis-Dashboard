@@ -40,8 +40,8 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-VERSION = "3.36"
-DATE_LABEL = "wrzesień 2026"
+VERSION = "3.37"
+DATE_LABEL = "październik 2026"
 DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
 
 # ---------------------------------------------------------------- czcionki ---
@@ -474,7 +474,7 @@ def part1(s: Story) -> None:
         "wysokość, bez wewnętrznego przewijania), a to, które moduły w ogóle są widoczne, kontroluje się "
         "osobno — patrz „Moduły” niżej.")
     s.bullets([
-        "Przycisk <b>„✏ Edytuj układ”</b> nad sekcjami odblokowuje tryb edycji — dopiero wtedy da się "
+        "Przycisk <b>„Edytuj układ”</b> (ikona ołówka) nad sekcjami odblokowuje tryb edycji — dopiero wtedy da się "
         "przeciągać sekcje (za nagłówek) i zmieniać ich rozmiar (za róg). Na co dzień (tryb zablokowany) "
         "układ zachowuje się jak zwykła, statyczna strona — nic nie da się przypadkiem przesunąć. Wysokość "
         "ustawiona ręcznie w trybie edycji jest tymczasowa — gdy treść sekcji się zmieni (np. dojdzie "
@@ -490,7 +490,7 @@ def part1(s: Story) -> None:
         "patrz wyżej). Wybranie presetu z listy rozwijanej przywraca zarówno kolejność, jak i widoczność "
         "modułów z chwili zapisu — dwa presety mogą więc pokazywać zupełnie inny zestaw sekcji (np. jeden "
         "„do przeglądu ryzyka” z wyłączonym Rebalancingiem i Dywidendami, drugi „do księgowości” "
-        "odwrotnie). „Usuń preset” (ikona kosza) kasuje wybrany, a „↺ Domyślny” wraca do jednokolumnowego "
+        "odwrotnie). „Usuń preset” (ikona kosza) kasuje wybrany, a „Domyślny” (ikona cofania) wraca do jednokolumnowego "
         "układu sprzed jakichkolwiek zmian i przywraca widoczność wszystkich modułów.",
         "Ostatnio wybrany preset jest pamiętany — po ponownym otwarciu dashboardu (w tej samej "
         "przeglądarce) zakładka Portfel od razu wygląda tak, jak ją zostawiłeś. Ręczne włączenie/wyłączenie "
@@ -744,7 +744,26 @@ def part2(s: Story) -> None:
         "backfillu, unika duplikatów). Symulacja obejmuje wyłącznie analizę TECHNICZNĄ — sentyment newsów, "
         "fundamenty i kontekst makro są pomijane, bo nie ma ich za darmo w wersji historycznej. Po backfillu "
         "panel skuteczności odzwierciedla więc głównie logikę techniczną, a nie pełny pipeline z dashboardu.")
-    s.h2("9.3 Jak czytać wyniki")
+    s.h2("9.3 Uzupełnianie dziury po przestoju dashboardu")
+    s.p("backfill_history.py (9.2) buduje gęstą próbkę co kilka dni na przestrzeni LAT — to zły "
+        "narzędzie do innego, częstszego problemu: dashboard stał wyłączony przez kilka dni, i teraz w "
+        "panelu skuteczności oraz na krzywej kapitału jest po prostu dziura. Do tego służy osobne "
+        "polecenie, które skanuje podany zakres dat dzień po dniu i wstawia TYLKO te dni, które jeszcze "
+        "nie mają zapisu — bezpieczne do wielokrotnego uruchomienia, nie mnoży duplikatów:")
+    s.code("python -m src.backfill_gap")
+    s.p(f"Bez żadnych opcji uzupełnia ostatnie 30 dni (opcje {c('--start')}/{c('--end')} zawężają zakres). "
+        "W przeciwieństwie do backfill_history.py uzupełnia DWIE rzeczy naraz: panel skuteczności (tą samą "
+        "metodologią — sentyment/fundamenty/makro pominięte) ORAZ krzywą kapitału portfela, rekonstruując "
+        "wartość pozycji z historycznych cen i historycznych kursów walut.")
+    s.p(f"To samo bez terminala: przycisk <b>„Uzupełnij lukę w danych”</b> w zakładce Portfel → Kopia "
+        "zapasowa. Odpowiedź przychodzi dopiero po zakończeniu (kilkanaście–kilkadziesiąt sekund dla "
+        "typowej watchlisty) — przycisk w tym czasie pokazuje „Uzupełniam…” i jest zablokowany, a po "
+        f"sukcesie oba panele (skuteczność, krzywa kapitału) odświeżają się same.")
+    s.callout("note",
+              "Uzupełnia TYLKO dni, których jeszcze nie ma — dni z realnych, żywych cykli nigdy nie są "
+              "nadpisywane ani duplikowane, więc można kliknąć wielokrotnie bez obaw.")
+
+    s.h2("9.4 Jak czytać wyniki")
     s.bullets([
         "Backtest testuje wyłącznie logikę techniczną, bez sentymentu i fundamentów, i nie uwzględnia "
         "prowizji, spreadu, poślizgu cenowego ani podatku.",
@@ -1714,6 +1733,17 @@ def part3(s: Story) -> None:
                                   "dopiero otwierało popup z właściwym polem) - zmniejszono go do "
                                   "kompaktowej pigułki (ikona lupy + „Ctrl K”), rozmiarem dopasowanej do "
                                   "sąsiednich pigułek statusu."],
+        ["3.37", "Październik 2026", "Modernizacja wizualna: emoji na przyciskach akcji zastąpione ikonami "
+                                      "SVG, poprawiony kontrast tekstu i większe cele dotykowe na pasku "
+                                      "narzędzi, delikatny efekt szkła na paletce poleceń/dialogach/"
+                                      "powiadomieniach, krótkie podświetlenie karty spółki przy zmianie "
+                                      "wyniku w danym cyklu. Zakładka Analiza na wąskich ekranach pokazuje "
+                                      "teraz brief dnia i sygnały PRZED kontekstem bocznym (makro, sektor), "
+                                      "nie po nim; nowy pasek nad briefem dnia pokazujący od razu zysk/"
+                                      "stratę portfela i liczbę dzisiejszych sygnałów „WARTO OBSERWOWAĆ”, "
+                                      "bez przełączania zakładki. Nowy rozdział 9.3: polecenie i przycisk "
+                                      "(Portfel → Kopia zapasowa) do uzupełniania dziury w danych po "
+                                      "przestoju dashboardu."],
     ], [10, 18, 72])
     s.p("<i>Koniec dokumentu. W razie pytań dotyczących działania konkretnej funkcji, sprawdź odpowiedni "
         f"rozdział powyżej lub skonsultuj plik config.yaml i log na żywo.</i>")
