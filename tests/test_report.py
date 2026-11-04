@@ -184,8 +184,9 @@ def test_current_drawdown_reflects_recovery_separately_from_max():
 # pozycje trafią do tej funkcji - sama funkcja jest czystą klasyfikacją). ----
 
 def _position(ticker="TEST", buy_date="2024-06-01", status="open",
-              signal_category=None, realized_pl_pct=None, unrealized_pct=None):
-    p = {"ticker": ticker, "buy_date": buy_date, "status": status}
+              signal_category=None, realized_pl_pct=None, unrealized_pct=None,
+              shares=10.0, buy_price=100.0):
+    p = {"ticker": ticker, "buy_date": buy_date, "status": status, "shares": shares, "buy_price": buy_price}
     p["signal_at_buy"] = {"category": signal_category, "ts": buy_date} if signal_category else None
     if realized_pl_pct is not None:
         p["realized_pl_pct"] = realized_pl_pct
@@ -233,6 +234,25 @@ def test_avg_realized_pct_only_counts_closed_positions():
 def test_avg_realized_pct_is_none_without_any_closed_position():
     result = compute_signal_discipline([_position(signal_category="WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia")])
     assert result["zgodnie"]["avg_realized_pl_pct"] is None
+
+
+def test_avg_is_weighted_by_cost_basis_not_a_simple_average():
+    # Regresja na realny przypadek: pozycja z błędnym/groszowym buy_price z
+    # importu (np. 0.001) dająca pozorne +3 000 000% potrafiła zdominować
+    # zwykłą średnią arytmetyczną, mimo że realnie zaangażowany kapitał był
+    # pomijalny (0.26 akcji po 0.001 = 0.00026 zł). Ważenie kosztem pozycji
+    # sprowadza jej wpływ do ~zera, zamiast psuć całą statystykę.
+    positions = [
+        _position(ticker="NORMALNA", status="closed", signal_category="UNIKAJ - blisko szczytu trendu",
+                  realized_pl_pct=-10.0, shares=10.0, buy_price=100.0),   # koszt 1000
+        _position(ticker="GROSZOWA", status="closed", signal_category="UNIKAJ - blisko szczytu trendu",
+                  realized_pl_pct=3_317_900.0, shares=0.2614, buy_price=0.001),  # koszt ~0.00026
+    ]
+    result = compute_signal_discipline(positions)
+    # Wynik zdominowany przez pozycję z realnym kapitałem (ok. -9.13%, blisko
+    # jej -10%) - zwykła średnia arytmetyczna dałaby tu ~1 658 945% (średnia
+    # z -10 i 3 317 900).
+    assert result["wbrew"]["avg_realized_pl_pct"] == pytest.approx(-9.13, abs=0.01)
 
 
 # ---------------- compute_dividend_forecast - ekstrapolacja dywidend z

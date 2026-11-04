@@ -1015,9 +1015,15 @@ def compute_signal_discipline(positions: list[dict]) -> dict:
     - "neutralnie"  - kupiono bez wyraźnego sygnału w żadną stronę
     - "brak_danych" - brak werdyktu sprzed zakupu w oknie wyszukiwania (np.
                        spółka dodana tego samego dnia, przed pierwszym cyklem)
-    """
+
+    Średnia jest WAŻONA wielkością pozycji (koszt = shares * buy_price), nie
+    zwykłą średnią arytmetyczną procentów - inaczej jedna skrajna transakcja
+    (np. błędny/groszowy buy_price z importu, dający pozornie +1 000 000%)
+    potrafi zdominować wynik, mimo że realnie zaangażowany był ułamek grosza.
+    Ważenie kosztem to też po prostu poprawna metodologia - zwrot -50% na
+    10 zł nie powinien liczyć się tak samo jak -50% na 10 000 zł."""
     buckets = {
-        key: {"count": 0, "closed_count": 0, "pl_pct_sum": 0.0, "positions": []}
+        key: {"count": 0, "closed_count": 0, "pl_pct_weighted_sum": 0.0, "cost_basis_sum": 0.0, "positions": []}
         for key in ("zgodnie", "wbrew", "neutralnie", "brak_danych")
     }
 
@@ -1043,7 +1049,9 @@ def compute_signal_discipline(positions: list[dict]) -> dict:
         }
         if p.get("status") == "closed" and p.get("realized_pl_pct") is not None:
             b["closed_count"] += 1
-            b["pl_pct_sum"] += p["realized_pl_pct"]
+            cost_basis = (p.get("shares") or 0) * (p.get("buy_price") or 0)
+            b["pl_pct_weighted_sum"] += p["realized_pl_pct"] * cost_basis
+            b["cost_basis_sum"] += cost_basis
             entry["realized_pl_pct"] = p["realized_pl_pct"]
         elif p.get("unrealized_pct") is not None:
             entry["unrealized_pct"] = p["unrealized_pct"]
@@ -1051,7 +1059,7 @@ def compute_signal_discipline(positions: list[dict]) -> dict:
 
     result = {}
     for key, b in buckets.items():
-        avg_pl = round(b["pl_pct_sum"] / b["closed_count"], 2) if b["closed_count"] else None
+        avg_pl = round(b["pl_pct_weighted_sum"] / b["cost_basis_sum"], 2) if b["cost_basis_sum"] else None
         result[key] = {
             "count": b["count"], "closed_count": b["closed_count"],
             "avg_realized_pl_pct": avg_pl, "positions": b["positions"],

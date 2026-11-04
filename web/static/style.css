@@ -2154,3 +2154,9 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
   margin-top: 0.15rem;
 }
 .col-settings__reset:hover { color: var(--accent-gold-bright); }
+
+.discipline-toggle {
+  background: none; border: none; color: var(--text-faint); font-size: 0.72rem;
+  text-decoration: underline; cursor: pointer; padding: 0.3rem 0; margin-top: 0.1rem;
+}
+.discipline-toggle:hover { color: var(--accent-gold-bright); }

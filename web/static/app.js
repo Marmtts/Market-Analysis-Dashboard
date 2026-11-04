@@ -1477,11 +1477,16 @@ function renderSignalDiscipline(data) {
   });
   html += `</div>`;
 
+  // Dashboard wyniki ma być skanowalny na pierwszy rzut oka, nie ścianą
+  // tekstu - przy długiej historii (np. import z XTB sięgający lat wstecz)
+  // lista pozycji per kategoria potrafi mieć kilkadziesiąt wierszy. Widać
+  // od razu tylko kilka najnowszych, reszta chowa się za "Pokaż wszystkie".
+  const DISCIPLINE_VISIBLE_LIMIT = 6;
   DISCIPLINE_BUCKETS.forEach((b) => {
     const bucket = data[b.key];
     if (!bucket || bucket.positions.length === 0) return;
-    html += `<div class="detail-section"><h4 class="detail-section__title">${escapeHtml(b.label)}</h4>`;
-    html += bucket.positions.map((p) => {
+    const sorted = [...bucket.positions].sort((a, b2) => (a.buy_date < b2.buy_date ? 1 : -1));
+    const rowHtml = (p) => {
       const pl = p.realized_pl_pct != null ? p.realized_pl_pct : p.unrealized_pct;
       const plLabel = pl != null ? `${pl >= 0 ? "+" : ""}${pl}%${p.realized_pl_pct == null ? " (otwarta)" : ""}` : "—";
       const plCls = pl != null ? (pl >= 0 ? "positive" : "negative") : "";
@@ -1491,12 +1496,28 @@ function renderSignalDiscipline(data) {
           <span class="eff-row__stat">kupno ${escapeHtml(p.buy_date)}</span>
           <span class="eff-row__stat eff-row__return ${plCls}">${plLabel}</span>
         </div>`;
-    }).join("");
+    };
+    html += `<div class="detail-section"><h4 class="detail-section__title">${escapeHtml(b.label)} (${sorted.length})</h4>`;
+    html += sorted.slice(0, DISCIPLINE_VISIBLE_LIMIT).map(rowHtml).join("");
+    const rest = sorted.slice(DISCIPLINE_VISIBLE_LIMIT);
+    if (rest.length > 0) {
+      html += `<div class="discipline-rest" data-bucket="${b.key}" hidden>${rest.map(rowHtml).join("")}</div>`;
+      html += `<button type="button" class="discipline-toggle" data-bucket="${b.key}" data-more-label="Pokaż wszystkie (${sorted.length})" data-less-label="Pokaż mniej">Pokaż wszystkie (${sorted.length})</button>`;
+    }
     html += `</div>`;
   });
 
-  html += `<p class="detail-disclaimer">Werdykt dopasowany do najbliższego cyklu analizy nie później niż 14 dni przed zakupem. Tylko ZAMKNIĘTE pozycje wchodzą do średniego wyniku per kategoria — otwarte są liczone, ale ich wynik jeszcze się zmienia.</p>`;
+  html += `<p class="detail-disclaimer">Werdykt dopasowany do najbliższego cyklu analizy nie później niż 14 dni przed zakupem. Tylko ZAMKNIĘTE pozycje wchodzą do średniego wyniku per kategoria (ważonego wielkością pozycji) — otwarte są liczone, ale ich wynik jeszcze się zmienia.</p>`;
   panel.innerHTML = html;
+
+  panel.querySelectorAll(".discipline-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const rest = panel.querySelector(`.discipline-rest[data-bucket="${btn.dataset.bucket}"]`);
+      const isHidden = rest.hidden;
+      rest.hidden = !isHidden;
+      btn.textContent = isHidden ? btn.dataset.lessLabel : btn.dataset.moreLabel;
+    });
+  });
 }
 
 // ---------------- Rebalancing (docelowe wagi per ticker) ----------------
