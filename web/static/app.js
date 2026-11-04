@@ -1477,46 +1477,51 @@ function renderSignalDiscipline(data) {
   });
   html += `</div>`;
 
-  // Dashboard wyniki ma być skanowalny na pierwszy rzut oka, nie ścianą
-  // tekstu - przy długiej historii (np. import z XTB sięgający lat wstecz)
-  // lista pozycji per kategoria potrafi mieć kilkadziesiąt wierszy. Widać
-  // od razu tylko kilka najnowszych, reszta chowa się za "Pokaż wszystkie".
-  const DISCIPLINE_VISIBLE_LIMIT = 6;
+  // Karty wyżej JUŻ odpowiadają na pytanie "czy trzymam się sygnału" na
+  // pierwszy rzut oka - rozkład na pozycje to drill-down, nie coś, co
+  // powinno zajmować ekran domyślnie (przy długiej historii importu z XTB
+  // potrafi to być kilkadziesiąt wierszy na kategorię). Jeden wspólny
+  // przełącznik dla całości zamiast osobnego per kategoria.
+  const totalPositions = DISCIPLINE_BUCKETS.reduce((sum, b) => sum + (data[b.key]?.positions.length || 0), 0);
+  html += `<button type="button" class="discipline-toggle discipline-details-toggle" data-more-label="Zobacz pozycje (${totalPositions})" data-less-label="Zwiń pozycje">Zobacz pozycje (${totalPositions})</button>`;
+
+  html += `<div class="discipline-details" hidden>`;
   DISCIPLINE_BUCKETS.forEach((b) => {
     const bucket = data[b.key];
     if (!bucket || bucket.positions.length === 0) return;
     const sorted = [...bucket.positions].sort((a, b2) => (a.buy_date < b2.buy_date ? 1 : -1));
-    const rowHtml = (p) => {
+    // Kolor nagłówka to cecha SAMEJ kategorii (zgodnie/wbrew), nie tego, czy
+    // akurat ma już jakąś zamkniętą pozycję do uśrednienia - inaczej świeży
+    // portfel bez zamkniętych transakcji nie miałby żadnego koloru wcale.
+    const titleCls = b.cls ? ` ${b.cls}` : "";
+    html += `<div class="detail-section"><h4 class="detail-section__title${titleCls}">${escapeHtml(b.label)} (${sorted.length})</h4>`;
+    if (b.key === "brak_danych") {
+      html += `<p class="detail-text detail-text--muted">Najczęściej pozycje sprzed czasu, zanim dashboard zaczął zbierać własne werdykty (np. import z raportu XTB) — nie ma z czym porównać decyzji, to nie błąd.</p>`;
+    }
+    html += sorted.map((p) => {
       const pl = p.realized_pl_pct != null ? p.realized_pl_pct : p.unrealized_pct;
       const plLabel = pl != null ? `${pl >= 0 ? "+" : ""}${pl}%${p.realized_pl_pct == null ? " (otwarta)" : ""}` : "—";
       const plCls = pl != null ? (pl >= 0 ? "positive" : "negative") : "";
       return `
-        <div class="eff-row">
-          <span class="eff-row__cat">${escapeHtml(p.ticker)}</span>
-          <span class="eff-row__stat">kupno ${escapeHtml(p.buy_date)}</span>
-          <span class="eff-row__stat eff-row__return ${plCls}">${plLabel}</span>
+        <div class="discipline-row">
+          <span class="discipline-row__ticker">${escapeHtml(p.ticker)}</span>
+          <span class="discipline-row__date">kupno ${escapeHtml(p.buy_date)}</span>
+          <span class="discipline-row__pl ${plCls}">${plLabel}</span>
         </div>`;
-    };
-    html += `<div class="detail-section"><h4 class="detail-section__title">${escapeHtml(b.label)} (${sorted.length})</h4>`;
-    html += sorted.slice(0, DISCIPLINE_VISIBLE_LIMIT).map(rowHtml).join("");
-    const rest = sorted.slice(DISCIPLINE_VISIBLE_LIMIT);
-    if (rest.length > 0) {
-      html += `<div class="discipline-rest" data-bucket="${b.key}" hidden>${rest.map(rowHtml).join("")}</div>`;
-      html += `<button type="button" class="discipline-toggle" data-bucket="${b.key}" data-more-label="Pokaż wszystkie (${sorted.length})" data-less-label="Pokaż mniej">Pokaż wszystkie (${sorted.length})</button>`;
-    }
+    }).join("");
     html += `</div>`;
   });
+  html += `</div>`;
 
   html += `<p class="detail-disclaimer">Werdykt dopasowany do najbliższego cyklu analizy nie później niż 14 dni przed zakupem. Tylko ZAMKNIĘTE pozycje wchodzą do średniego wyniku per kategoria (ważonego wielkością pozycji) — otwarte są liczone, ale ich wynik jeszcze się zmienia.</p>`;
   panel.innerHTML = html;
 
-  panel.querySelectorAll(".discipline-toggle").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const rest = panel.querySelector(`.discipline-rest[data-bucket="${btn.dataset.bucket}"]`);
-      const isHidden = rest.hidden;
-      rest.hidden = !isHidden;
-      btn.textContent = isHidden ? btn.dataset.lessLabel : btn.dataset.moreLabel;
-    });
+  const detailsToggle = panel.querySelector(".discipline-details-toggle");
+  detailsToggle.addEventListener("click", () => {
+    const details = panel.querySelector(".discipline-details");
+    const isHidden = details.hidden;
+    details.hidden = !isHidden;
+    detailsToggle.textContent = isHidden ? detailsToggle.dataset.lessLabel : detailsToggle.dataset.moreLabel;
   });
 }
 
