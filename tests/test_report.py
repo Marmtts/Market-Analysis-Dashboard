@@ -1,6 +1,8 @@
+from datetime import datetime, timedelta
+
 import pytest
 
-from src.report import combine_scores, compute_max_drawdown
+from src.report import combine_scores, compute_max_drawdown, compute_signal_discipline, compute_dividend_forecast
 from src.technical_analysis import TechnicalResult
 from src.llm_sentiment import SentimentResult, SentimentTrendResult
 from src.fundamentals import FundamentalResult
@@ -174,3 +176,100 @@ def test_current_drawdown_reflects_recovery_separately_from_max():
     result = compute_max_drawdown(points)
     assert result["max_drawdown_pct"] == 60.0
     assert result["current_drawdown_pct"] == 10.0
+
+
+# ---------------- compute_signal_discipline - "czy trzymasz się własnego
+# sygnału": konfrontuje każdy zakup z werdyktem narzędzia sprzed tej decyzji
+# (position["signal_at_buy"], dogrywane przez db.get_score_near_date zanim
+# pozycje trafią do tej funkcji - sama funkcja jest czystą klasyfikacją). ----
+
+def _position(ticker="TEST", buy_date="2024-06-01", status="open",
+              signal_category=None, realized_pl_pct=None, unrealized_pct=None):
+    p = {"ticker": ticker, "buy_date": buy_date, "status": status}
+    p["signal_at_buy"] = {"category": signal_category, "ts": buy_date} if signal_category else None
+    if realized_pl_pct is not None:
+        p["realized_pl_pct"] = realized_pl_pct
+    if unrealized_pct is not None:
+        p["unrealized_pct"] = unrealized_pct
+    return p
+
+
+def test_buy_after_good_entry_verdict_is_zgodnie():
+    result = compute_signal_discipline([_position(signal_category="WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia")])
+    assert result["zgodnie"]["count"] == 1
+    assert result["wbrew"]["count"] == 0
+
+
+def test_buy_despite_avoid_verdict_is_wbrew():
+    result = compute_signal_discipline([_position(signal_category="UNIKAJ - blisko szczytu trendu")])
+    assert result["wbrew"]["count"] == 1
+
+
+def test_buy_with_neutral_verdict_is_neutralnie():
+    result = compute_signal_discipline([_position(signal_category="NEUTRALNIE POZYTYWNIE - brak jednoznacznego sygnału wejścia")])
+    assert result["neutralnie"]["count"] == 1
+
+
+def test_buy_without_verdict_in_window_is_brak_danych():
+    result = compute_signal_discipline([_position(signal_category=None)])
+    assert result["brak_danych"]["count"] == 1
+
+
+def test_avg_realized_pct_only_counts_closed_positions():
+    positions = [
+        _position(ticker="A", status="closed", signal_category="UNIKAJ - blisko szczytu trendu", realized_pl_pct=-10.0),
+        _position(ticker="B", status="closed", signal_category="UNIKAJ - blisko szczytu trendu", realized_pl_pct=-30.0),
+        _position(ticker="C", status="open", signal_category="UNIKAJ - blisko szczytu trendu", unrealized_pct=50.0),
+    ]
+    result = compute_signal_discipline(positions)
+    assert result["wbrew"]["count"] == 3
+    assert result["wbrew"]["closed_count"] == 2
+    # Średnia TYLKO z A i B (-10, -30) -> -20 - otwarta pozycja C (mimo
+    # dobrego unrealized_pct) nie powinna zaciągać średniej w górę, bo jej
+    # wynik jeszcze się nie zrealizował.
+    assert result["wbrew"]["avg_realized_pl_pct"] == -20.0
+
+
+def test_avg_realized_pct_is_none_without_any_closed_position():
+    result = compute_signal_discipline([_position(signal_category="WARTO OBSERWOWAĆ - możliwy dobry punkt wejścia")])
+    assert result["zgodnie"]["avg_realized_pl_pct"] is None
+
+
+# ---------------- compute_dividend_forecast - ekstrapolacja dywidend z
+# ostatnich 12 mies. na kolejne 12 mies., tylko dla obecnie posiadanych
+# spółek. Waluta dywidendy == base_currency w testach, żeby ominąć
+# zapytania o kurs (rate=1.0 bez I/O, patrz _convert_dividend_to_base_currency). ----
+
+def _dividend(ticker, days_ago, amount=100.0, currency="PLN"):
+    pay_date = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+    return {"ticker": ticker, "currency": currency, "pay_date": pay_date, "amount_gross": amount, "withholding_tax": 0.0}
+
+
+def test_dividend_within_last_12_months_for_held_ticker_is_projected():
+    result = compute_dividend_forecast([_dividend("MSFT", days_ago=100)], held_tickers={"MSFT"}, base_currency="PLN")
+    assert result["total_projected"] == 100.0
+    assert result["by_ticker"]["MSFT"]["payments_last_12mo"] == 1
+
+
+def test_dividend_older_than_12_months_is_excluded():
+    result = compute_dividend_forecast([_dividend("MSFT", days_ago=400)], held_tickers={"MSFT"}, base_currency="PLN")
+    assert result["total_projected"] == 0.0
+    assert "MSFT" not in result["by_ticker"]
+
+
+def test_dividend_for_no_longer_held_ticker_is_excluded():
+    # Sprzedana pozycja - nie ma podstaw zakładać przyszłej wypłaty.
+    result = compute_dividend_forecast([_dividend("MSFT", days_ago=30)], held_tickers={"AAPL"}, base_currency="PLN")
+    assert result["total_projected"] == 0.0
+
+
+def test_multiple_dividends_same_ticker_sum_and_count_payments():
+    dividends = [_dividend("MSFT", days_ago=30, amount=50.0), _dividend("MSFT", days_ago=120, amount=60.0)]
+    result = compute_dividend_forecast(dividends, held_tickers={"MSFT"}, base_currency="PLN")
+    assert result["total_projected"] == 110.0
+    assert result["by_ticker"]["MSFT"]["payments_last_12mo"] == 2
+
+
+def test_empty_inputs_return_zero_forecast():
+    assert compute_dividend_forecast([], held_tickers={"MSFT"})["total_projected"] == 0.0
+    assert compute_dividend_forecast([_dividend("MSFT", days_ago=10)], held_tickers=set())["total_projected"] == 0.0

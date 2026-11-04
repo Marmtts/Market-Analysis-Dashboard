@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -954,6 +954,109 @@ def compute_dividend_summary(dividends: list[dict], base_currency: str = "PLN") 
         "conversion_notes": conversion_notes,
         "nbp_compliant": base_currency == "PLN" and not any_fallback_used,
     }
+
+
+def compute_dividend_forecast(dividends: list[dict], held_tickers: set[str], base_currency: str = "PLN") -> dict:
+    """Orientacyjna projekcja dochodu z dywidend na kolejne 12 miesięcy - suma
+    FAKTYCZNIE otrzymanych dywidend z OSTATNICH 12 miesięcy, liczona WYŁĄCZNIE
+    dla spółek obecnie posiadanych (held_tickers). To ekstrapolacja, nie
+    prognoza: zakłada niezmienione pozycje oraz niezmienione stawki i
+    częstotliwość wypłat - realny wynik zależy od decyzji spółek o dywidendzie
+    i Twoich przyszłych zmian w portfelu. Spółka held, ale bez żadnej wypłaty
+    w ostatnich 12 mies. (świeża pozycja albo spółka nie płacąca dywidend) po
+    prostu nie pojawia się w wyniku - to nie błąd, tylko brak podstaw do
+    ekstrapolacji."""
+    if not dividends or not held_tickers:
+        return {"base_currency": base_currency, "total_projected": 0.0, "by_ticker": {}, "conversion_notes": []}
+
+    cutoff = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    conversion_notes: list[str] = []
+    by_ticker: dict[str, dict] = {}
+    total = 0.0
+
+    for d in dividends:
+        ticker = d["ticker"]
+        pay_date = d.get("pay_date")
+        if ticker not in held_tickers or not pay_date or pay_date < cutoff:
+            continue
+        conv = _convert_dividend_to_base_currency(d, base_currency)
+        if conv["gross_base"] is None:
+            conversion_notes.append(conv["note"])
+            continue
+        total += conv["gross_base"]
+        tb = by_ticker.setdefault(ticker, {"projected_gross_base": 0.0, "payments_last_12mo": 0})
+        tb["projected_gross_base"] += conv["gross_base"]
+        tb["payments_last_12mo"] += 1
+
+    by_ticker_result = {
+        t: {"projected_gross_base": round(b["projected_gross_base"], 2), "payments_last_12mo": b["payments_last_12mo"]}
+        for t, b in sorted(by_ticker.items(), key=lambda kv: -kv[1]["projected_gross_base"])
+    }
+    return {
+        "base_currency": base_currency,
+        "total_projected": round(total, 2),
+        "by_ticker": by_ticker_result,
+        "conversion_notes": conversion_notes,
+    }
+
+
+def compute_signal_discipline(positions: list[dict]) -> dict:
+    """Konfrontuje każdą decyzję zakupu z tym, co werdykt narzędzia mówił o
+    danej spółce W MOMENCIE zakupu (position["signal_at_buy"], patrz
+    db.get_score_near_date) - pokazuje, czy faktycznie trzymasz się
+    własnych sygnałów, i czy to się opłaca. Tylko ZAMKNIĘTE pozycje
+    (status="closed", z realized_pl_pct) wchodzą do średniego wyniku per
+    kategoria - otwarte pozycje są tylko zliczane, bo ich wynik jeszcze się
+    zmienia i uśrednianie niedokończonego wyniku byłoby mylące.
+
+    Kategorie:
+    - "zgodnie"     - kupiono, gdy werdykt to WARTO OBSERWOWAĆ (dobry punkt wejścia)
+    - "wbrew"       - kupiono MIMO ostrzeżenia UNIKAJ (blisko szczytu albo świeży spadek)
+    - "neutralnie"  - kupiono bez wyraźnego sygnału w żadną stronę
+    - "brak_danych" - brak werdyktu sprzed zakupu w oknie wyszukiwania (np.
+                       spółka dodana tego samego dnia, przed pierwszym cyklem)
+    """
+    buckets = {
+        key: {"count": 0, "closed_count": 0, "pl_pct_sum": 0.0, "positions": []}
+        for key in ("zgodnie", "wbrew", "neutralnie", "brak_danych")
+    }
+
+    for p in positions:
+        signal = p.get("signal_at_buy")
+        if signal is None:
+            bucket_key = "brak_danych"
+        else:
+            category = signal.get("category") or ""
+            if category.startswith("WARTO OBSERWOWAĆ"):
+                bucket_key = "zgodnie"
+            elif category.startswith("UNIKAJ"):
+                bucket_key = "wbrew"
+            else:
+                bucket_key = "neutralnie"
+
+        b = buckets[bucket_key]
+        b["count"] += 1
+        entry = {
+            "ticker": p["ticker"], "buy_date": p["buy_date"], "status": p.get("status"),
+            "signal_category": signal.get("category") if signal else None,
+            "signal_ts": signal.get("ts") if signal else None,
+        }
+        if p.get("status") == "closed" and p.get("realized_pl_pct") is not None:
+            b["closed_count"] += 1
+            b["pl_pct_sum"] += p["realized_pl_pct"]
+            entry["realized_pl_pct"] = p["realized_pl_pct"]
+        elif p.get("unrealized_pct") is not None:
+            entry["unrealized_pct"] = p["unrealized_pct"]
+        b["positions"].append(entry)
+
+    result = {}
+    for key, b in buckets.items():
+        avg_pl = round(b["pl_pct_sum"] / b["closed_count"], 2) if b["closed_count"] else None
+        result[key] = {
+            "count": b["count"], "closed_count": b["closed_count"],
+            "avg_realized_pl_pct": avg_pl, "positions": b["positions"],
+        }
+    return result
 
 
 def build_closed_trades_export_rows(closed_positions: list[dict], base_currency: str = "PLN") -> tuple[list[str], list[list]]:

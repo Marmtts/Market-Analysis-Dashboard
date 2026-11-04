@@ -1139,6 +1139,7 @@ function switchTab(tab) {
     loadPortfolioEquitySection();
     loadDividends();
     loadRebalancing();
+    loadSignalDiscipline();
     initPortfolioGridOnce();
     // Siatka rozmiaru kart (ResizeObserver w watchSectionContentForResize)
     // powinna sama nadążyć za dociąganiem danych, ale bywały karty, które
@@ -1285,7 +1286,7 @@ async function loadDividends() {
   try {
     const res = await fetch("/api/dividends");
     const data = await res.json();
-    renderDividendSummary(data.summary);
+    renderDividendSummary(data.summary, data.forecast);
     renderDividendTable(data.dividends);
   } catch (err) {
     console.warn("Nie udało się pobrać dywidend:", err);
@@ -1293,15 +1294,45 @@ async function loadDividends() {
   }
 }
 
-function renderDividendSummary(summary) {
+function renderDividendForecastHtml(forecast) {
+  const tickers = Object.keys(forecast?.by_ticker || {});
+  if (tickers.length === 0) return "";
+
+  let html = `<div class="detail-section">
+    <h4 class="detail-section__title">Prognoza na kolejne 12 mies. (orientacyjna)</h4>
+    <div class="metric-grid">
+      <div><span>Oczekiwany przychód brutto</span><strong class="positive">+${forecast.total_projected.toFixed(2)} ${escapeHtml(forecast.base_currency)}</strong></div>
+    </div>
+    <div class="tax-year-grid">`;
+  tickers.forEach((ticker) => {
+    const t = forecast.by_ticker[ticker];
+    html += `
+      <div class="tax-year-card">
+        <div class="tax-year-card__header"><strong>${escapeHtml(ticker)}</strong><span>${t.payments_last_12mo} wypłat / 12 mies.</span></div>
+        <div class="metric-grid">
+          <div><span>Projekcja brutto</span><strong class="positive">+${t.projected_gross_base.toFixed(2)}</strong></div>
+        </div>
+      </div>`;
+  });
+  html += `</div>`;
+  if (forecast.conversion_notes && forecast.conversion_notes.length) {
+    html += `<ul class="detail-list">${forecast.conversion_notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+  }
+  html += `<p class="detail-disclaimer">Ekstrapolacja: suma dywidend FAKTYCZNIE otrzymanych w ostatnich 12 mies. dla spółek, które masz OBECNIE w portfelu — zakłada niezmienione pozycje i niezmienione stawki/częstotliwość wypłat. To nie prognoza spółki, tylko rzut tego, co już się wydarzyło, na kolejny rok. Spółka bez wypłaty w ostatnich 12 mies. (świeża pozycja albo nie płaci dywidend) tu się nie pojawia.</p></div>`;
+  return html;
+}
+
+function renderDividendSummary(summary, forecast) {
   const panel = el("dividendSummaryPanel");
   const years = Object.keys(summary?.by_year || {}).sort().reverse();
   if (years.length === 0) {
-    panel.innerHTML = `<p class="empty-state">💵 Brak zarejestrowanych dywidend — dodaj ręcznie po lewej albo zaimportuj raport XTB.</p>`;
+    panel.innerHTML = renderDividendForecastHtml(forecast)
+      || `<p class="empty-state">💵 Brak zarejestrowanych dywidend — dodaj ręcznie po lewej albo zaimportuj raport XTB.</p>`;
     return;
   }
 
-  let html = `<div class="detail-section">
+  let html = renderDividendForecastHtml(forecast);
+  html += `<div class="detail-section">
     <h4 class="detail-section__title">💵 Przychód z dywidend (${escapeHtml(summary.base_currency)})</h4>
     <div class="metric-grid">
       <div><span>Łącznie brutto</span><strong class="positive">+${summary.total_gross.toFixed(2)}</strong></div>
@@ -1399,6 +1430,74 @@ el("dividendForm").addEventListener("submit", async (e) => {
     }
   });
 });
+
+// ---------------- Dyscyplina sygnałów ----------------
+// Konfrontuje każdy zakup z werdyktem narzędzia sprzed tamtej decyzji -
+// patrz compute_signal_discipline w report.py. Osobny fetch (nie część
+// loadPortfolio) - to analiza historyczna, nie coś co powinno blokować
+// podstawowy widok portfela, jeśli akurat zawiedzie.
+const DISCIPLINE_BUCKETS = [
+  { key: "zgodnie", label: "Zgodnie z sygnałem", cls: "positive", hint: "Kupno po werdykcie WARTO OBSERWOWAĆ" },
+  { key: "wbrew", label: "Wbrew ostrzeżeniu", cls: "negative", hint: "Kupno mimo werdyktu UNIKAJ" },
+  { key: "neutralnie", label: "Neutralnie", cls: "", hint: "Kupno bez wyraźnego sygnału w żadną stronę" },
+  { key: "brak_danych", label: "Brak danych", cls: "", hint: "Brak werdyktu sprzed zakupu (np. spółka dodana tego samego dnia)" },
+];
+
+async function loadSignalDiscipline() {
+  try {
+    const res = await fetch("/api/portfolio/signal-discipline");
+    const data = await res.json();
+    renderSignalDiscipline(data);
+  } catch (err) {
+    console.warn("Nie udało się pobrać dyscypliny sygnałów:", err);
+  }
+}
+
+function renderSignalDiscipline(data) {
+  const panel = el("signalDisciplinePanel");
+  if (!panel) return;
+  const totalCount = DISCIPLINE_BUCKETS.reduce((sum, b) => sum + (data?.[b.key]?.count || 0), 0);
+  if (!data || totalCount === 0) {
+    panel.innerHTML = `<p class="empty-state">Brak pozycji do analizy — pojawi się po dodaniu pierwszej.</p>`;
+    return;
+  }
+
+  let html = `<div class="risk-cards">`;
+  DISCIPLINE_BUCKETS.forEach((b) => {
+    const bucket = data[b.key] || { count: 0, closed_count: 0, avg_realized_pl_pct: null };
+    const avgLabel = bucket.avg_realized_pl_pct != null
+      ? `${bucket.avg_realized_pl_pct >= 0 ? "+" : ""}${bucket.avg_realized_pl_pct}% śr. (${bucket.closed_count} zamkn.)`
+      : (bucket.count > 0 ? "brak zamkniętych pozycji" : "—");
+    html += `
+      <div class="risk-card" title="${escapeHtml(b.hint)}">
+        <div class="risk-card__label">${escapeHtml(b.label)}</div>
+        <div class="risk-card__value${bucket.avg_realized_pl_pct != null ? " " + b.cls : ""}">${bucket.count}</div>
+        <div class="risk-card__sub">${escapeHtml(avgLabel)}</div>
+      </div>`;
+  });
+  html += `</div>`;
+
+  DISCIPLINE_BUCKETS.forEach((b) => {
+    const bucket = data[b.key];
+    if (!bucket || bucket.positions.length === 0) return;
+    html += `<div class="detail-section"><h4 class="detail-section__title">${escapeHtml(b.label)}</h4>`;
+    html += bucket.positions.map((p) => {
+      const pl = p.realized_pl_pct != null ? p.realized_pl_pct : p.unrealized_pct;
+      const plLabel = pl != null ? `${pl >= 0 ? "+" : ""}${pl}%${p.realized_pl_pct == null ? " (otwarta)" : ""}` : "—";
+      const plCls = pl != null ? (pl >= 0 ? "positive" : "negative") : "";
+      return `
+        <div class="eff-row">
+          <span class="eff-row__cat">${escapeHtml(p.ticker)}</span>
+          <span class="eff-row__stat">kupno ${escapeHtml(p.buy_date)}</span>
+          <span class="eff-row__stat eff-row__return ${plCls}">${plLabel}</span>
+        </div>`;
+    }).join("");
+    html += `</div>`;
+  });
+
+  html += `<p class="detail-disclaimer">Werdykt dopasowany do najbliższego cyklu analizy nie później niż 14 dni przed zakupem. Tylko ZAMKNIĘTE pozycje wchodzą do średniego wyniku per kategoria — otwarte są liczone, ale ich wynik jeszcze się zmienia.</p>`;
+  panel.innerHTML = html;
+}
 
 // ---------------- Rebalancing (docelowe wagi per ticker) ----------------
 async function loadRebalancing() {
