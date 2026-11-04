@@ -479,6 +479,22 @@ def get_score_history(ticker: str, limit: int = 400) -> list[dict]:
         ).fetchall()
         return sanitize_for_json([dict(r) for r in rows])
 
+
+def get_score_near_date(ticker: str, date_str: str, max_days_before: int = 14) -> dict | None:
+    """Najświeższy wpis score_history dla tickera, NIE późniejszy niż
+    `date_str`, w oknie maks. `max_days_before` dni wstecz - odtwarza, co
+    narzędzie mówiło o spółce W MOMENCIE decyzji (np. zakupu). None, gdy w
+    oknie nie ma żadnego wpisu (np. spółka dodana tego samego dnia, przed
+    pierwszym cyklem analizy)."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT ts, score, category, signal FROM score_history "
+            "WHERE ticker = ? AND date(ts) <= ? AND date(ts) >= date(?, ?) "
+            "ORDER BY ts DESC LIMIT 1",
+            (ticker.upper(), date_str, date_str, f"-{max_days_before} days"),
+        ).fetchone()
+        return dict(row) if row else None
+
 # =====================================================================
 # Portfel użytkownika (posiadane pozycje)
 # =====================================================================

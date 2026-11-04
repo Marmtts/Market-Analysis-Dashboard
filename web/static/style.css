@@ -2154,3 +2154,34 @@ body.layout-editing .grid-stack-item-content.dash-section { border-color: var(--
   margin-top: 0.15rem;
 }
 .col-settings__reset:hover { color: var(--accent-gold-bright); }
+
+.discipline-toggle {
+  background: none; border: none; color: var(--text-faint); font-size: 0.72rem;
+  text-decoration: underline; cursor: pointer; padding: 0.3rem 0; margin-top: 0.1rem;
+}
+.discipline-toggle:hover { color: var(--accent-gold-bright); }
+
+/* Nagłówek listy per kategoria - domyślny złoty (.detail-section__title)
+   nie odróżniał wizualnie "Zgodnie" od "Wbrew", mimo że karty wyżej już są
+   kolorowane - te same klasy .positive/.negative co wszędzie indziej. */
+.detail-section__title.positive { color: var(--accent-green-bright); }
+.detail-section__title.negative { color: var(--accent-red-bright); }
+
+/* Siatka o STAŁYCH kolumnach zamiast flex+space-between (.eff-row) - tamten
+   układ "pływał" środkową kolumną zależnie od długości tickera i wyniku %,
+   więc data i procent nigdy nie stały w równej linii między wierszami. */
+.discipline-row {
+  display: grid; grid-template-columns: 90px 130px 1fr;
+  align-items: center; gap: 0.5rem;
+  padding: 0.45rem 0.5rem; border-bottom: 1px dashed var(--border);
+  border-radius: 4px; transition: background 0.15s ease; margin: 0 -0.5rem;
+}
+.discipline-row:hover { background: var(--bg-elevated-2); }
+.discipline-row:last-of-type { border-bottom: none; }
+.discipline-row__ticker { font-size: 0.72rem; font-weight: 600; }
+.discipline-row__date { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); }
+.discipline-row__pl { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; text-align: right; }
+.discipline-row__pl.positive { color: var(--accent-green-bright); }
+.discipline-row__pl.negative { color: var(--accent-red-bright); }
+
+.discipline-details-toggle { margin-top: 0.4rem; }
