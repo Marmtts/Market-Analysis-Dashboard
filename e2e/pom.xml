@@ -16,7 +16,13 @@
     <dependency>
       <groupId>com.microsoft.playwright</groupId>
       <artifactId>playwright</artifactId>
-      <version>1.52.0</version>
+      <!-- 1.61+ wymagane - GitHub Actions "ubuntu-latest" zmigrował na
+           Ubuntu 26.04, a starsze Playwrighty wprost odmawiają instalacji
+           Chromium na tym systemie ("Playwright does not support chromium
+           on ubuntu26.04-x64"), co psuło nawet testy *ApiTest (bez
+           przeglądarki) - sam bootstrap sterownika i tak próbuje
+           zweryfikować/zainstalować przeglądarkę. -->
+      <version>1.65.0</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
