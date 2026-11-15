@@ -1,11 +1,11 @@
 """
 build_manual.py
 -----------------
-Generuje PDF „XTB Trend Watch — Instrukcja użytkownika” (reportlab + DejaVu Sans,
+Generuje PDF „Market Analysis Dashboard — Instrukcja użytkownika” (reportlab + DejaVu Sans,
 żeby poprawnie renderować polskie znaki).
 
 Użycie:
-    python build_manual.py                         # -> XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf
+    python build_manual.py                         # -> Market_Analysis_Dashboard_Instrukcja_Uzytkownika.pdf
     python build_manual.py --out inna_nazwa.pdf
 
 Jak aktualizować dokument w przyszłości:
@@ -42,7 +42,7 @@ from reportlab.platypus.tableofcontents import TableOfContents
 
 VERSION = "3.37"
 DATE_LABEL = "październik 2026"
-DOC_TITLE = "XTB Trend Watch — Instrukcja użytkownika"
+DOC_TITLE = "Market Analysis Dashboard — Instrukcja użytkownika"
 
 # ---------------------------------------------------------------- czcionki ---
 def _find_font_dir() -> Path:
@@ -280,7 +280,7 @@ class ManualDoc(BaseDocTemplate):
     def __init__(self, filename, **kw):
         super().__init__(filename, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
                          topMargin=22 * mm, bottomMargin=24 * mm, title=DOC_TITLE,
-                         author="XTB Trend Watch", subject=f"Instrukcja użytkownika, wersja {VERSION}", **kw)
+                         author="Market Analysis Dashboard", subject=f"Instrukcja użytkownika, wersja {VERSION}", **kw)
         frame = Frame(self.leftMargin, self.bottomMargin, self.width, self.height, id="main",
                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
         self.addPageTemplates([
@@ -325,14 +325,14 @@ def build(story: Story, out_path: str) -> None:
     cover = [
         Spacer(1, 78 * mm),
         Paragraph("◆", S["CoverMark"]),
-        Paragraph("XTB Trend Watch", S["CoverTitle"]),
+        Paragraph("Market Analysis Dashboard", S["CoverTitle"]),
         Paragraph("Instrukcja użytkownika", S["CoverSub"]),
         Spacer(1, 16 * mm),
         Paragraph(f"Wersja dokumentu: {VERSION} • Data ostatniej aktualizacji: {DATE_LABEL}", S["CoverMeta"]),
         Spacer(1, 42 * mm),
         Paragraph("ZASTRZEŻENIE", S["CoverWarnHead"]),
         Paragraph(
-            "XTB Trend Watch jest narzędziem analitycznym do własnego użytku, nie jest poradą "
+            "Market Analysis Dashboard jest narzędziem analitycznym do własnego użytku, nie jest poradą "
             "inwestycyjną, rekomendacją w rozumieniu przepisów ani usługą doradztwa finansowego. "
             "Wszystkie decyzje inwestycyjne oraz związane z nimi ryzyko leżą wyłącznie po stronie "
             "użytkownika. Dane pochodzą z automatycznych, publicznie dostępnych źródeł (Yahoo Finance, "
@@ -358,8 +358,8 @@ def build(story: Story, out_path: str) -> None:
 def part1(s: Story) -> None:
 
     # ------------------------------------------------------------ 1
-    s.h1("1. Czym jest XTB Trend Watch")
-    s.p("XTB Trend Watch to osobiste narzędzie analityczne, które codziennie (lub na żądanie) "
+    s.h1("1. Czym jest Market Analysis Dashboard")
+    s.p("Market Analysis Dashboard to osobiste narzędzie analityczne, które codziennie (lub na żądanie) "
         "sprawdza spółki z Twojej watchlisty pod trzema kątami:")
     s.bullets([
         "<b>Analiza techniczna</b> — RSI, średnie kroczące (SMA), wstęgi Bollingera, ATR, odległość od "
@@ -1377,7 +1377,7 @@ def part3(s: Story) -> None:
         "alokacji się nadpisują — to jeden cel na ticker, więc nowsza wartość zawsze wygrywa), więc "
         "ponowny import tego samego pliku nie tworzy duplikatów.",
         "Niepoprawne wiersze są pomijane z ostrzeżeniem (widocznym w komunikacie i w logu), a reszta pliku "
-        "jest wczytywana. Plik, który nie jest kopią XTB Trend Watch, zostanie odrzucony w całości. "
+        "jest wczytywana. Plik, który nie jest kopią Market Analysis Dashboard, zostanie odrzucony w całości. "
         "Limit to 5 MB i 5000 wierszy.",
         "Spółki występujące w pozycjach portfela są automatycznie dopisywane do watchlisty, żeby były "
         "analizowane.",
@@ -1758,9 +1758,9 @@ def content() -> Story:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generuje PDF instrukcji użytkownika XTB Trend Watch")
+    parser = argparse.ArgumentParser(description="Generuje PDF instrukcji użytkownika Market Analysis Dashboard")
     parser.add_argument("--out", default=str(Path(__file__).resolve().parent
-                                             / "XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf"))
+                                             / "Market_Analysis_Dashboard_Instrukcja_Uzytkownika.pdf"))
     args = parser.parse_args()
     build(content(), args.out)
     print(f"Zapisano: {args.out}")

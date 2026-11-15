@@ -7,6 +7,8 @@ reports/
 config.yaml
 KONTEKST_PROJEKTU.md
 .DS_Store
+.coverage
+coverage.xml
 
 # Skille Claude (frontend-design od Anthropic, ui-ux-pro-max od
 # nextlevelbuilder) - na razie wszystkie trzymane tylko lokalnie, celowo

@@ -68,8 +68,8 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Run unit tests
-        run: pytest tests/ --junitxml=reports/unit.xml
+      - name: Run unit tests with coverage
+        run: pytest tests/ --junitxml=reports/unit.xml --cov=src --cov-report=term-missing --cov-report=xml:reports/coverage.xml
 
       - name: Publish test results as GitHub Check
         if: always()
@@ -80,6 +80,17 @@ jobs:
           reporter: java-junit # parsuje standardowy schemat JUnit XML - ten sam co pytest --junitxml produkuje
           fail-on-error: true
           use-actions-summary: false
+
+      # Raport pokrycia jako artifact CI - nie ma zewnętrznego serwisu
+      # (Codecov itp.), więc to najprostszy sposób, żeby liczby były
+      # dostępne bez dodatkowego konta/tokenu w sekretach repo.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: reports/coverage.xml
+          retention-days: 14
 
   # Równolegle z "ui" niżej (oba czekają tylko na "unit", nie na siebie
   # nawzajem) - testy API (Playwright APIRequestContext, bez przeglądarki)

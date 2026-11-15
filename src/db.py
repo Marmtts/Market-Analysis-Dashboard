@@ -1151,7 +1151,7 @@ def import_backup(data) -> dict:
     są pomijane, więc wielokrotny import tego samego pliku nie tworzy
     duplikatów. Niepoprawne wiersze są pomijane z ostrzeżeniem."""
     if not isinstance(data, dict) or data.get("app") != BACKUP_APP_ID:
-        raise ValueError("To nie jest plik kopii zapasowej XTB Trend Watch.")
+        raise ValueError("To nie jest plik kopii zapasowej Market Analysis Dashboard.")
     if data.get("version") != BACKUP_VERSION:
         raise ValueError(f"Nieobsługiwana wersja kopii zapasowej: {data.get('version')!r}.")
 

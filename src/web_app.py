@@ -1,7 +1,7 @@
 """
 web_app.py
 ------------
-Dashboard webowy XTB Trend Watch. Uruchom:
+Dashboard webowy Market Analysis Dashboard. Uruchom:
 
     python -m src.web_app --config config.yaml
 
@@ -121,13 +121,13 @@ async def lifespan(app: FastAPI):
     db.init_db(seed_watchlist=_cfg.get("watchlist", []))
     task = asyncio.create_task(_background_scheduler())
     price_alert_task = asyncio.create_task(_price_alert_scheduler())
-    logger.info("XTB Trend Watch Dashboard wystartował.")
+    logger.info("Market Analysis Dashboard Dashboard wystartował.")
     yield
     task.cancel()
     price_alert_task.cancel()
 
 
-app = FastAPI(title="XTB Trend Watch Dashboard", lifespan=lifespan)
+app = FastAPI(title="Market Analysis Dashboard Dashboard", lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -628,7 +628,7 @@ async def api_test_notification():
 
     ok = await asyncio.to_thread(
         send_discord_alert,
-        "XTB Trend Watch: test powiadomień",
+        "Market Analysis Dashboard: test powiadomień",
         "Jeśli to widzisz, webhook Discorda jest poprawnie skonfigurowany.",
         "test",
         webhook_url,
@@ -1447,7 +1447,7 @@ app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 def main():
     global _cfg
-    parser = argparse.ArgumentParser(description="XTB Trend Watch - dashboard webowy")
+    parser = argparse.ArgumentParser(description="Market Analysis Dashboard - dashboard webowy")
     parser.add_argument("--config", default="config.yaml", help="Ścieżka do pliku konfiguracyjnego")
     parser.add_argument("--host", default=None, help="Nadpisuje web.host z configu")
     parser.add_argument("--port", type=int, default=None, help="Nadpisuje web.port z configu")

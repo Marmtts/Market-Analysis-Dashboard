@@ -14,7 +14,7 @@ class SmokeTest {
     @Test
     void dashboardLoads(Page page) {
         page.navigate(Config.BASE_URL);
-        assertThat(page).hasTitle("XTB Trend Watch — Terminal");
+        assertThat(page).hasTitle("Market Analysis Dashboard — Terminal");
     }
 
     @Test
