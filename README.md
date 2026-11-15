@@ -1,7 +1,6 @@
 # Market Analysis Dashboard
 
 [![CI](https://github.com/Marmtts/Market-Analysis-Dashboard/actions/workflows/e2e.yml/badge.svg)](https://github.com/Marmtts/Market-Analysis-Dashboard/actions/workflows/e2e.yml)
-[![Coverage](https://img.shields.io/badge/coverage-10%25-orange)](#testy-i-ci)
 
 Osobiste narzędzie analityczne do **codziennej analizy** wybranych spółek
 (globalnie) pod kątem technicznym, sentymentu newsów, fundamentów i szerokiego
