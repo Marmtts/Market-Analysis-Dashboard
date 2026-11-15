@@ -63,8 +63,9 @@ from src.report import (
     compute_portfolio_statistics, compute_benchmark_comparison,
     build_closed_trades_export_rows,
     compute_twr_curve, prepare_cash_flows_for_currency,
-    compute_dividend_summary,
+    compute_dividend_summary, compute_dividend_forecast,
     compute_rebalancing_suggestions, compute_sector_rebalancing_suggestions, DEFAULT_REBALANCE_TOLERANCE_PCT,
+    compute_signal_discipline,
 )
 from src.daily_brief import generate_daily_brief
 from src.chatbot import answer_chat_question
@@ -1116,6 +1117,25 @@ async def api_get_closed_portfolio():
             p["holding_days"] = None
     return sanitize_for_json({"positions": positions, "summary": db.get_closed_summary()})
 
+@app.get("/api/portfolio/signal-discipline")
+async def api_get_signal_discipline():
+    """Patrz compute_signal_discipline (report.py) - dla każdej posiadanej
+    (otwartej lub zamkniętej) pozycji dogrywa werdykt narzędzia sprzed
+    zakupu (db.get_score_near_date) i grupuje wynik. Żadnych zapytań
+    sieciowych - _get_enriched_open_positions() czyta z cache'u wyników, tak
+    jak GET /api/portfolio."""
+    closed = db.get_portfolio(status="closed")
+    for p in closed:
+        if p.get("sell_price") is not None and p.get("buy_price"):
+            p["realized_pl_pct"] = round((p["sell_price"] - p["buy_price"]) / p["buy_price"] * 100, 2)
+
+    positions = closed + _get_enriched_open_positions()
+    for p in positions:
+        p["signal_at_buy"] = db.get_score_near_date(p["ticker"], p["buy_date"])
+
+    return sanitize_for_json(compute_signal_discipline(positions))
+
+
 @app.get("/api/portfolio/tax-summary")
 async def api_get_tax_summary():
     closed = db.get_portfolio(status="closed")
@@ -1154,7 +1174,9 @@ async def api_get_dividends():
     dividends = db.get_dividends()
     base_currency = _cfg.get("portfolio", {}).get("base_currency", "PLN")
     summary = await asyncio.to_thread(compute_dividend_summary, dividends, base_currency)
-    return sanitize_for_json({"dividends": dividends, "summary": summary})
+    held_tickers = {p["ticker"] for p in db.get_portfolio(status="open")}
+    forecast = await asyncio.to_thread(compute_dividend_forecast, dividends, held_tickers, base_currency)
+    return sanitize_for_json({"dividends": dividends, "summary": summary, "forecast": forecast})
 
 
 @app.post("/api/dividends")
