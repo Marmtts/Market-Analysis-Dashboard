@@ -1,5 +1,5 @@
 // ============================================================
-// XTB Trend Watch — Terminal — logika frontendu (vanilla JS)
+// Market Analysis Dashboard — Terminal — logika frontendu (vanilla JS)
 // ============================================================
 
 const state = {

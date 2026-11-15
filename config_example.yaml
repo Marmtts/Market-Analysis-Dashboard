@@ -1,5 +1,5 @@
 # =============================================================
-# KONFIGURACJA - XTB Trend Watch
+# KONFIGURACJA - Market Analysis Dashboard
 # =============================================================
 # Tickery podajemy w formacie Yahoo Finance (np. AAPL, ASML.AS, ALE.WA).
 # W XTB nazwy instrumentów mogą się różnić (np. "US100" vs "^NDX"),

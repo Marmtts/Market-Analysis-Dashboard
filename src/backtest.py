@@ -637,7 +637,7 @@ def print_earnings_window_report(result: dict) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backtest strategii wejścia XTB Trend Watch")
+    parser = argparse.ArgumentParser(description="Backtest strategii wejścia Market Analysis Dashboard")
     parser.add_argument("--ticker", help="Ticker Yahoo Finance, np. MSFT, ALE.WA (pojedynczy backtest)")
     parser.add_argument("--years", type=int, default=5, help="Ile lat historii testować (domyślnie 5)")
     parser.add_argument("--hold-days", type=int, default=20,

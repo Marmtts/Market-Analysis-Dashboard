@@ -81,7 +81,7 @@ def _build_prompt(payload: dict, portfolio_summary: dict | None) -> str:
         portfolio_block = "\n".join(lines)
 
     return f"""Jesteś asystentem analitycznym przygotowującym KRÓTKI, codzienny brief dla inwestora
-korzystającego z narzędzia XTB Trend Watch. Masz następujące dane z dzisiejszego cyklu analizy:
+korzystającego z narzędzia Market Analysis Dashboard. Masz następujące dane z dzisiejszego cyklu analizy:
 
 KONTEKST MAKRO: {macro_line}
 

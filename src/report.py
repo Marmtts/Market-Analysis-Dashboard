@@ -264,7 +264,7 @@ def save_reports(all_results: list[dict], macro_summary: str, cfg: dict,
 
     if cfg["output"].get("save_markdown", True):
         md_lines = [
-            f"# Raport XTB Trend Watch - {date_str}",
+            f"# Raport Market Analysis Dashboard - {date_str}",
             "",
             "> **Zastrzeżenie:** To narzędzie analityczne, nie porada inwestycyjna. "
             "Wszystkie decyzje inwestycyjne i ryzyko z nimi związane leżą po stronie użytkownika.",

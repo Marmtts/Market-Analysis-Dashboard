@@ -1,4 +1,7 @@
-# XTB Trend Watch
+# Market Analysis Dashboard
+
+[![CI](https://github.com/Marmtts/Market-Analysis-Dashboard/actions/workflows/e2e.yml/badge.svg)](https://github.com/Marmtts/Market-Analysis-Dashboard/actions/workflows/e2e.yml)
+[![Coverage](https://img.shields.io/badge/coverage-10%25-orange)](#testy-i-ci)
 
 Osobiste narzędzie analityczne do **codziennej analizy** wybranych spółek
 (globalnie) pod kątem technicznym, sentymentu newsów, fundamentów i szerokiego
@@ -9,6 +12,30 @@ i portfelem, oraz interaktywnym asystentem AI działającym w 100% lokalnie.
 > Narzędzie generuje analizę, sygnały i raporty, które czytasz i na ich
 > podstawie **ręcznie** podejmujesz decyzję oraz składasz zlecenie u swojego
 > brokera. Nie łączy się z żadnym kontem maklerskim i nie handluje za Ciebie.
+
+**→ [Testy i CI](#testy-i-ci)** — 57 testów jednostkowych (pytest) + 11 e2e
+(Playwright/Java, JUnit 5, Allure), pełny pipeline GitHub Actions na każdym PR.
+
+---
+
+## Testy i CI
+
+| Warstwa | Narzędzie | Testów | Uruchom lokalnie |
+|---|---|---|---|
+| Unit | pytest + pytest-cov | 57 | `pip install -r requirements-dev.txt && pytest tests/ --cov=src` |
+| API e2e (bez przeglądarki) | Playwright (Java) + JUnit 5 | 7 | `bash e2e/run-tests.sh -Dtest=WatchlistApiTest,PortfolioApiTest` |
+| UI e2e (przeglądarka) | Playwright (Java) + JUnit 5 | 4 | `bash e2e/run-tests.sh -Dtest=SmokeTest,WatchlistTest,PortfolioTest` |
+
+Pipeline (`.github/workflows/e2e.yml`) na każdym PR do `main`: **security**
+(Trivy: podatności zależności + wyciekłe sekrety) → **unit** (pytest +
+pokrycie) → **api** + **ui** równolegle (oba po Playwright/Java) → **report**
+(zbiorczy raport Allure jako artifact CI) → **pipeline-status** (jedna
+bramka wymagana do mergu, zielona tylko gdy wszystkie powyższe przeszły).
+
+Raport Allure: artifact `allure-report` w zakładce *Actions* danego
+przebiegu. Lokalnie: `bash e2e/run-tests.sh`, potem
+`allure serve e2e/target/allure-results` (`npm i -g allure-commandline`
+albo `npx allure serve ...`).
 
 ---
 
@@ -228,8 +255,8 @@ crontab -e
 0 8 * * 1-5 cd /pełna/ścieżka/xtb_trend_watch && venv/bin/python -m src.main >> logs/cron.log 2>&1
 ```
 
-**Windows:** użyj dołączonego `run_daily.bat` przez Harmonogram zadań
-(szczegóły w komentarzach w samym pliku).
+**Windows:** użyj dołączonego `scripts/run_daily.bat` przez Harmonogram
+zadań (szczegóły w komentarzach w samym pliku).
 
 ---
 
@@ -377,19 +404,21 @@ Typowe sufiksy giełd dla tickerów spoza USA: `.WA` (Warszawa), `.DE`
 ## 9. Struktura projektu
 
 ```
-xtb_trend_watch/
+market-analysis-dashboard/
 ├── config.example.yaml       # szablon konfiguracji (bez sekretów) - skopiuj jako config.yaml
 ├── config.yaml                # Twoja konfiguracja (w .gitignore, zawiera klucze API)
 ├── requirements.txt
-├── requirements-dev.txt        # dodatkowo tylko pytest (testy jednostkowe, patrz niżej)
+├── requirements-dev.txt        # pytest + pytest-cov (testy jednostkowe + pokrycie, patrz niżej)
 ├── pytest.ini
 ├── README.md
-├── XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.36)
-├── build_manual.py             # generator instrukcji PDF (reportlab + fonttools)
-├── run_daily.bat               # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
+├── docs/
+│   ├── Market_Analysis_Dashboard_Instrukcja_Uzytkownika.pdf   # instrukcja użytkownika (v3.36)
+│   └── build_manual.py         # generator instrukcji PDF (reportlab + fonttools)
+├── scripts/
+│   └── run_daily.bat           # pomocniczy skrypt do Harmonogramu zadań Windows (tryb CLI)
 ├── data/                       # SQLite (watchlista, portfel, cache) - w .gitignore
 ├── reports/                    # raporty z CLI - w .gitignore
-├── logs/                       # logi z run_daily.bat - w .gitignore
+├── logs/                       # logi ze scripts/run_daily.bat - w .gitignore
 ├── .github/workflows/e2e.yml   # GitHub Actions CI: security scan + testy jednostkowe + API + UI na każdym PR do main
 ├── tests/                      # testy jednostkowe (pytest) - scoring, sanityzacja JSON, silnik sygnałów technicznych
 ├── e2e/                        # testy e2e (Playwright + Java) - patrz niżej
@@ -435,10 +464,11 @@ xtb_trend_watch/
 ```
 
 Pełny opis wszystkich funkcji dashboardu znajdziesz w
-`XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf` (wersja 3.36). Instrukcję
-generuje skrypt `build_manual.py` (`python build_manual.py`); wymaga
-dodatkowo pakietów `reportlab` i `fonttools`, które **nie** są potrzebne do
-działania samego narzędzia (nie ma ich w `requirements.txt`).
+`docs/Market_Analysis_Dashboard_Instrukcja_Uzytkownika.pdf` (wersja 3.36).
+Instrukcję generuje skrypt `docs/build_manual.py`
+(`python docs/build_manual.py`); wymaga dodatkowo pakietów `reportlab`
+i `fonttools`, które **nie** są potrzebne do działania samego narzędzia
+(nie ma ich w `requirements.txt`).
 
 **Testy jednostkowe** (pytest, katalog `tests/`) sprawdzają czystą logikę bez
 serwera/bazy/przeglądarki - scoring i kategorie (`report.py`), sanityzację
@@ -464,7 +494,8 @@ raport Allure i jeden check „Pipeline status” wymagany do mergu.
 
 ## 10. Możliwe dalsze rozszerzenia
 
-Pełna historia zmian jest w `XTB_Trend_Watch_Instrukcja_Uzytkownika.pdf`
+Pełna historia zmian jest w
+`docs/Market_Analysis_Dashboard_Instrukcja_Uzytkownika.pdf`
 (rozdział "Historia zmian dokumentu"). Pomysły poniżej nie są jeszcze
 zrealizowane:
 

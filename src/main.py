@@ -75,7 +75,7 @@ def print_results_table(results: list[dict], title: str) -> None:
 
 
 def run(cfg: dict) -> None:
-    console.rule("[bold cyan]XTB Trend Watch - analiza dzienna[/bold cyan]")
+    console.rule("[bold cyan]Market Analysis Dashboard - analiza dzienna[/bold cyan]")
 
     payload = run_full_analysis(cfg, cfg["watchlist"], on_progress=_console_progress)
 
@@ -100,7 +100,7 @@ def run(cfg: dict) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="XTB Trend Watch - dzienna analiza rynku")
+    parser = argparse.ArgumentParser(description="Market Analysis Dashboard - dzienna analiza rynku")
     parser.add_argument("--config", default="config.yaml", help="Ścieżka do pliku konfiguracyjnego")
     args = parser.parse_args()
 
