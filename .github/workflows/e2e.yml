@@ -73,6 +73,15 @@ jobs:
 
       - name: Publish test results as GitHub Check
         if: always()
+        # dorny/test-reporter tworzy check run, potem aktualizuje go ~0.5s
+        # później - GitHub Checks API czasem odpowiada 404 na ten update,
+        # mimo że check run realnie istnieje (znany, udokumentowany wyścig:
+        # https://github.com/dorny/test-reporter/issues/866). To tylko
+        # RAPORTOWANIE wyniku jako adnotacji w PR - sama bramka testów już
+        # zadziałała wyżej (pytest/mvn kończy się kodem 1 przy realnej
+        # porażce, zanim w ogóle dojdzie do tego kroku), więc przejściowy
+        # błąd samego raportowania nie powinien wywracać całego joba.
+        continue-on-error: true
         uses: dorny/test-reporter@v3.2.0
         with:
           name: Unit test results
@@ -129,6 +138,8 @@ jobs:
 
       - name: Publish test results as GitHub Check
         if: always()
+        # continue-on-error: patrz komentarz przy tym samym kroku w jobie "unit" wyżej.
+        continue-on-error: true
         uses: dorny/test-reporter@v3.2.0
         with:
           name: API test results
@@ -192,6 +203,8 @@ jobs:
 
       - name: Publish test results as GitHub Check
         if: always()
+        # continue-on-error: patrz komentarz przy tym samym kroku w jobie "unit" wyżej.
+        continue-on-error: true
         uses: dorny/test-reporter@v3.2.0
         with:
           name: UI test results
